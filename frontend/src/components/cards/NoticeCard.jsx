@@ -1,201 +1,171 @@
 import { useState } from "react";
-import { Pin, Archive, Trash2, Paperclip, ChevronDown, ChevronUp } from "lucide-react";
-import { togglePinNotice, archiveNotice, deleteNotice } from "../../api/notice.api";
-import useAuth from "../../hooks/useAuth";
-
-// ── Config ────────────────────────────────────────────────────
-const priorityConfig = {
-  low:    { bar: "bg-gray-200",   label: "",        badge: "" },
-  normal: { bar: "bg-gray-300",   label: "",        badge: "" },
-  high:   { bar: "bg-amber-400",  label: "High",    badge: "text-amber-700 bg-amber-50 border-amber-100" },
-  urgent: { bar: "bg-red-500",    label: "Urgent",  badge: "text-red-700 bg-red-50 border-red-100" },
-};
-
-const noticeTypeLabel = {
-  announcement:    "Announcement",
-  update:          "Update",
-  deadline:        "Deadline",
-  schedule_change: "Schedule change",
-  result:          "Result",
-  reminder:        "Reminder",
-};
+import {
+  Pin, Paperclip, ChevronDown, Archive, Trash2,
+  Megaphone, AlertTriangle, Clock, Award, Bell, RefreshCw, Zap,
+} from "lucide-react";
 
 const relativeTime = (d) => {
+  if (!d) return "";
   const mins = Math.floor((Date.now() - new Date(d)) / 60000);
-  if (mins < 1)  return "just now";
+  if (mins < 1) return "now";
   if (mins < 60) return `${mins}m ago`;
   const hrs = Math.floor(mins / 60);
-  if (hrs < 24)  return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  if (days === 1) return "Yesterday";
-  return `${days}d ago`;
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
 };
 
-// ── NoticeCard ────────────────────────────────────────────────
-// Props:
-//   notice       — the notice document
-//   onRemove     — called with notice._id after delete or archive, to remove from local list
-//   showActions  — whether to show pin/archive/delete (pass true for admin/coordinator views)
-const NoticeCard = ({ notice, onRemove, showActions = false }) => {
-  const { user } = useAuth();
-  const [expanded,  setExpanded]  = useState(false);
-  const [isPinned,  setIsPinned]  = useState(notice.isPinned);
-  const [loading,   setLoading]   = useState(false);
+const typeConf = {
+  announcement:    { icon: Megaphone,      bg: "bg-gray-100",   icon_c: "text-gray-500",   label: "Announcement"    },
+  update:          { icon: RefreshCw,      bg: "bg-blue-100",   icon_c: "text-blue-500",   label: "Update"          },
+  deadline:        { icon: Clock,          bg: "bg-red-100",    icon_c: "text-red-500",    label: "Deadline"        },
+  schedule_change: { icon: AlertTriangle,  bg: "bg-amber-100",  icon_c: "text-amber-500",  label: "Schedule Change" },
+  result:          { icon: Award,          bg: "bg-green-100",  icon_c: "text-green-500",  label: "Result"          },
+  reminder:        { icon: Bell,           bg: "bg-purple-100", icon_c: "text-purple-500", label: "Reminder"        },
+};
 
-  const pCfg = priorityConfig[notice.priority] ?? priorityConfig.normal;
-  const isOwner = user?._id === (notice.createdBy?._id ?? notice.createdBy);
-  const canManage = showActions && (isOwner || user?.role === "superadmin");
+const priorityConf = {
+  urgent: { row: "bg-red-50 border-red-100",    icon_bg: "bg-red-500",    icon_c: "text-white", badge: "bg-red-500 text-white",    label: "Urgent" },
+  high:   { row: "bg-amber-50 border-amber-100",icon_bg: "bg-amber-400",  icon_c: "text-white", badge: "bg-amber-400 text-white",  label: "High"   },
+  normal: { row: "bg-white border-gray-100",    icon_bg: null,            icon_c: null,         badge: null,                       label: ""       },
+  low:    { row: "bg-white border-gray-100",    icon_bg: null,            icon_c: null,         badge: null,                       label: ""       },
+};
 
-  const handlePin = async (e) => {
-    e.stopPropagation();
-    setLoading(true);
-    try {
-      await togglePinNotice(notice._id);
-      setIsPinned((p) => !p);
-    } catch (err) { console.error(err); }
-    finally { setLoading(false); }
-  };
+const NoticeCard = ({ notice, canManage, onPin, onArchive, onDelete }) => {
+  const [open,     setOpen]     = useState(false);
+  const [isPinned, setIsPinned] = useState(notice.isPinned);
+  const [busy,     setBusy]     = useState(false);
 
-  const handleArchive = async (e) => {
-    e.stopPropagation();
-    if (!window.confirm("Archive this notice?")) return;
-    setLoading(true);
-    try {
-      await archiveNotice(notice._id);
-      onRemove?.(notice._id);
-    } catch (err) { console.error(err); }
-    finally { setLoading(false); }
-  };
+  const tc = typeConf[notice.noticeType]   ?? typeConf.announcement;
+  const pc = priorityConf[notice.priority] ?? priorityConf.normal;
+  const Icon = tc.icon;
 
-  const handleDelete = async (e) => {
-    e.stopPropagation();
-    if (!window.confirm("Delete this notice permanently?")) return;
-    setLoading(true);
-    try {
-      await deleteNotice(notice._id);
-      onRemove?.(notice._id);
-    } catch (err) { console.error(err); }
-    finally { setLoading(false); }
+  const isAlert = notice.priority === "urgent" || notice.priority === "high";
+
+  // Override icon background for high priority
+  const iconBg  = isAlert ? pc.icon_bg  : tc.bg;
+  const iconCol = isAlert ? pc.icon_c   : tc.icon_c;
+
+  const act = async (fn) => {
+    setBusy(true);
+    try { await fn(); } catch {} finally { setBusy(false); }
   };
 
   return (
-    <div className={`bg-white border rounded-xl overflow-hidden transition-all ${
-      notice.priority === "urgent"
-        ? "border-red-200 shadow-sm shadow-red-50"
-        : isPinned
-        ? "border-gray-300"
-        : "border-gray-100"
-    }`}>
-      {/* Priority bar */}
-      <div className={`h-0.5 w-full ${pCfg.bar}`} />
+    <div className={`border rounded-xl transition-all duration-150 overflow-hidden
+      ${pc.row}
+      ${busy ? "opacity-40 pointer-events-none" : ""}
+    `}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full text-left flex items-start gap-3 px-3 py-3"
+      >
+        {/* Icon box */}
+        <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${iconBg}`}>
+          <Icon size={14} className={iconCol} />
+        </div>
 
-      <div className="px-4 py-3.5">
-        {/* Header row */}
-        <div className="flex items-start justify-between gap-3 mb-2">
-          <div className="flex items-start gap-2 min-w-0 flex-1">
-            {isPinned && <Pin size={12} className="text-gray-400 mt-0.5 flex-shrink-0" />}
-            <p className="text-sm font-semibold text-gray-900 leading-snug">{notice.title}</p>
-          </div>
-
-          <div className="flex items-center gap-1.5 flex-shrink-0">
-            {pCfg.label && (
-              <span className={`text-xs font-medium px-2 py-0.5 rounded-md border ${pCfg.badge}`}>
-                {pCfg.label}
+        {/* Text */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 mb-0.5">
+            {isPinned && <Pin size={9} className="text-gray-400 flex-shrink-0" />}
+            {isAlert && (
+              <span className={`text-[9px] font-bold px-1.5 py-px rounded-full flex-shrink-0 ${pc.badge}`}>
+                {pc.label}
               </span>
             )}
-            <span className="text-xs text-gray-400 whitespace-nowrap">
-              {relativeTime(notice.createdAt)}
-            </span>
+            <span className="text-[10px] text-gray-400 font-medium">{tc.label}</span>
           </div>
+
+          <p className="text-xs font-semibold text-gray-900 leading-snug truncate">
+            {notice.title}
+          </p>
+
+          {!open && (
+            <p className="text-xs text-gray-500 truncate mt-0.5">
+              {notice.content}
+            </p>
+          )}
         </div>
 
-        {/* Type + author */}
-        <div className="flex items-center gap-2 mb-2.5">
-          <span className="text-xs text-gray-400 bg-gray-50 border border-gray-100 px-2 py-0.5 rounded-md">
-            {noticeTypeLabel[notice.noticeType] ?? notice.noticeType}
-          </span>
-          <span className="text-xs text-gray-400">
-            by {notice.createdBy?.firstName} {notice.createdBy?.lastName}
-          </span>
+        {/* Right */}
+        <div className="flex flex-col items-end gap-1 flex-shrink-0 pt-0.5">
+          <span className="text-[10px] text-gray-400">{relativeTime(notice.createdAt)}</span>
+          <ChevronDown size={11} className={`text-gray-300 transition-transform ${open ? "rotate-180" : ""}`} />
         </div>
+      </button>
 
-        {/* Content — clamp to 2 lines, expand on click */}
-        <p className={`text-xs text-gray-600 leading-relaxed ${expanded ? "" : "line-clamp-2"}`}>
-          {notice.content}
-        </p>
+      {/* Expanded */}
+      {open && (
+        <div className="px-3 pb-3 space-y-2.5 -mt-0.5">
+          {/* Divider */}
+          <div className="border-t border-black/5" />
 
-        {/* Expand toggle */}
-        {notice.content?.length > 120 && (
-          <button
-            onClick={() => setExpanded((p) => !p)}
-            className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-700 mt-1.5 transition-colors"
-          >
-            {expanded ? <><ChevronUp size={11} /> Show less</> : <><ChevronDown size={11} /> Read more</>}
-          </button>
-        )}
+          <p className="text-xs text-gray-600 leading-relaxed whitespace-pre-line">
+            {notice.content}
+          </p>
 
-        {/* Metadata preview — rendered only when expanded and metadata is non-empty */}
-        {expanded && notice.metadata && Object.keys(notice.metadata).length > 0 && (
-          <div className="mt-3 px-3 py-2 bg-gray-50 border border-gray-100 rounded-lg">
-            <p className="text-xs font-medium text-gray-500 mb-1.5">Details</p>
-            <div className="space-y-1">
-              {Object.entries(notice.metadata).map(([key, val]) => (
-                <div key={key} className="flex gap-2 text-xs">
-                  <span className="text-gray-400 capitalize min-w-[80px]">{key.replace(/([A-Z])/g, " $1")}</span>
-                  <span className="text-gray-700 font-medium">{val}</span>
+          {/* Metadata */}
+          {notice.metadata && Object.keys(notice.metadata).length > 0 && (
+            <div className="bg-white/60 border border-black/5 rounded-lg px-3 py-2 space-y-1">
+              {Object.entries(notice.metadata).map(([k, v]) => (
+                <div key={k} className="flex gap-2 text-xs">
+                  <span className="text-gray-400 capitalize min-w-[80px]">
+                    {k.replace(/([A-Z])/g, " $1")}
+                  </span>
+                  <span className="text-gray-700 font-medium">{String(v)}</span>
                 </div>
               ))}
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Attachments */}
-        {notice.attachments?.length > 0 && (
-          <div className="flex flex-wrap gap-2 mt-3">
-            {notice.attachments.map((att, i) => (
-              <a
-                key={i}
-                href={att.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 text-xs text-gray-600 bg-gray-50 border border-gray-200 px-2.5 py-1 rounded-lg hover:border-gray-400 transition-colors"
-              >
-                <Paperclip size={10} />
-                {att.name}
-              </a>
-            ))}
-          </div>
-        )}
+          {/* Attachments */}
+          {notice.attachments?.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {notice.attachments.map((f, i) => (
+                <a
+                  key={i}
+                  href={f.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-[10px] text-gray-500 bg-white border border-gray-200 px-2 py-0.5 rounded-md hover:border-gray-400 transition-colors"
+                >
+                  <Paperclip size={8} /> {f.name}
+                </a>
+              ))}
+            </div>
+          )}
 
-        {/* Actions row — only for owners or superadmin */}
-        {canManage && (
-          <div className="flex items-center gap-3 mt-3 pt-3 border-t border-gray-50">
-            <button
-              onClick={handlePin}
-              disabled={loading}
-              className={`flex items-center gap-1 text-xs transition-colors ${
-                isPinned ? "text-gray-900 font-medium" : "text-gray-400 hover:text-gray-700"
-              }`}
-            >
-              <Pin size={11} /> {isPinned ? "Pinned" : "Pin"}
-            </button>
-            <button
-              onClick={handleArchive}
-              disabled={loading}
-              className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-700 transition-colors"
-            >
-              <Archive size={11} /> Archive
-            </button>
-            <button
-              onClick={handleDelete}
-              disabled={loading}
-              className="flex items-center gap-1 text-xs text-gray-300 hover:text-red-500 transition-colors ml-auto"
-            >
-              <Trash2 size={11} /> Delete
-            </button>
+          {/* Footer */}
+          <div className="flex items-center justify-between pt-1">
+            <span className="text-[10px] text-gray-400">
+              {notice.createdBy?.firstName} {notice.createdBy?.lastName}
+            </span>
+
+            {canManage && (
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={(e) => { e.stopPropagation(); act(async () => { await onPin?.(notice._id); setIsPinned(p => !p); }); }}
+                  className={`flex items-center gap-1 text-[10px] transition-colors ${isPinned ? "text-gray-800 font-semibold" : "text-gray-400 hover:text-gray-600"}`}
+                >
+                  <Pin size={9} /> {isPinned ? "Pinned" : "Pin"}
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); act(() => onArchive?.(notice._id)); }}
+                  className="flex items-center gap-1 text-[10px] text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <Archive size={9} /> Archive
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); act(() => onDelete?.(notice._id)); }}
+                  className="flex items-center gap-1 text-[10px] text-gray-300 hover:text-red-500 transition-colors"
+                >
+                  <Trash2 size={9} /> Delete
+                </button>
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 };

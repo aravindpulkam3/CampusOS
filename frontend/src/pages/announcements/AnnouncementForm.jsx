@@ -1,9 +1,11 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, ImagePlus, X } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { createAnnouncement } from "../../api/announcement.api";
 import { getClubDetails } from "../../api/club.api";
 import { getEventById } from "../../api/event.api";
+import ImageUploadZone from "../../components/forms/ImageUploadZone"; // ✅ Integrated dropzone component
+import useAuth from "../../hooks/useAuth";
 
 const MAX_TITLE = 100;
 const MAX_BODY = 2000;
@@ -30,65 +32,43 @@ const FieldError = ({ message }) =>
 // ─── Main ─────────────────────────────────────────────────────
 export default function CreateAnnouncement() {
   const { targetType, targetId } = useParams();
+  const {user}=useAuth();
   const navigate = useNavigate();
 
   const isClub = targetType === "club";
 
   const [form, setForm] = useState({ title: "", body: "", image: "" });
-  const [imagePreview, setImagePreview] = useState(null);
   const [errors, setErrors] = useState({});
   const [submitError, setSubmitError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const imageInputRef = useRef(null);
-
   useEffect(() => {
     const fetchData = async () => {
-      if (targetType === "club") {
-        const payload = await getClubDetails(targetId);
-        if (!payload.data.data.isAdmin) {
-          navigate(-1);
+      try {
+        if (targetType === "club") {
+          const payload = await getClubDetails(targetId);
+          if (!payload.data.data.isAdmin) {
+            navigate(-1);
+          }
         }
-      }
-      if (targetType === "event") {
-        const payload = await getEventById(targetId);
-        if (!payload.data.data.isOrganizer) {
-          navigate(-1);
+        if (targetType === "event") {
+          const payload = await getEventById(targetId);
+          if (!payload.data.data.isOrganizer&&user.role!=="superadmin") {
+            navigate(-1);
+          }
         }
+      } catch (err) {
+        console.error("Authorization fetch failed:", err);
+        navigate(-1);
       }
     };
     fetchData();
-  }, []);
+  }, [targetType, targetId, navigate]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
     setErrors((prev) => ({ ...prev, [name]: "" }));
-  };
-
-  const handleImageChange = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      setErrors((prev) => ({
-        ...prev,
-        image: "Only image files are allowed.",
-      }));
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      setErrors((prev) => ({ ...prev, image: "Image must be under 5 MB." }));
-      return;
-    }
-    const localUrl = URL.createObjectURL(file);
-    setImagePreview(localUrl);
-    setForm((prev) => ({ ...prev, image: localUrl }));
-  };
-
-  const removeImage = () => {
-    setImagePreview(null);
-    setForm((prev) => ({ ...prev, image: "" }));
-    if (imageInputRef.current) imageInputRef.current.value = "";
   };
 
   const validate = () => {
@@ -105,14 +85,14 @@ export default function CreateAnnouncement() {
       setErrors(errs);
       return;
     }
-    setLoading(true);
-    try {
-      setLoading(true);
 
+    setLoading(true);
+    setSubmitError("");
+    try {
       await createAnnouncement(targetType, targetId, {
         title: form.title.trim(),
         body: form.body.trim(),
-        image: form.image,
+        image: form.image || null, // ✅ Send the Cloudinary URL string or null if unpopulated
       });
 
       navigate(`/community/${isClub ? "clubs" : "events"}/${targetId}`, {
@@ -123,10 +103,6 @@ export default function CreateAnnouncement() {
         },
       });
     } catch (err) {
-      // if (err.response?.status === 403) {
-      //   navigate(-1); // or navigate("/403")
-      //   toast.error(err.response.data.message);
-      // }
       setSubmitError(
         err.response?.data?.message || "Failed to post announcement",
       );
@@ -218,67 +194,30 @@ export default function CreateAnnouncement() {
             <FieldError message={errors.body} />
           </div>
 
-          {/* Image Upload */}
+          {/* ✅ Swapped Out Legacy Input Elements with the Live ImageUploadZone Component */}
           <div>
-            <Label>
-              Image{" "}
-              <span className="text-gray-400 font-normal">(optional)</span>
-            </Label>
-
-            {imagePreview ? (
-              <div className="relative rounded-xl overflow-hidden border border-gray-100">
-                <img
-                  src={imagePreview}
-                  alt="Preview"
-                  className="w-full max-h-52 object-cover"
-                />
-                {/* Remove button */}
-                <button
-                  type="button"
-                  onClick={removeImage}
-                  className="absolute top-2.5 right-2.5 p-1.5 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
-                >
-                  <X size={13} className="text-gray-600" />
-                </button>
-                {/* Cloudinary notice */}
-                <div className="absolute bottom-2.5 left-2.5 bg-amber-50 border border-amber-200 text-amber-700 text-xs px-2 py-1 rounded-lg">
-                  Local preview — Cloudinary upload coming soon
-                </div>
-              </div>
-            ) : (
-              <label className="flex flex-col items-center justify-center w-full h-28 border border-dashed border-gray-200 rounded-xl cursor-pointer hover:border-gray-400 hover:bg-gray-50 transition-all group">
-                <ImagePlus
-                  size={20}
-                  className="text-gray-300 group-hover:text-gray-400 mb-1.5 transition-colors"
-                />
-                <span className="text-xs text-gray-400 group-hover:text-gray-500 transition-colors">
-                  Click to upload image
-                </span>
-                <span className="text-xs text-gray-300 mt-0.5">
-                  PNG, JPG up to 5 MB
-                </span>
-                <input
-                  ref={imageInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageChange}
-                  className="hidden"
-                />
-              </label>
-            )}
+            <ImageUploadZone
+              label="Feature Announcement Graphic"
+              value={form.image}
+              folder={isClub ? "club-announcements" : "event-announcements"} // Routes to distinct asset folders dynamically
+              onChange={(uploadedUrl) => {
+                setForm((prev) => ({ ...prev, image: uploadedUrl }));
+                setErrors((prev) => ({ ...prev, image: "" }));
+              }}
+            />
             <FieldError message={errors.image} />
           </div>
         </div>
 
-        {/* Live Preview */}
+        {/* Live Typography Preview Layer */}
         {(form.title || form.body) && (
           <div className="bg-white border border-gray-100 rounded-xl p-5">
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">
-              Preview
+              Live Preview Feed Item
             </p>
-            {imagePreview && (
+            {form.image && (
               <img
-                src={imagePreview}
+                src={form.image}
                 alt=""
                 className="w-full max-h-40 object-cover rounded-lg border border-gray-100 mb-3"
               />

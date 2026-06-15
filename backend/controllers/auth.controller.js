@@ -56,6 +56,7 @@ export const login = asyncHandler(async (req, res) => {
     cgpa: user.cgpa,
     followedClubs: user.followedClubs,
     registeredEvents: user.registeredEvents,
+    classroom:user.classroom,
   });
 });
 

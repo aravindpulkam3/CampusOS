@@ -47,12 +47,16 @@ export const getAnnouncements = asyncHandler(async (req, res) => {
     data = await Announcement.find({
       targetType: "club",
       club: targetId,
-    }).sort({ createdAt: -1 });
+    })
+      .populate("postedBy", "firstName lastName")
+      .sort({ createdAt: -1 });
   } else if (targetType === "event") {
     data = await Announcement.find({
       targetType: "event",
       event: targetId,
-    }).sort({ createdAt: -1 });
+    })
+      .populate("postedBy", "firstName lastName")
+      .sort({ createdAt: -1 });
   } else {
     throw new ApiError(400, "Invalid target type");
   }
@@ -83,6 +87,7 @@ export const getCommunityFeed = asyncHandler(async (req, res) => {
     club: { $in: followedClubIds },
   })
     .populate("club", "clubName")
+    .populate("postedBy", "firstName lastName")
     .sort({ createdAt: -1 });
 
   // Updates from registered events
@@ -91,12 +96,14 @@ export const getCommunityFeed = asyncHandler(async (req, res) => {
     event: { $in: registeredEventIds },
   })
     .populate("event", "eventName")
+    .populate("postedBy", "firstName lastName")
     .sort({ createdAt: -1 });
 
   // General announcements for discovery
   const generalAnnouncements = await Announcement.find()
     .populate("club", "clubName")
     .populate("event", "eventName")
+    .populate("postedBy", "firstName lastName")
     .sort({ createdAt: -1 })
     .limit(20);
 
@@ -112,7 +119,15 @@ export const getCommunityFeed = asyncHandler(async (req, res) => {
     new Map(
       feed.map((announcement) => [announcement._id.toString(), announcement]),
     ).values(),
-  );
+  ).filter((announcement) => {
+    // Defensive Guard: If targetType is event but event is null, it was deleted. Drop it.
+    if (announcement.targetType === "event" && !announcement.event)
+      return false;
+    // If targetType is club but club is null, it was deleted. Drop it.
+    if (announcement.targetType === "club" && !announcement.club) return false;
+
+    return true;
+  });
 
   // Sort newest first
   uniqueFeed.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));

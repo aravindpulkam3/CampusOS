@@ -1,5 +1,5 @@
 import api from './axios'
-// TODO: define event API calls
+
 export const createEvent=(data)=>api.post("/events/create",data);
 export const getAllEvents=()=>api.get("/events");
 export const getEventById=(id)=>api.get(`/events/${id}`);

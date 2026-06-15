@@ -1,5 +1,5 @@
 import api from "./axios";
-// TODO: define announcement API calls
+
 export const createAnnouncement = (targetType, targetId, data) =>
   api.post(`/announcements/${targetType}/${targetId}`, data);
 export const getAnnouncements=(targetType,targetId)=>api.get(`/announcements/${targetType}/${targetId}`);

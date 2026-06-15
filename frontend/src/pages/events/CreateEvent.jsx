@@ -409,7 +409,7 @@ const CreateEvent = () => {
           <ImageUploadZone
             label="Banner Asset"
             value={form.banner}
-            folder="banners" // Places asset inside /eventsphere/banners sub-directory on cloud console
+            folder="event-banners" // Places asset inside /eventsphere/banners sub-directory on cloud console
             onChange={(uploadedUrl) =>
               setForm((prev) => ({ ...prev, banner: uploadedUrl }))
             }

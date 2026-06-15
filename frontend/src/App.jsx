@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route} from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 
 import Layout from "./components/layout/Layout";
@@ -21,7 +21,7 @@ import Events from "./pages/events/Events.jsx";
 import EventDetail from "./pages/events/EventDetail.jsx";
 import CreateEvent from "./pages/events/CreateEvent.jsx";
 import MyEvents from "./pages/events/MyEvents.jsx";
-import Announcements from "./pages/announcements/Announcements.jsx";
+import Announcements from "./pages/announcements/AnnouncementCard.jsx";
 import AnnouncementForm from "./pages/announcements/AnnouncementForm.jsx";
 
 // Academics workspace
@@ -50,6 +50,7 @@ import NotFound from "./pages/NotFound";
 import CreateDeadline from "./pages/academics/classroom/CreateDeadline.jsx";
 import DiscussionDetail from "./pages/discussions/DiscussionDetail.jsx";
 import useAuth from "./hooks/useAuth.js";
+import EditClub from "./pages/clubs/EditClub.jsx";
 
 
 
@@ -95,6 +96,7 @@ function App() {
             <Route path="/community/clubs" element={<Clubs />} />
             <Route path="/community/clubs/:clubId" element={<ClubDetail />} />
             <Route path="/community/clubs/create" element={<ProtectedRoute allowedRoles={["superadmin"]}><CreateClub /></ProtectedRoute>} />
+            <Route path="/community/clubs/:clubId/edit" element={<EditClub />} />
             <Route path="/community/events" element={<Events />} />
             <Route path="/community/events/:id" element={<EventDetail />} />
             <Route path="/community/clubs/:clubId/events/create" element={

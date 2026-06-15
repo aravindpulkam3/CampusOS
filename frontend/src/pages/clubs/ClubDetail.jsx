@@ -11,10 +11,12 @@ import {
   UserMinus,
   ChevronRight,
   Image,
+  Edit,
 } from "lucide-react";
 import { followClub, getClubDetails } from "../../api/club.api";
 import useAuth from "../../hooks/useAuth";
 import NoticeFeed from "../../components/cards/NoticeFeed";
+import AnnouncementCard from "../announcements/AnnouncementCard";
 
 // ─── Helpers ──────────────────────────────────────────────────
 const clubBg = [
@@ -175,38 +177,6 @@ const EventCard = ({ event, past = false }) => (
   </Link>
 );
 
-// ─── Announcement Card ────────────────────────────────────────
-const AnnouncementCard = ({ announcement, bgClass, initials }) => (
-  <div className="flex gap-3 p-4 bg-white border border-gray-100 rounded-xl hover:border-gray-200 transition-all duration-200">
-    <div
-      className={`w-8 h-8 rounded-lg ${bgClass} flex items-center justify-center text-white text-xs font-bold flex-shrink-0 mt-0.5`}
-    >
-      {initials}
-    </div>
-    <div className="flex-1 min-w-0">
-      <div className="flex items-start justify-between gap-2 mb-1">
-        <h4 className="text-sm font-semibold text-gray-900 leading-snug">
-          {announcement.title}
-        </h4>
-        <span className="text-xs text-gray-400 flex-shrink-0 whitespace-nowrap">
-          {relativeTime(announcement.createdAt)}
-        </span>
-      </div>
-      <p className="text-xs text-gray-500 leading-relaxed line-clamp-3">
-        {announcement.body}
-      </p>
-      {announcement.image && (
-        <img
-          src={announcement.image}
-          alt=""
-          className="mt-2 w-full max-h-40 object-cover rounded-lg border border-gray-100"
-          loading="lazy"
-        />
-      )}
-    </div>
-  </div>
-);
-
 // ─── Main ─────────────────────────────────────────────────────
 const ClubDetail = () => {
   const { clubId } = useParams();
@@ -229,13 +199,14 @@ const ClubDetail = () => {
           club: fetchedClub,
           events: fetchedEvents,
           announcements: fetchedAnnouncements,
-          isAdmin,
+          isAdmin: adminStatus,
         } = payload.data.data;
-
+        // console.log(isAdmin);
         setClub(fetchedClub);
         setEvents(fetchedEvents || []);
         setAnnouncements(fetchedAnnouncements || []);
-        setIsAdmin(isAdmin);
+        console.log(fetchedAnnouncements);
+        setIsAdmin(adminStatus);
 
         if (user) {
           const following = fetchedClub.clubFollowers?.some(
@@ -330,6 +301,16 @@ const ClubDetail = () => {
                 icon={Plus}
                 label="Post Announcement"
               />
+              <button
+                onClick={() =>
+                  navigate(`/community/clubs/${clubId}/edit`, {
+                    state: { club, isAdmin },
+                  })
+                }
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-gray-200 text-gray-600 rounded-lg hover:border-gray-400 hover:text-gray-900 transition-all duration-150 bg-white shadow-2xs"
+              >
+                <Edit size={12} /> Edit Club
+              </button>
             </div>
           )}
         </div>
@@ -467,12 +448,20 @@ const ClubDetail = () => {
         />
         {announcements.length > 0 ? (
           <div className="flex flex-col gap-3">
-            {announcements.map((a) => (
+            {/* {announcements.map((a) => (
               <AnnouncementCard
                 key={a._id}
                 announcement={a}
                 bgClass={bgClass}
                 initials={initials}
+              />
+            ))} */}
+            {announcements.map((a) => (
+              <AnnouncementCard
+                key={a._id}
+                announcement={a}
+                variant="detail"
+                avatarBg={bgClass} // passes the club's accent color as author avatar bg
               />
             ))}
           </div>

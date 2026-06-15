@@ -14,6 +14,7 @@ import { getEventById, registerForEvent } from "../../api/event.api";
 import { getAnnouncements } from "../../api/announcement.api";
 import NoticeFeed from "../../components/cards/NoticeFeed";
 import useAuth from "../../hooks/useAuth";
+import AnnouncementCard from "../announcements/AnnouncementCard";
 
 // ─── Helpers ──────────────────────────────────────────────────
 const categoryColor = {
@@ -108,35 +109,6 @@ function checkEligibility(event, user) {
     : { eligible: false, reason: reasons.join(" · ") };
 }
 
-// ─── Announcement Card ────────────────────────────────────────
-const AnnouncementCard = ({ announcement }) => (
-  <div className="flex gap-4 p-4 bg-white border border-gray-100 rounded-xl hover:border-gray-200 transition-all duration-200">
-    <div className="w-8 h-8 rounded-lg bg-gray-900 flex items-center justify-center text-white text-xs font-bold flex-shrink-0 mt-0.5">
-      <Megaphone size={13} />
-    </div>
-    <div className="flex-1 min-w-0">
-      <div className="flex items-center justify-between gap-2 mb-1">
-        <h4 className="text-sm font-semibold text-gray-900">
-          {announcement.title}
-        </h4>
-        <span className="text-xs text-gray-400 flex-shrink-0">
-          {relativeTime(announcement.createdAt)}
-        </span>
-      </div>
-      <p className="text-xs text-gray-500 leading-relaxed line-clamp-2">
-        {announcement.body}
-      </p>
-      {announcement.image && (
-        <img
-          src={announcement.image}
-          alt=""
-          className="mt-2 w-full max-h-40 object-cover rounded-lg border border-gray-100"
-        />
-      )}
-    </div>
-  </div>
-);
-
 // ─── Skeleton ─────────────────────────────────────────────────
 const Skeleton = () => (
   <div className="max-w-3xl mx-auto animate-pulse px-4 py-6">
@@ -173,6 +145,7 @@ export default function EventDetail() {
         const data = eventRes?.data?.data.event;
         setEvent(data);
         setIsOrganizer(eventRes.data.data.isOrganizer);
+        
         setAnnouncements(announcementRes?.data?.data || []);
 
         if (
@@ -260,13 +233,13 @@ export default function EventDetail() {
         <ArrowLeft size={14} /> Back
       </button>
 
-      <NoticeFeed
+      {/* <NoticeFeed
         targetType="events"
         targetId={id}
         title="Event Notices"
         canPost={user?.role === "superadmin"}
         showActions={user?.role === "superadmin"}
-      />
+      /> */}
 
       {/* ── Banner ── */}
       {event.banner && (
@@ -537,7 +510,7 @@ export default function EventDetail() {
             )}
           </div>
 
-          {isOrganizer && (
+          {(isOrganizer||user.role==="superadmin") && (
             <Link
               to={`/community/event/${id}/announcements/create`}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-gray-200 text-gray-600 rounded-lg hover:border-gray-400 hover:text-gray-900 transition-all duration-150"
@@ -550,8 +523,16 @@ export default function EventDetail() {
         {latestAnnouncements.length > 0 ? (
           <>
             <div className="flex flex-col gap-3">
-              {latestAnnouncements.map((a) => (
+              {/* {latestAnnouncements.map((a) => (
                 <AnnouncementCard key={a._id} announcement={a} />
+              ))} */}
+              {latestAnnouncements.map((a) => (
+                <AnnouncementCard
+                  key={a._id}
+                  announcement={a}
+                  variant="detail"
+                  // no avatarBg override — defaults to bg-gray-800
+                />
               ))}
             </div>
 

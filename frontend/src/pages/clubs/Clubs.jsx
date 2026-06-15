@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Search, X, Users, Plus } from "lucide-react";
-import { getAllClubs } from "../../api/club.api";
+import { getAllClubs, followClub } from "../../api/club.api";
 import useAuth from "../../hooks/useAuth";
 
 const CATEGORIES = ["All", "Technical", "Cultural", "Creative", "Business"];
@@ -24,11 +24,11 @@ const clubBg = [
 
 const clubInitials = (name) =>
   name
-    .split(" ")
+    ?.split(" ")
     .map((w) => w[0])
     .slice(0, 2)
     .join("")
-    .toUpperCase();
+    .toUpperCase() || "?";
 
 // ─── Club Card ────────────────────────────────────────────────
 const ClubCard = ({ club, index, followed, onFollow }) => {
@@ -75,6 +75,7 @@ const ClubCard = ({ club, index, followed, onFollow }) => {
       {/* Actions */}
       <div className="flex items-center gap-2 pt-1 border-t border-gray-50">
         <button
+          type="button"
           onClick={() => onFollow(club._id)}
           className={`flex-1 py-1.5 text-xs font-medium rounded-lg border transition-all duration-150
             ${
@@ -117,8 +118,7 @@ const Clubs = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState("All");
-  const [followedClubs, setFollowedClubs] = useState(new Set());
-  const {user}=useAuth();
+  const { user, setUser } = useAuth(); 
 
   useEffect(() => {
     const fetchAllClubs = async () => {
@@ -134,13 +134,20 @@ const Clubs = () => {
     fetchAllClubs();
   }, []);
 
-  const handleFollow = (clubId) => {
-    // TODO: wire to follow/unfollow API
-    setFollowedClubs((prev) => {
-      const next = new Set(prev);
-      next.has(clubId) ? next.delete(clubId) : next.add(clubId);
-      return next;
-    });
+  const handleFollow = async (clubId) => {
+    try {
+      const payload = await followClub(clubId);
+      
+      setClubs((prevClubs) =>
+        prevClubs.map((club) =>
+          club._id === clubId ? payload.data.data.club : club
+        )
+      );
+
+      setUser(payload.data.data.user);
+    } catch (error) {
+      console.error("Network follow assertion query cycle failed:", error);
+    }
   };
 
   const filtered = clubs.filter((club) => {
@@ -241,7 +248,8 @@ const Clubs = () => {
                 key={club._id}
                 club={club}
                 index={i}
-                followed={followedClubs.has(club._id)}
+                // ✅ FIXED: Evaluates directly against user profile array to support clean data re-renders
+                followed={user?.followedClubs?.some((id) => id.toString() === club._id.toString()) ?? false}
                 onFollow={handleFollow}
               />
             ))

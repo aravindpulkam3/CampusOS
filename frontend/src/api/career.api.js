@@ -1,23 +1,4 @@
-// import api from "./api.js";
 
-// // ── Dashboard ────────────────────────────────────────────────
-// export const getCareerDashboard = () => api.get("/career/dashboard");
-
-// // ── Drives ───────────────────────────────────────────────────
-// export const getDrives    = (params) => api.get("/career/drives", { params });
-// export const getDriveById = (id)     => api.get(`/career/drives/${id}`);
-// export const createDrive  = (data)   => api.post("/career/drives", data);
-// export const updateDrive  = (id, data) => api.patch(`/career/drives/${id}`, data);
-// export const deleteDrive  = (id)     => api.delete(`/career/drives/${id}`);
-
-// // ── Applications ─────────────────────────────────────────────
-// export const applyToDrive            = (driveId)        => api.post(`/career/drives/${driveId}/apply`);
-// export const getMyApplications       = ()               => api.get("/career/applications/mine");
-// export const getApplicationById      = (id)             => api.get(`/career/applications/${id}`);
-// export const updateApplicationStatus = (id, data)       => api.patch(`/career/applications/${id}/status`, data);
-// export const updateApplicationNotes  = (id, data)       => api.patch(`/career/applications/${id}/notes`, data);
-// export const withdrawApplication     = (id)             => api.delete(`/career/applications/${id}/withdraw`);
-// export const getDriveApplications    = (driveId, params) => api.get(`/career/drives/${driveId}/applications`, { params });
 
 import api from "./axios"
 
