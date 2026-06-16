@@ -148,87 +148,113 @@ export const deleteDrive = asyncHandler(async (req, res) => {
 // Returns: upcoming drives, quick stats, recent notices (notices TBD via Notice model)
 export const getCareerDashboard = asyncHandler(async (req, res) => {
   const userId = req.user._id;
-  const user = req.user;
+  const user   = req.user;
+  const now    = new Date();
 
-  // 1. Fetch upcoming + open placement drives (Limit up to 5, sorted chronologically)
-  const upcomingDrives = await Drive.find({
-    status: { $in: ["upcoming", "open"] },
-  })
-    .select(
-      "companyName companyLogo role jobType driveType ctc stipend registrationDeadline location status eligibleBranches minCGPA maxBacklogs minYear maxYear",
-    )
-    .sort({ registrationDeadline: 1 })
-    .limit(5)
-    .lean();
+  const eligibilityFilter = {
+    registrationDeadline: { $gt: now }, // greater than 
+    $and: [
+      {
+        $or: [
+          { eligibleBranches: { $size: 0 } },   
+          { eligibleBranches: user.branch },  
+        ],
+      },
+      { minCGPA:    { $lte: user.cgpa     ?? 10 } }, // less than or equal to 
+      { maxBacklogs: { $gte: user.backlogs ?? 0  } }, // greater than or equal to
+      { minYear:    { $lte: user.year     ?? 1  } },
+      { maxYear:    { $gte: user.year     ?? 4  } },
+    ],
+  };
 
-  // 2. Fetch the student's personal application footprint matrix
   const myApplications = await Application.find({ student: userId })
     .populate({
       path: "drive",
-      select:
-        "companyName companyLogo role jobType ctc stipend status registrationDeadline location",
+      select: "companyName companyLogo role jobType ctc stipend registrationDeadline location",
     })
     .sort({ appliedAt: -1 })
     .lean();
 
-  // Guard track: Filter out broken applications where the underlying drive document was deleted
-  const validApplications = myApplications.filter((app) => app.drive !== null);
+  const validApplications = myApplications.filter((a) => a.drive !== null);
+  const appliedDriveIds   = validApplications.map((a) => a.drive._id);
 
-  // 3. Compute structural metric card totals concurrently
-  const [openCount, appliedCount] = await Promise.all([
-    Drive.countDocuments({ status: "open" }),
-    Application.countDocuments({ student: userId }),
-  ]);
+  // ── 3. Eligible drives NOT yet applied to ──────────────────────────────
+  const eligibleDrives = await Drive.find({
+    ...eligibilityFilter,
+    _id: { $nin: appliedDriveIds }, // not in
+  })
+    .select("companyName companyLogo role jobType ctc stipend registrationDeadline location")
+    .sort({ registrationDeadline: 1 })
+    .limit(6)
+    .lean();
 
-  const upcomingOA = validApplications.filter(
-    (a) => a.status === "oa_scheduled",
-  ).length;
-  const upcomingInterviews = validApplications.filter(
-    (a) => a.status === "interview_scheduled",
-  ).length;
+  // ── 4. Notices: from applied drives OR eligible open drives ─────────────
+  const allEligibleIds = await Drive.find(eligibilityFilter)
+    .select("_id").lean()
+    .then((docs) => docs.map((d) => d._id));
 
-  // 4. Map and isolate upcoming activities based on your frontend ActivityCard layout expectations
-  // Note: Your ActivityCard maps components via 'application.status' and 'application.drive.companyName'
+  const driveIdsForNotices = [
+    ...new Set([
+      ...appliedDriveIds.map(String),
+      ...allEligibleIds.map(String),
+    ]),
+  ];
+
+  const recentNotices = await Notice.find({
+    targetType: "drive",
+    isArchived: false,
+    $or: [
+      { targetId: { $in: driveIdsForNotices } },
+      { targetId: null },   // platform-wide placement notices
+    ],
+  })
+    .populate("createdBy", "firstName lastName")
+    .sort({ isPinned: -1, priority: -1, createdAt: -1 })
+    .limit(8)
+    .lean();
+
+  // ── 5. Upcoming OA / Interview activities ──────────────────────────────
   const myActivities = validApplications
     .filter((a) => ["oa_scheduled", "interview_scheduled"].includes(a.status))
     .map((a) => ({
-      _id: a._id,
+      _id:    a._id,
       status: a.status,
       drive: {
-        _id: a.drive._id,
-        companyName: a.drive.companyName,
-        companyLogo: a.drive.companyLogo,
-        // Since individual test slots live inside the student's timeline audit trail,
-        // we pull the timestamp from the most recent timeline activity log entry matching that status
-        oaDate:
-          a.timeline.find((t) => t.status === "oa_scheduled")?.changedAt ||
-          null,
-        interviewDate:
-          a.timeline.find((t) => t.status === "interview_scheduled")
-            ?.changedAt || null,
+        _id:          a.drive._id,
+        companyName:  a.drive.companyName,
+        companyLogo:  a.drive.companyLogo,
+        oaDate:        a.timeline.find((t) => t.status === "oa_scheduled")?.changedAt || null,
+        interviewDate: a.timeline.find((t) => t.status === "interview_scheduled")?.changedAt || null,
       },
     }));
 
-  // 5. Fetch live channel notification listings tagged for your placement workflow workspace
-  const recentNotices = await Notice.find({
-    targetType: "drive",
-  })
-    .sort({ createdAt: -1 })
-    .limit(5)
-    .lean();
+  // ── 6. Stats ───────────────────────────────────────────────────────────
+  const totalEligible = await Drive.countDocuments(eligibilityFilter);
 
-  // console.log(recentNotices);
-
-  // 6. Return standard structured response object mirroring UI payload expectations
   return sendResponse(res, 200, "Dashboard data compiled successfully.", {
-    upcomingDrives,
-    myActivities, // Changed from upcomingActivities to match state bindings
+    eligibleDrives,
+    myApplications: validApplications.map((a) => ({
+      _id:      a._id,
+      status:   a.status,
+      appliedAt: a.appliedAt,
+      drive: {
+        _id:                  a.drive._id,
+        companyName:          a.drive.companyName,
+        companyLogo:          a.drive.companyLogo,
+        role:                 a.drive.role,
+        jobType:              a.drive.jobType,
+        ctc:                  a.drive.ctc,
+        stipend:              a.drive.stipend,
+        registrationDeadline: a.drive.registrationDeadline,
+      },
+    })),
+    myActivities,
     recentNotices,
     stats: {
-      openDrives: openCount,
-      applied: appliedCount, // Renamed from appliedDrives to match layout metrics
-      upcomingOA,
-      upcomingInterviews,
+      eligibleDrives:     totalEligible,
+      applied:            validApplications.length,
+      upcomingOA:         validApplications.filter((a) => a.status === "oa_scheduled").length,
+      upcomingInterviews: validApplications.filter((a) => a.status === "interview_scheduled").length,
     },
   });
 });

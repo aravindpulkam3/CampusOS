@@ -4,8 +4,8 @@ import {
   Mail,
   Hash,
   BookOpen,
-  MapPin,
   Calendar,
+  MapPin,
   ChevronRight,
   Users,
   Briefcase,
@@ -20,16 +20,15 @@ import {
   Eye,
   EyeOff,
   AlertTriangle,
+  GitFork,
+  UserCheck,
+  Globe,
+  FileText,
 } from "lucide-react";
 import useAuth from "../../hooks/useAuth";
 import axios from "../../api/axios";
-import { getProfile, logoutApi } from "../../api/auth.api";
-
-// ─── API ──────────────────────────────────────────────────────
-// GET  /api/profile          → full profile aggregate
-// PATCH /api/profile         → update firstName, lastName
-// PATCH /api/profile/password → change password
-// POST  /api/profile/avatar  → upload avatar (Cloudinary — TODO)
+import { getProfile, logoutApi, updateProfile } from "../../api/auth.api";
+import ImageUploadZone from "../../components/forms/ImageUploadZone.jsx";
 
 // ─── Helpers ──────────────────────────────────────────────────
 const formatDate = (d) =>
@@ -128,43 +127,23 @@ const Skeleton = () => (
 );
 
 // ─── Avatar ───────────────────────────────────────────────────
-const Avatar = ({ user, onUpload }) => {
-  const fileRef = useRef();
+const Avatar = ({ user }) => {
   const initials =
     `${user?.firstName?.[0] || ""}${user?.lastName?.[0] || ""}`.toUpperCase();
 
   return (
-    <div className="relative group w-20 h-20 mx-auto">
-      {user?.avatarUrl ? (
+    <div className="relative w-20 h-20 mx-auto">
+      {user?.profilePicture ? (
         <img
-          src={user.avatarUrl}
+          src={user.profilePicture}
           alt="Avatar"
-          className="w-20 h-20 rounded-2xl object-cover"
+          className="w-20 h-20 rounded-2xl object-cover border border-gray-100 shadow-sm"
         />
       ) : (
-        <div className="w-20 h-20 rounded-2xl bg-gray-900 flex items-center justify-center text-white text-2xl font-bold">
+        <div className="w-20 h-20 rounded-2xl bg-gray-900 flex items-center justify-center text-white text-2xl font-bold shadow-sm">
           {initials}
         </div>
       )}
-      {/* Upload overlay — Cloudinary TODO */}
-      <button
-        onClick={() => fileRef.current?.click()}
-        className="absolute inset-0 rounded-2xl bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
-        title="Change photo"
-      >
-        <Camera size={16} className="text-white" />
-      </button>
-      <input
-        ref={fileRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={(e) => {
-          // TODO: upload to Cloudinary, then PATCH /api/profile/avatar
-          const file = e.target.files?.[0];
-          if (file) onUpload?.(file);
-        }}
-      />
     </div>
   );
 };
@@ -174,6 +153,12 @@ const EditProfileModal = ({ user, onClose, onSave }) => {
   const [form, setForm] = useState({
     firstName: user?.firstName || "",
     lastName: user?.lastName || "",
+    profilePicture: user?.profilePicture || "",
+    github: user?.github || "", // Double check these fallbacks are active
+    linkedin: user?.linkedin || "",
+    portfolio: user?.portfolio || "",
+    resumeUrl: user?.resumeUrl || "",
+    bio: user?.bio || "",
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -186,24 +171,37 @@ const EditProfileModal = ({ user, onClose, onSave }) => {
     }
     setLoading(true);
     try {
-      const res = await axios.patch("/profile", {
+      console.log(form);
+      const res = await updateProfile({
         firstName: form.firstName.trim(),
         lastName: form.lastName.trim(),
+        profilePicture: form.profilePicture.trim(),
+
+        // ─── FIXED: Changed keys to lowercase to match backend destructuring ───
+        github: form.github ? form.github.trim() : "",
+        linkedin: form.linkedin ? form.linkedin.trim() : "",
+
+        portfolio: form.portfolio.trim(),
+        resumeUrl: form.resumeUrl.trim(),
+        bio: form.bio.trim(),
       });
       onSave(res.data.data);
       onClose();
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to update profile");
+      // setError(err.response?.data?.message || "Failed to update profile");
+      console.log(err);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-xl w-full max-w-sm">
+    <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-xl w-full max-w-md my-8">
         <div className="flex items-center justify-between p-5 border-b border-gray-100">
-          <h3 className="text-sm font-semibold text-gray-900">Edit Profile</h3>
+          <h3 className="text-sm font-semibold text-gray-900">
+            Edit Profile Details
+          </h3>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-700 transition-colors"
@@ -211,43 +209,145 @@ const EditProfileModal = ({ user, onClose, onSave }) => {
             <X size={16} />
           </button>
         </div>
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+        <form
+          onSubmit={handleSubmit}
+          className="p-5 space-y-4 max-h-[75vh] overflow-y-auto"
+        >
           {error && (
             <div className="flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg">
               <AlertTriangle size={13} className="text-red-500 flex-shrink-0" />
               <p className="text-xs text-red-700">{error}</p>
             </div>
           )}
+
+          {/* Profile Picture Upload Section (Small/Compact Size) */}
+          <div className="border border-gray-50 rounded-xl p-3 bg-gray-50/50">
+            <label className="block text-xs font-semibold text-gray-700 mb-2">
+              Profile Avatar Picture
+            </label>
+            <div className="w-28 max-w-full">
+              <ImageUploadZone
+                label="Avatar"
+                value={form.profilePicture}
+                folder="user-profiles"
+                onChange={(uploadedUrl) =>
+                  setForm((p) => ({ ...p, profilePicture: uploadedUrl }))
+                }
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1.5">
+                First Name <span className="text-red-400">*</span>
+              </label>
+              <input
+                type="text"
+                value={form.firstName}
+                onChange={(e) =>
+                  setForm((p) => ({ ...p, firstName: e.target.value }))
+                }
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400"
+                placeholder="First name"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1.5">
+                Last Name
+              </label>
+              <input
+                type="text"
+                value={form.lastName}
+                onChange={(e) =>
+                  setForm((p) => ({ ...p, lastName: e.target.value }))
+                }
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400"
+                placeholder="Last name"
+              />
+            </div>
+          </div>
+
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1.5">
-              First Name <span className="text-red-400">*</span>
+              Bio
             </label>
-            <input
-              type="text"
-              value={form.firstName}
-              onChange={(e) =>
-                setForm((p) => ({ ...p, firstName: e.target.value }))
-              }
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 placeholder:text-gray-300"
-              placeholder="First name"
+            <textarea
+              value={form.bio}
+              onChange={(e) => setForm((p) => ({ ...p, bio: e.target.value }))}
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 resize-none"
+              placeholder="Tell us a bit about yourself..."
+              rows={2}
             />
           </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1.5">
-              Last Name
-            </label>
-            <input
-              type="text"
-              value={form.lastName}
-              onChange={(e) =>
-                setForm((p) => ({ ...p, lastName: e.target.value }))
-              }
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 placeholder:text-gray-300"
-              placeholder="Last name"
-            />
+
+          <div className="space-y-3 pt-2 border-t border-gray-50">
+            <h4 className="text-xs font-semibold text-gray-900">
+              Professional Links & Assets
+            </h4>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1.5 flex items-center gap-1">
+                <GitFork size={12} className="text-gray-400" /> GitHub URL
+              </label>
+              <input
+                type="url"
+                value={form.github || ""} // 👈 ADD "|| ''" FALLBACK HERE
+                onChange={(e) =>
+                  setForm((p) => ({ ...p, github: e.target.value }))
+                }
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400"
+                placeholder="https://github.com/username"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1.5 flex items-center gap-1">
+                <UserCheck size={12} className="text-gray-400" /> LinkedIn URL
+              </label>
+              <input
+                type="url"
+                value={form.linkedin || ""} // 👈 ADD "|| ''" FALLBACK HERE
+                onChange={(e) =>
+                  setForm((p) => ({ ...p, linkedin: e.target.value }))
+                }
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400"
+                placeholder="https://linkedin.com/in/username"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1.5 flex items-center gap-1">
+                <Globe size={12} className="text-gray-400" /> Portfolio Website
+              </label>
+              <input
+                type="url"
+                value={form.portfolio || ""} // 👈 ADD "|| ''" FALLBACK HERE
+                onChange={(e) =>
+                  setForm((p) => ({ ...p, portfolio: e.target.value }))
+                }
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400"
+                placeholder="https://portfolio.com"
+              />
+            </div>
+
+            {/* Resume File URL Asset Handler */}
+            <div className="pt-1">
+              <label className="block text-xs font-medium text-gray-700 mb-1.5 flex items-center gap-1">
+                <FileText size={12} className="text-gray-400" /> Resume PDF URL
+              </label>
+              <ImageUploadZone
+                label="Resume PDF"
+                value={form.resumeUrl}
+                folder="student-resumes"
+                onChange={(uploadedUrl) =>
+                  setForm((p) => ({ ...p, resumeUrl: uploadedUrl }))
+                }
+              />
+            </div>
           </div>
-          {/* Reserved for future: bio, github, linkedin, portfolio */}
-          <div className="flex justify-end gap-3 pt-1">
+
+          <div className="flex justify-end gap-3 pt-3 border-t border-gray-100">
             <button
               type="button"
               onClick={onClose}
@@ -429,11 +529,24 @@ const EmptyState = ({ message }) => (
 );
 
 // ─── Info Row ─────────────────────────────────────────────────
-const InfoRow = ({ icon: Icon, label, value }) => (
+const InfoRow = ({ icon: Icon, label, value, isLink, url }) => (
   <div className="flex items-center gap-3 py-2.5 border-b border-gray-50 last:border-0">
     <Icon size={13} className="text-gray-400 flex-shrink-0" />
     <span className="text-xs text-gray-400 w-24 flex-shrink-0">{label}</span>
-    <span className="text-xs font-medium text-gray-800">{value || "—"}</span>
+    {isLink && url ? (
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-xs font-medium text-blue-600 hover:underline truncate max-w-[180px] sm:max-w-none"
+      >
+        {value || "View Link"}
+      </a>
+    ) : (
+      <span className="text-xs font-medium text-gray-800 truncate max-w-[180px] sm:max-w-none">
+        {value || "—"}
+      </span>
+    )}
   </div>
 );
 
@@ -464,16 +577,6 @@ const Profile = () => {
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        // GET /api/profile
-        // Returns: {
-        //   user: { firstName, lastName, email, rollNumber, branch, year, section, cgpa, role, avatarUrl, createdAt },
-        //   stats: { clubsFollowing, eventsRegistered, discussionsCreated, placementApplications },
-        //   classroom: { _id, className } | null,
-        //   followedClubs: Club[],
-        //   registeredEvents: Event[],
-        //   recentApplications: Application[] (latest 5, drive populated)
-        // }
-        // const res = await axios.get("/profile")
         const res = await getProfile();
         setProfile(res.data.data);
       } catch (err) {
@@ -509,8 +612,8 @@ const Profile = () => {
     registeredEvents = [],
     recentApplications = [],
   } = profile;
+
   const fullName = `${user.firstName} ${user.lastName}`;
-  const initials = `${user.firstName?.[0]}${user.lastName?.[0]}`.toUpperCase();
   const cgpaColor =
     user.cgpa >= 8
       ? "text-green-600"
@@ -538,16 +641,7 @@ const Profile = () => {
           {/* Profile Card */}
           <div className="bg-white border border-gray-100 rounded-xl p-6">
             <div className="flex flex-col items-center text-center">
-              <Avatar
-                user={user}
-                onUpload={(file) => {
-                  // TODO: upload to Cloudinary then PATCH /api/profile/avatar
-                  console.log(
-                    "Avatar upload pending Cloudinary integration",
-                    file,
-                  );
-                }}
-              />
+              <Avatar user={user} />
 
               <div className="mt-4">
                 <h2 className="text-base font-semibold text-gray-900">
@@ -563,6 +657,13 @@ const Profile = () => {
               >
                 {roleLabel[user.role] || "Student"}
               </span>
+
+              {/* Bio Sub-text Section */}
+              {user.bio && (
+                <p className="text-xs text-gray-500 mt-3 border-t border-gray-50 pt-3 italic line-clamp-3 w-full">
+                  "{user.bio}"
+                </p>
+              )}
 
               {/* CGPA pill */}
               <div className="mt-3 flex items-center gap-2">
@@ -596,10 +697,10 @@ const Profile = () => {
             </div>
           </div>
 
-          {/* Account Info */}
+          {/* Account & Social Info */}
           <div className="bg-white border border-gray-100 rounded-xl p-5">
             <h3 className="text-sm font-semibold text-gray-900 mb-3">
-              Account Info
+              Account & Social Info
             </h3>
             <InfoRow icon={Mail} label="Email" value={user.email} />
             <InfoRow icon={Hash} label="Roll No." value={user.rollNumber} />
@@ -609,6 +710,36 @@ const Profile = () => {
               icon={MapPin}
               label="Section"
               value={`Section ${user.section}`}
+            />
+
+            {/* Added Social Media Rows */}
+            <InfoRow
+              icon={GitFork}
+              label="GitHub"
+              value={user.github ? "View GitHub" : "—"}
+              isLink={!!user.github}
+              url={user.github}
+            />
+            <InfoRow
+              icon={UserCheck}
+              label="LinkedIn"
+              value={user.linkedin ? "View Profile" : "—"}
+              isLink={!!user.linkedin}
+              url={user.linkedin}
+            />
+            <InfoRow
+              icon={Globe}
+              label="Portfolio"
+              value={user.portfolio ? "View Portfolio" : "—"}
+              isLink={!!user.portfolio}
+              url={user.portfolio}
+            />
+            <InfoRow
+              icon={FileText}
+              label="Resume"
+              value={user.resumeUrl ? "Download Resume" : "—"}
+              isLink={!!user.resumeUrl}
+              url={user.resumeUrl}
             />
           </div>
 
@@ -742,7 +873,6 @@ const Profile = () => {
                     to={`/community/events/${event._id}`}
                     className="flex items-center gap-3 p-3 bg-gray-50 border border-gray-100 rounded-xl hover:border-gray-300 transition-all group"
                   >
-                    {/* Date block — Fixed to parse startDateTime string values */}
                     <div className="flex-shrink-0 w-9 text-center">
                       <p className="text-xs text-gray-400 uppercase leading-none">
                         {new Date(event.startDateTime).toLocaleDateString(
@@ -788,7 +918,6 @@ const Profile = () => {
                       to={`/career/drives/${app.drive?._id}`}
                       className="flex items-center gap-3 p-3 bg-gray-50 border border-gray-100 rounded-xl hover:border-gray-300 transition-all group"
                     >
-                      {/* Company logo */}
                       <div className="w-9 h-9 rounded-lg bg-white border border-gray-200 flex items-center justify-center flex-shrink-0 overflow-hidden">
                         {app.drive?.companyLogo ? (
                           <img

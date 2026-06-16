@@ -52,9 +52,7 @@ const applicationSchema = new mongoose.Schema(
     },
     resumeUrl: { type: String, default: "" },
     currentRound: Number,
-    notes: { type: String, default: "" }, // ← private notes for the student
-
-    // Full audit trail of every status change
+   
     timeline: { type: [timelineEntrySchema], default: [] },
 
     appliedAt: { type: Date, default: Date.now },

@@ -81,3 +81,32 @@ export const getUpcomingEvents = asyncHandler(async (req, res) => {
 export const registeredEvents=asyncHandler(async(req,res)=>{
   const events= await User.find(req.user._id);
 })
+
+export const updateEvent = asyncHandler(async (req, res) => {
+  const { id } = req.params; 
+  const updates = req.body;
+  
+
+  if (!id || id === "undefined") {
+    return sendResponse(res, 400, "Invalid or missing Event ID parameter");
+  }
+
+  if (updates.startDateTime && updates.endDateTime) {
+    if (new Date(updates.endDateTime) <= new Date(updates.startDateTime)) {
+      return sendResponse(res, 400, "End date and time must be after the start timeline");
+    }
+  }
+
+  const updatedEvent = await Event.findByIdAndUpdate(
+    id,
+    { $set: updates },
+    { new: true, runValidators: true } // Returns the newly modified object and fires schema validations
+  );
+  
+
+  if (!updatedEvent) {
+    return sendResponse(res, 404, "Target event configuration does not exist");
+  }
+
+  return sendResponse(res, 200, "Event parameters synced successfully", { event: updatedEvent });
+});

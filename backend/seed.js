@@ -11,23 +11,23 @@ await connectDB();
 
 const seedClassroom = async () => {
   try {
-    // const classroom = await Classroom.findOne({
-    //   className: "CSE-A Semester 7",
-    // });
+    const classroom = await Classroom.findOne({
+      className: "CSE-A Semester 7",
+    });
 
-    // await User.updateMany(
-    //   {
-    //     branch: "CSE",
-    //     year: 4,
-    //     section: "A",
-    //   },
-    //   {
-    //     classroom: classroom._id,
-    //   },
-    // );
-    const event= await Event.find().select("eventName");
+    await User.updateMany(
+      {
+        branch: "CSE",
+        year: 4,
+        section: "A",
+      },
+      {
+        classroom: classroom._id,
+      },
+    );
+    // const event= await Event.find().select("eventName");
 
-    console.log(event);
+    // console.log(event);
     process.exit(0);
   } catch (error) {
     console.error(error);

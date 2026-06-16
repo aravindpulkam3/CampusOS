@@ -1,5 +1,6 @@
-import { Megaphone, Radio } from "lucide-react";
-
+import { Megaphone, Radio, Trash2 } from "lucide-react";
+import { useState } from "react";
+import useAuth from "../../hooks/useAuth";
 // ─── Helpers ──────────────────────────────────────────────────
 const relativeTime = (d) => {
   if (!d) return "—";
@@ -59,13 +60,18 @@ const AnnouncementCard = ({
   variant = "detail",
   avatarBg,
   onClick,
+  onDelete,
+  isEligible, // Added onDelete callback prop
 }) => {
   const isFeed = variant === "feed";
-
+  const [isDeleting, setIsDeleting] = useState(false);
+  const { user } = useAuth();
+  
   // ── Source info (feed variant) ──────────────────────────────
   const tType = announcement.targetType; // "club" | "event"
   const tConf = typeConfig[tType] || typeConfig.club;
   const TypeIcon = tConf.icon;
+
 
   const sourceName =
     tType === "club"
@@ -76,11 +82,8 @@ const AnnouncementCard = ({
   const sourceInitials = getInitials(sourceName);
 
   // ── Author info (detail variant) ────────────────────────────
-  // ── Author info (detail variant) ────────────────────────────
   const author = announcement.postedBy;
-  console.log(announcement.postedBy);
 
-  // Verify that 'author' exists AND is a populated object, not just a plain string ID
   const isPopulated =
     author && typeof author === "object" && "firstName" in author;
 
@@ -94,11 +97,31 @@ const AnnouncementCard = ({
 
   const authorAvatarBg = avatarBg || "bg-gray-800";
 
+  // ── Delete Handler ──────────────────────────────────────────
+  const handleDeleteClick = async (e) => {
+    e.stopPropagation(); // Prevents clicking delete from opening the feed detail view
+
+    if (window.confirm("Are you sure you want to delete this announcement?")) {
+      try {
+        setIsDeleting(true);
+        // Call your external API handler passed down via props
+        if (onDelete) {
+          await onDelete(announcement._id);
+        }
+      } catch (error) {
+        console.error("Failed to delete announcement:", error);
+      } finally {
+        setIsDeleting(false);
+      }
+    }
+  };
+
   return (
     <div
       onClick={isFeed && onClick ? onClick : undefined}
       className={`bg-white border border-gray-100 rounded-2xl overflow-hidden transition-all duration-200
         ${isFeed && onClick ? "cursor-pointer hover:border-gray-300 hover:shadow-md" : ""}
+        ${isDeleting ? "opacity-50 pointer-events-none" : ""}
       `}
     >
       {/* ── Image — feed: full-width hero; detail: inline ── */}
@@ -114,7 +137,7 @@ const AnnouncementCard = ({
       )}
 
       <div className="p-4">
-        {/* ── Feed header: type badge + timestamp ── */}
+        {/* ── Feed header: type badge + timestamp + delete ── */}
         {isFeed && (
           <div className="flex items-center justify-between mb-3">
             <span
@@ -123,29 +146,51 @@ const AnnouncementCard = ({
               <TypeIcon size={11} />
               {tConf.label}
             </span>
-            <span className="text-xs text-gray-400">
-              {relativeTime(announcement.createdAt)}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-400">
+                {relativeTime(announcement.createdAt)}
+              </span>
+              {(isEligible || user?.role === "superadmin") && (
+                <button
+                  onClick={handleDeleteClick}
+                  className="text-gray-400 hover:text-red-500 p-1 rounded-md hover:bg-red-50 transition-colors"
+                  title="Delete Announcement"
+                >
+                  <Trash2 size={14} />
+                </button>
+              )}
+            </div>
           </div>
         )}
 
-        {/* ── Detail header: author avatar + name + timestamp ── */}
+        {/* ── Detail header: author avatar + name + timestamp + delete ── */}
         {!isFeed && (
-          <div className="flex items-center gap-2.5 mb-3">
-            <div
-              className={`w-8 h-8 rounded-full ${authorAvatarBg} flex items-center justify-center
-                text-white text-xs font-bold flex-shrink-0`}
-            >
-              {authorInitials}
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2.5">
+              <div
+                className={`w-8 h-8 rounded-full ${authorAvatarBg} flex items-center justify-center
+                  text-white text-xs font-bold flex-shrink-0`}
+              >
+                {authorInitials}
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-gray-800 leading-tight">
+                  {authorName}
+                </p>
+                <p className="text-xs text-gray-400">
+                  {relativeTime(announcement.createdAt)}
+                </p>
+              </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-gray-800 leading-tight">
-                {authorName}
-              </p>
-              <p className="text-xs text-gray-400">
-                {relativeTime(announcement.createdAt)}
-              </p>
-            </div>
+            {(isEligible || user?.role === "superadmin") && (
+                <button
+                  onClick={handleDeleteClick}
+                  className="text-gray-400 hover:text-red-500 p-1 rounded-md hover:bg-red-50 transition-colors"
+                  title="Delete Announcement"
+                >
+                  <Trash2 size={14} />
+                </button>
+              )}
           </div>
         )}
 

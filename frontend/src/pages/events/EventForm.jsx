@@ -1,11 +1,11 @@
-import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { ArrowLeft, X, Plus } from "lucide-react";
-import { createEvent } from "../../api/event.api";
+import { createEvent, getEventById, updateEvent } from "../../api/event.api.js"; // Added getEventById & updateEvent
 import { BRANCHES } from "../../constants/branches.js";
 import { EVENT_CATEGORIES } from "../../constants/categories.js";
 import useAuth from "../../hooks/useAuth.js";
-import ImageUploadZone from "../../components/forms/ImageUploadZone.jsx"
+import ImageUploadZone from "../../components/forms/ImageUploadZone.jsx";
 
 const YEARS = [1, 2, 3, 4];
 
@@ -42,7 +42,6 @@ const Select = ({ children, ...props }) => (
 const FieldError = ({ message }) =>
   message ? <p className="text-xs text-red-400 mt-1">{message}</p> : null;
 
-// ─── Toggle Pill ──────────────────────────────────────────────
 const TogglePill = ({ label, selected, onClick }) => (
   <button
     type="button"
@@ -58,7 +57,6 @@ const TogglePill = ({ label, selected, onClick }) => (
   </button>
 );
 
-// ─── Section Wrapper ──────────────────────────────────────────
 const Section = ({ title, children }) => (
   <div className="bg-white border border-gray-100 rounded-xl p-5 flex flex-col gap-4">
     <h3 className="text-sm font-semibold text-gray-900 pb-2 border-b border-gray-50">
@@ -68,12 +66,25 @@ const Section = ({ title, children }) => (
   </div>
 );
 
+// ─── Skeleton Loader for Edit Fetch Fallback ──────────────────
+const FormSkeleton = () => (
+  <div className="max-w-3xl mx-auto animate-pulse px-4 py-6 space-y-6">
+    <div className="w-20 h-4 bg-gray-100 rounded" />
+    <div className="h-32 bg-gray-100 rounded-xl" />
+    <div className="h-48 bg-gray-100 rounded-xl" />
+  </div>
+);
+
 // ─── Main Component ───────────────────────────────────────────
-const CreateEvent = () => {
+const EventForm = ({ mode = "create" }) => {
   const navigate = useNavigate();
-  const { clubId } = useParams();
+  const location = useLocation();
+  const { clubId, eventId } = useParams(); // Can capture either dependent parameter from layout routes
   const { user } = useAuth();
 
+  const isEditMode = mode === "edit";
+
+  const [loading, setLoading] = useState(isEditMode);
   const [submitting, setSubmitting] = useState(false);
   const [tagInput, setTagInput] = useState("");
   const [errors, setErrors] = useState({});
@@ -88,11 +99,63 @@ const CreateEvent = () => {
     venue: "",
     category: "",
     tags: [],
-    organizerClub: clubId,
+    organizerClub: clubId || "",
     eligibleBranches: [],
     eligibleYears: [],
     banner: "",
   });
+
+  // ─── Edit Mode Data Initialization Effect ───────────────────
+  useEffect(() => {
+    if (!isEditMode) return;
+
+    // 1. Optimistic check: Try reading data forwarded from navigate state
+    if (location.state?.event) {
+      populateForm(location.state.event);
+      setLoading(false);
+    } else if (eventId) {
+      // 2. Fallback check: Fetch fresh data from API if page refreshed
+      const fetchEventData = async () => {
+        try {
+          const res = await getEventById(eventId);
+          const eventData = res?.data?.data?.event;
+          if (eventData) {
+            populateForm(eventData);
+          } else {
+            setErrors({ submit: "Event details could not be parsed." });
+          }
+        } catch (err) {
+          console.error(err);
+          setErrors({ submit: "Failed to load event settings for editing." });
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchEventData();
+    }
+  }, [isEditMode, eventId, location.state]);
+
+  // Helper to parse ISO strings back to raw input formats HTML elements expect
+  const populateForm = (eventData) => {
+    const start = new Date(eventData.startDateTime);
+    const end = new Date(eventData.endDateTime);
+
+    setForm({
+      eventName: eventData.eventName || "",
+      description: eventData.description || "",
+      startDate: start.toISOString().split("T")[0],
+      startTime: start.toTimeString().split(" ")[0].slice(0, 5),
+      endDate: end.toISOString().split("T")[0],
+      endTime: end.toTimeString().split(" ")[0].slice(0, 5),
+      venue: eventData.venue || "",
+      category: eventData.category || "",
+      tags: eventData.tags || [],
+      organizerClub: eventData.organizerClub?._id || eventData.organizerClub || clubId || "",
+      eligibleBranches: eventData.eligibleBranches || [],
+      eligibleYears: eventData.eligibleYears || [],
+      banner: eventData.banner || "",
+    });
+  };
 
   const set = (field) => (e) => {
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
@@ -159,13 +222,8 @@ const CreateEvent = () => {
 
     setSubmitting(true);
 
-    // Formulate ISO Date objects to match backend Date expectations
-    const startDateTime = new Date(
-      `${form.startDate}T${form.startTime}`,
-    ).toISOString();
-    const endDateTime = new Date(
-      `${form.endDate}T${form.endTime}`,
-    ).toISOString();
+    const startDateTime = new Date(`${form.startDate}T${form.startTime}`).toISOString();
+    const endDateTime = new Date(`${form.endDate}T${form.endTime}`).toISOString();
 
     const payload = {
       eventName: form.eventName.trim(),
@@ -176,26 +234,32 @@ const CreateEvent = () => {
       category: form.category,
       tags: form.tags,
       organizerClub: form.organizerClub,
-      createdBy: user?._id,
       eligibleBranches: form.eligibleBranches,
       eligibleYears: form.eligibleYears,
       banner: form.banner.trim() || null,
     };
 
     try {
-      await createEvent(payload);
-      navigate(`/community/clubs/${clubId}`);
+      if (isEditMode) {
+        await updateEvent(eventId, payload);
+        navigate(`/community/events/${eventId}`); // Route back to refreshed Detail page
+      } else {
+        await createEvent(...payload);
+        navigate(`/community/clubs/${clubId || form.organizerClub}`);
+      }
     } catch (err) {
       console.error(err);
       setErrors((prev) => ({
         ...prev,
         submit:
-          err.response?.data?.message || "Failed to create event. Try again.",
+          err.response?.data?.message || `Failed to ${mode} event. Try again.`,
       }));
     } finally {
       setSubmitting(false);
     }
   };
+
+  if (loading) return <FormSkeleton />;
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-6">
@@ -209,9 +273,13 @@ const CreateEvent = () => {
 
       {/* Page Header */}
       <div className="mb-6">
-        <h2 className="text-lg font-semibold text-gray-900">Create Event</h2>
+        <h2 className="text-lg font-semibold text-gray-900">
+          {isEditMode ? "Edit Event" : "Create Event"}
+        </h2>
         <p className="text-xs text-gray-400 mt-0.5">
-          Fill in the details to publish a new club event configuration
+          {isEditMode
+            ? "Modify modifications to tweak this running event config details"
+            : "Fill in the details to publish a new club event configuration"}
         </p>
       </div>
 
@@ -269,7 +337,7 @@ const CreateEvent = () => {
                 type="date"
                 value={form.startDate}
                 onChange={set("startDate")}
-                min={new Date().toISOString().split("T")[0]}
+                min={isEditMode ? undefined : new Date().toISOString().split("T")[0]}
               />
               <FieldError message={errors.startDate} />
             </div>
@@ -409,7 +477,7 @@ const CreateEvent = () => {
           <ImageUploadZone
             label="Banner Asset"
             value={form.banner}
-            folder="event-banners" // Places asset inside /eventsphere/banners sub-directory on cloud console
+            folder="event-banners"
             onChange={(uploadedUrl) =>
               setForm((prev) => ({ ...prev, banner: uploadedUrl }))
             }
@@ -433,7 +501,7 @@ const CreateEvent = () => {
             disabled={submitting}
             className="px-5 py-2 text-sm font-medium bg-gray-900 text-white rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-xs"
           >
-            {submitting ? "Publishing..." : "Publish Event"}
+            {submitting ? "Saving..." : isEditMode ? "Save Changes" : "Publish Event"}
           </button>
         </div>
       </form>
@@ -441,4 +509,4 @@ const CreateEvent = () => {
   );
 };
 
-export default CreateEvent;
+export default EventForm;

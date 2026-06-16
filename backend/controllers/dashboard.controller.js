@@ -7,6 +7,7 @@ import Drive        from "../models/Drive.js";
 import Discussion   from "../models/Discussion.js";
 import Application  from "../models/Application.js";
 import Classroom    from "../models/Classroom.js";
+import { searchAll }     from "../services/dashboard.service.js";
 
 export const getDashboard = asyncHandler(async (req, res) => {
   const user = req.user;
@@ -127,4 +128,12 @@ export const getDashboard = asyncHandler(async (req, res) => {
       activeApplications,   // NEW
     },
   });
+});
+
+export const globalSearch = asyncHandler(async (req, res) => {
+  const { q } = req.query;
+  if (!q || q.trim().length < 2)
+    return sendResponse(res, 200, "Search results", []);
+  const results = await searchAll(q);
+  return sendResponse(res, 200, "Search results", results);
 });

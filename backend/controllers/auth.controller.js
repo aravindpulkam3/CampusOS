@@ -11,6 +11,7 @@ import {
   REFRESH_COOKIE_OPTIONS,
   getProfileData
 } from "../services/auth.service.js";
+import User from "../models/User.js";
 
 export const signup = asyncHandler(async (req, res) => {
   const user = await registerUser(req.body);
@@ -95,6 +96,78 @@ export const getProfile = asyncHandler(async (req, res) => {
   );
 });
 
-// export const getProfile=asyncHandler(async(req,res)=>{
+const isValidUrl = (string) => {
+  if (!string) return true; // Optional fields can be empty strings
+  try {
+    new URL(string);
+    return true;
+  } catch (_) {
+    return false;
+  }
+};
 
-// })
+export const updateProfile = asyncHandler(async (req, res) => {
+  // 1. Identify the logged-in user from the authentication middleware
+  const userId = req.user?._id; 
+  
+  if (!userId) {
+    return sendResponse(res, 401, "Unauthorized: User session not found");
+  }
+
+  // 2. Extract allowed fields from body to prevent malicious parameter injection
+  const {
+    firstName,
+    lastName,
+    profilePicture,
+    bio,
+    github,
+    linkedin,
+    portfolio,
+    resumeUrl,
+  } = req.body;
+
+  // 3. Mandatory field validation
+  if (firstName !== undefined && !firstName.trim()) {
+    return sendResponse(res, 400, "First name cannot be empty");
+  }
+
+  // 4. URL format validation checks for assets and social configurations
+  if (github && !isValidUrl(github)) return sendResponse(res, 400, "Invalid GitHub URL format");
+  if (linkedin && !isValidUrl(linkedin)) return sendResponse(res, 400, "Invalid LinkedIn URL format");
+  if (portfolio && !isValidUrl(portfolio)) return sendResponse(res, 400, "Invalid Portfolio URL format");
+  if (resumeUrl && !isValidUrl(resumeUrl)) return sendResponse(res, 400, "Invalid Resume asset URL format");
+   if (profilePicture && !isValidUrl(profilePicture)) return sendResponse(res, 400, "Invalid rpofile picture URL format");
+
+  // 5. Construct update object dynamically based on what was passed
+ // ─── Safely Construct Update Object ──────────────────────────
+  const updateData = {};
+  
+  if (firstName !== undefined) updateData.firstName = firstName.trim();
+  if (lastName !== undefined) updateData.lastName = lastName.trim();
+  if (bio !== undefined) updateData.bio = bio.trim();
+
+  // Protect optional social values by checking if they exist before trimming
+  if (profilePicture !== undefined) updateData.profilePicture = profilePicture.trim();
+  if (github !== undefined) updateData.github = github ? github.trim() : "";
+  if (linkedin !== undefined) updateData.linkedin = linkedin ? linkedin.trim() : "";
+  if (portfolio !== undefined) updateData.portfolio = portfolio ? portfolio.trim() : "";
+  if (resumeUrl !== undefined) updateData.resumeUrl = resumeUrl ? resumeUrl.trim() : "";
+
+  // 6. Execute update query against database
+  const updatedUser = await User.findByIdAndUpdate(
+    userId,
+    { $set: updateData },
+    { 
+      new: true,           // Returns the modified document rather than the old one
+      runValidators: true, // Forces Mongoose schema validators to re-fire on updates
+      select: "-password"  // Ensures the hashed password remains private
+    }
+  );
+
+  if (!updatedUser) {
+    return sendResponse(res, 404, "User profile record does not exist");
+  }
+
+  // 7. Success: Send fresh payload back up to frontend profile state
+  return sendResponse(res, 200, "Profile updated successfully", updatedUser);
+});

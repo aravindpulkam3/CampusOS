@@ -10,6 +10,7 @@ import {
   ChevronUp,
   CornerDownRight,
   X,
+  PenSquare, // Added for an interactive prompt layout icon
 } from "lucide-react";
 import useAuth from "../../hooks/useAuth";
 import {
@@ -69,7 +70,6 @@ const Avatar = ({ user, size = "sm" }) => {
 };
 
 // ─── Recursive Reply Node ─────────────────────────────────────
-// depth controls the left indent; we cap visual nesting at depth 4
 const ReplyNode = ({
   reply,
   discussionId,
@@ -126,7 +126,7 @@ const ReplyNode = ({
     try {
       const res = await addReply(discussionId, commentId, {
         content: replyText.trim(),
-        parentReplyId: reply._id, // ← key: tells backend this is nested
+        parentReplyId: reply._id,
       });
       onNewReply(reply._id, res.data.data);
       setReplyText("");
@@ -138,7 +138,6 @@ const ReplyNode = ({
     }
   };
 
-  // Left border color fades with depth
   const borderColors = [
     "border-gray-200",
     "border-gray-200",
@@ -151,13 +150,11 @@ const ReplyNode = ({
   return (
     <div className={`pl-3 ${depth > 0 ? `border-l ${borderColor}` : ""}`}>
       <div className="py-2">
-        {/* Author row */}
         <div className="flex items-center gap-2 mb-1">
           <Avatar user={reply.author} size="sm" />
           <span className="text-xs font-medium text-gray-800">
             {reply.author?.firstName} {reply.author?.lastName}
           </span>
-          {/* @mention */}
           {reply.replyingTo && (
             <span className="text-xs text-blue-500">
               @{reply.replyingTo.firstName}
@@ -171,12 +168,10 @@ const ReplyNode = ({
           )}
         </div>
 
-        {/* Content */}
         <p className="text-xs text-gray-700 leading-relaxed ml-8 mb-1.5">
           {reply.content}
         </p>
 
-        {/* Actions */}
         <div className="flex items-center gap-3 ml-8">
           <button
             onClick={handleUpvote}
@@ -218,7 +213,6 @@ const ReplyNode = ({
           )}
         </div>
 
-        {/* Inline reply input */}
         {replyBox && (
           <div className="flex gap-2 mt-2 ml-8">
             <input
@@ -255,7 +249,6 @@ const ReplyNode = ({
         )}
       </div>
 
-      {/* Children — recursive */}
       {!collapsed && children.length > 0 && (
         <div>
           {children.map((child) => (
@@ -308,7 +301,6 @@ const CommentBlock = ({
     );
   }
 
-  // Insert a new top-level reply (direct to comment)
   const handleDirectReplySubmit = async () => {
     if (!replyText.trim()) return;
     setSubmitting(true);
@@ -327,7 +319,6 @@ const CommentBlock = ({
     }
   };
 
-  // Insert a nested reply under a specific parent node in the tree
   const handleNewNestedReply = (parentReplyId, newReply) => {
     const insertInto = (nodes) =>
       nodes.map((n) => {
@@ -340,7 +331,6 @@ const CommentBlock = ({
     setShowReplies(true);
   };
 
-  // Soft-remove a reply from tree (any depth)
   const handleDeleteReply = (replyId) => {
     const removeFrom = (nodes) =>
       nodes
@@ -397,7 +387,6 @@ const CommentBlock = ({
       )}
 
       <div className="flex gap-3">
-        {/* Upvote column */}
         <div className="flex flex-col items-center gap-1 flex-shrink-0 pt-0.5">
           <button
             onClick={handleUpvote}
@@ -414,7 +403,6 @@ const CommentBlock = ({
           </span>
         </div>
 
-        {/* Content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-2">
             <Avatar user={comment.author} size="sm" />
@@ -439,7 +427,6 @@ const CommentBlock = ({
             {comment.content}
           </p>
 
-          {/* Actions */}
           <div className="flex items-center gap-4 flex-wrap">
             {currentUser && (
               <button
@@ -455,7 +442,9 @@ const CommentBlock = ({
 
             {totalReplies > 0 && (
               <button
-                onClick={() => setShowReplies((p) => !p)}
+                onClick={() => {
+                  setShowReplies((p) => !p);
+                }}
                 className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-700 transition-colors"
               >
                 {showReplies ? (
@@ -486,7 +475,6 @@ const CommentBlock = ({
             )}
           </div>
 
-          {/* Direct reply input */}
           {replyBox && (
             <div className="mt-3 flex gap-2">
               <input
@@ -522,7 +510,6 @@ const CommentBlock = ({
             </div>
           )}
 
-          {/* Reply tree */}
           {showReplies && replyTree.length > 0 && (
             <div className="mt-3">
               {replyTree.map((reply) => (
@@ -559,8 +546,12 @@ export default function DiscussionDetail() {
   const [upvotes, setUpvotes] = useState(0);
   const [upvoted, setUpvoted] = useState(false);
   const [bookmarked, setBookmarked] = useState(false);
+  
+  // ─── Refactored Comment Box State Management ───
+  const [isFormExpanded, setIsFormExpanded] = useState(false);
   const [commentText, setCommentText] = useState("");
   const [posting, setPosting] = useState(false);
+  const textareaRef = useRef(null);
 
   useEffect(() => {
     const fetch = async () => {
@@ -612,6 +603,7 @@ export default function DiscussionDetail() {
       const res = await addComment(id, { content: commentText.trim() });
       setComments((p) => [...p, res.data.data]);
       setCommentText("");
+      setIsFormExpanded(false); // Collapse form back down after successful post
       setDiscussion((d) => ({ ...d, commentCount: (d.commentCount ?? 0) + 1 }));
     } catch (err) {
       console.error(err);
@@ -668,21 +660,15 @@ export default function DiscussionDetail() {
     <div className="max-w-3xl mx-auto pb-16">
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-xs text-gray-400 mb-6">
-        <Link
-          to="/discussions"
-          className="hover:text-gray-700 transition-colors"
-        >
+        <Link to="/discussions" className="hover:text-gray-700 transition-colors">
           Discussions
         </Link>
         <span>/</span>
-        <span className="text-gray-600 truncate max-w-xs">
-          {discussion.title}
-        </span>
+        <span className="text-gray-600 truncate max-w-xs">{discussion.title}</span>
       </div>
 
       {/* Discussion card */}
-      <div className="bg-white border border-gray-100 rounded-2xl p-6 mb-4 relative">
-        {/* ─── Top Badge Line & Action Row ─── */}
+      <div className="bg-white border border-gray-100 rounded-2xl p-6 mb-6 relative">
         <div className="flex items-center justify-between gap-2 mb-3 flex-wrap w-full">
           <div className="flex items-center gap-2 flex-wrap">
             <span
@@ -707,7 +693,6 @@ export default function DiscussionDetail() {
             )}
           </div>
 
-          {/* ─── Icon-Only Trash Can Delete Button ─── */}
           {isDiscussionAuthor && user.role === "superadmin" && (
             <button
               onClick={handleDelete}
@@ -719,12 +704,10 @@ export default function DiscussionDetail() {
           )}
         </div>
 
-        {/* ─── Discussion Title ─── */}
         <h1 className="text-xl font-semibold text-gray-900 leading-tight mb-4">
           {discussion.title}
         </h1>
 
-        {/* ─── Author Info block ─── */}
         <div className="flex items-center gap-2.5 mb-5">
           <Avatar user={discussion.author} size="md" />
           <div>
@@ -738,12 +721,10 @@ export default function DiscussionDetail() {
           </div>
         </div>
 
-        {/* ─── Main Post Content Body ─── */}
         <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line mb-5">
           {discussion.content}
         </p>
 
-        {/* ─── Tags List Sub-layout ─── */}
         {discussion.tags?.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mb-5">
             {discussion.tags.map((tag) => (
@@ -757,7 +738,6 @@ export default function DiscussionDetail() {
           </div>
         )}
 
-        {/* ─── Footer Engagement & Metrics Section ─── */}
         <div className="flex items-center justify-between pt-4 border-t border-gray-100">
           <div className="flex items-center gap-3">
             <button
@@ -789,7 +769,73 @@ export default function DiscussionDetail() {
         </div>
       </div>
 
-      {/* Comments */}
+      {/* ─── NEW: Compact, Collapsible Inline Reply Form (Positioned Above Comments) ─── */}
+      {user && !discussion.isLocked ? (
+        <div className="mb-6 transition-all duration-200">
+          {!isFormExpanded ? (
+            // Collapsed trigger bar: matches standard UI elements nicely
+            <div
+              onClick={() => {
+                setIsFormExpanded(true);
+                setTimeout(() => textareaRef.current?.focus(), 50);
+              }}
+              className="flex items-center gap-2.5 px-4 py-3 bg-white border border-gray-100 rounded-xl cursor-pointer text-gray-400 hover:border-gray-300 hover:shadow-xs transition-all"
+            >
+              <PenSquare size={14} className="text-gray-400 flex-shrink-0" />
+              <span className="text-xs font-medium">Write a thoughtful reply...</span>
+            </div>
+          ) : (
+            // Expanded micro input card
+            <div className="bg-white border border-gray-100 rounded-xl p-4 shadow-xs">
+              <form onSubmit={handlePostComment}>
+                <textarea
+                  ref={textareaRef}
+                  value={commentText}
+                  onChange={(e) => setCommentText(e.target.value)}
+                  rows={3}
+                  placeholder="Type your answer or perspective here..."
+                  className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg outline-none focus:border-gray-900 placeholder:text-gray-300 resize-none leading-relaxed transition-all mb-3"
+                />
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsFormExpanded(false);
+                      setCommentText("");
+                    }}
+                    className="px-3 py-1.5 text-xs font-medium text-gray-500 hover:text-gray-800 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={posting || !commentText.trim()}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 bg-gray-900 text-white text-xs font-medium rounded-lg hover:bg-gray-800 disabled:opacity-40 transition-colors"
+                  >
+                    {posting ? (
+                      <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      "Post reply"
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+        </div>
+      ) : discussion.isLocked ? (
+        <div className="flex items-center justify-center gap-2 py-3 bg-gray-50 border border-gray-100 rounded-xl mb-6">
+          <span className="text-xs text-gray-500">🔒 This discussion is locked.</span>
+        </div>
+      ) : (
+        <div className="flex items-center justify-center gap-2 py-3 bg-gray-50 border border-gray-100 rounded-xl mb-6">
+          <Link to="/login" className="text-xs text-gray-900 font-medium hover:underline underline-offset-2">
+            Sign in to reply
+          </Link>
+        </div>
+      )}
+
+      {/* List of Existing Comments */}
       <div className="mb-4">
         <h2 className="text-sm font-semibold text-gray-900 mb-3">
           {comments.length > 0
@@ -820,57 +866,6 @@ export default function DiscussionDetail() {
           </div>
         )}
       </div>
-
-      {/* Add comment */}
-      {user && !discussion.isLocked ? (
-        <div className="bg-white border border-gray-100 rounded-2xl p-5">
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-3">
-            Your reply
-          </h3>
-          <form onSubmit={handlePostComment}>
-            <textarea
-              value={commentText}
-              onChange={(e) => setCommentText(e.target.value)}
-              rows={4}
-              placeholder="Write a thoughtful reply..."
-              className="w-full px-3.5 py-2.5 text-sm border border-gray-200 rounded-xl outline-none focus:border-gray-900 focus:ring-2 focus:ring-gray-900/5 placeholder:text-gray-300 resize-none leading-relaxed transition-all mb-3"
-            />
-            <div className="flex items-center justify-end">
-              <button
-                type="submit"
-                disabled={posting || !commentText.trim()}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-xl hover:bg-gray-800 disabled:opacity-40 transition-colors"
-              >
-                {posting ? (
-                  <>
-                    <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    Posting...
-                  </>
-                ) : (
-                  <>
-                    <MessageSquare size={13} /> Post reply
-                  </>
-                )}
-              </button>
-            </div>
-          </form>
-        </div>
-      ) : discussion.isLocked ? (
-        <div className="flex items-center justify-center gap-2 py-4 bg-gray-50 border border-gray-100 rounded-xl">
-          <span className="text-sm text-gray-500">
-            🔒 This discussion is locked.
-          </span>
-        </div>
-      ) : (
-        <div className="flex items-center justify-center gap-2 py-4 bg-gray-50 border border-gray-100 rounded-xl">
-          <Link
-            to="/login"
-            className="text-sm text-gray-900 font-medium hover:underline underline-offset-2"
-          >
-            Sign in to reply
-          </Link>
-        </div>
-      )}
     </div>
   );
 }

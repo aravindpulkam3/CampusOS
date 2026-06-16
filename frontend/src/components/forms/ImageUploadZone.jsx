@@ -6,7 +6,7 @@ const ImageUploadZone = ({ value, onChange, folder = "general", label = "Upload 
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
   const fileInputRef = useRef(null);
-
+  
   const handleFileChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -28,7 +28,7 @@ const ImageUploadZone = ({ value, onChange, folder = "general", label = "Upload 
       const response = await api.post(`/v1/upload?folder=${folder}`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-
+      console.log("inside Image upload");
       if (response.data?.url) {
         onChange(response.data.url); // Sends the Cloudinary url string back up to form state handler
       }

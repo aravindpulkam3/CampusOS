@@ -117,11 +117,11 @@ const driveSchema = new mongoose.Schema(
       },
     ],
 
-    status: {
-      type: String,
-      enum: ["upcoming", "open", "closed"],
-      default: "upcoming",
-    },
+    // status: {
+    //   type: String,
+    //   enum: ["open", "closed"],
+    //   default: "open",
+    // },
 
     applicationCount: {
       type: Number,

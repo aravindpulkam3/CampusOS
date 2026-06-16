@@ -8,10 +8,14 @@ import {
   Users,
   Megaphone,
   Plus,
+  Edit3, // Imported Edit Icon
   ChevronRight,
 } from "lucide-react";
 import { getEventById, registerForEvent } from "../../api/event.api";
-import { getAnnouncements } from "../../api/announcement.api";
+import {
+  getAnnouncements,
+  deleteAnnouncement,
+} from "../../api/announcement.api";
 import NoticeFeed from "../../components/cards/NoticeFeed";
 import useAuth from "../../hooks/useAuth";
 import AnnouncementCard from "../announcements/AnnouncementCard";
@@ -34,9 +38,6 @@ const statusConfig = {
   Cancelled: { color: "bg-red-50 text-red-600", dot: "bg-red-500" },
 };
 
-// ─── Updated Helpers for Date & Time Blocks ───────────────────
-
-// ─── Production-Grade Multi-Day DateTime Formatter ───────────────────
 const formatEventSchedule = (startDateStr, endDateStr) => {
   if (!startDateStr || !endDateStr)
     return { isMultiDay: false, start: "—", end: "—", timeLabel: "—" };
@@ -50,7 +51,6 @@ const formatEventSchedule = (startDateStr, endDateStr) => {
   const isMultiDay = start.toDateString() !== end.toDateString();
 
   if (isMultiDay) {
-    // For Multi-day events: Return full Date + Time packages for separate columns
     return {
       isMultiDay: true,
       start: `${start.toLocaleDateString("en-IN", dateOpts)} · ${start.toLocaleTimeString("en-IN", timeOpts)}`,
@@ -58,7 +58,6 @@ const formatEventSchedule = (startDateStr, endDateStr) => {
     };
   }
 
-  // For Single-day events: Return standard Date and concise Time Range
   return {
     isMultiDay: false,
     dateLabel: start.toLocaleDateString("en-IN", dateOpts),
@@ -82,7 +81,6 @@ const clubInitials = (name) =>
     .join("")
     .toUpperCase() || "C";
 
-// ─── Eligibility check ────────────────────────────────────────
 function checkEligibility(event, user) {
   if (!user)
     return { eligible: false, reason: "You must be logged in to register." };
@@ -98,7 +96,6 @@ function checkEligibility(event, user) {
   )
     reasons.push(`Open to Year ${event.eligibleYears.join(", ")} only`);
 
-  // Note: minCGPA logic fallback retained in engine checks if returned fields map to the model context
   if (event.minCGPA > 0 && user.cgpa < event.minCGPA)
     reasons.push(
       `Minimum CGPA ${event.minCGPA} required (yours: ${user.cgpa})`,
@@ -109,7 +106,6 @@ function checkEligibility(event, user) {
     : { eligible: false, reason: reasons.join(" · ") };
 }
 
-// ─── Skeleton ─────────────────────────────────────────────────
 const Skeleton = () => (
   <div className="max-w-3xl mx-auto animate-pulse px-4 py-6">
     <div className="w-20 h-4 bg-gray-100 rounded mb-6" />
@@ -120,7 +116,6 @@ const Skeleton = () => (
   </div>
 );
 
-// ─── Main Component ───────────────────────────────────────────
 export default function EventDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -145,7 +140,7 @@ export default function EventDetail() {
         const data = eventRes?.data?.data.event;
         setEvent(data);
         setIsOrganizer(eventRes.data.data.isOrganizer);
-        
+
         setAnnouncements(announcementRes?.data?.data || []);
 
         if (
@@ -180,6 +175,24 @@ export default function EventDetail() {
     }
   };
 
+  // ─── Edit Event Navigation Handler ──────────────────────────
+  const handleEditClick = () => {
+    // Navigates to edit form, embedding current layout state into history
+    navigate(`/community/events/${id}/edit`, { state: { event } });
+  };
+
+  const handleDeleteAnnouncement = async (id) => {
+    try {
+      const payload = await deleteAnnouncement(id);
+      setAnnouncements((prevAnnouncements) =>
+        prevAnnouncements.filter((announcement) => announcement._id !== id),
+      );
+    } catch (error) {
+      console.error("Failed to delete announcement from database:", error);
+      alert("Something went wrong while deleting. Please try again.");
+    }
+  };
+
   if (loading) return <Skeleton />;
 
   if (error || !event)
@@ -197,7 +210,6 @@ export default function EventDetail() {
       </div>
     );
 
-  // Computes lifecycle properties based on schema datetimes
   const calculateCurrentStatus = () => {
     if (event.status === "Cancelled") return "Cancelled";
     const now = new Date();
@@ -233,14 +245,6 @@ export default function EventDetail() {
         <ArrowLeft size={14} /> Back
       </button>
 
-      {/* <NoticeFeed
-        targetType="events"
-        targetId={id}
-        title="Event Notices"
-        canPost={user?.role === "superadmin"}
-        showActions={user?.role === "superadmin"}
-      /> */}
-
       {/* ── Banner ── */}
       {event.banner && (
         <div className="h-52 rounded-xl overflow-hidden border border-gray-100 mb-6">
@@ -254,7 +258,6 @@ export default function EventDetail() {
 
       {/* ── Header ── */}
       <div className="mb-6">
-        {/* Badges Display Module */}
         <div className="flex items-center gap-2 flex-wrap mb-3">
           <span
             className={`text-xs font-medium px-2.5 py-1 rounded-full ${catColor}`}
@@ -277,12 +280,10 @@ export default function EventDetail() {
           ))}
         </div>
 
-        {/* Event Name */}
         <h1 className="text-xl font-semibold text-gray-900 leading-snug mb-2">
           {event.eventName}
         </h1>
 
-        {/* Organizer Hook Linkages */}
         {event.organizerClub && (
           <button
             onClick={() =>
@@ -301,14 +302,11 @@ export default function EventDetail() {
       </div>
 
       {/* ── Meta Parameters Info Row ── */}
-
       {(() => {
         const schedule = formatEventSchedule(
           event.startDateTime,
           event.endDateTime,
         );
-
-        // Dynamically build the grid matrix contents based on the structural length of the event
         const gridItems = schedule.isMultiDay
           ? [
               { icon: Calendar, label: "Starts", value: schedule.start },
@@ -510,28 +508,35 @@ export default function EventDetail() {
             )}
           </div>
 
-          {(isOrganizer||user.role==="superadmin") && (
-            <Link
-              to={`/community/event/${id}/announcements/create`}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-gray-200 text-gray-600 rounded-lg hover:border-gray-400 hover:text-gray-900 transition-all duration-150"
-            >
-              <Plus size={12} /> Post Update
-            </Link>
+          {/* ── Updated Controls Matrix (Organizer / Superadmin View) ── */}
+          {(isOrganizer || user?.role === "superadmin") && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleEditClick}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-gray-200 text-gray-600 rounded-lg hover:border-gray-400 hover:text-gray-900 transition-all duration-150 bg-white"
+              >
+                <Edit3 size={12} /> Edit Event
+              </button>
+              <Link
+                to={`/community/event/${id}/announcements/create`}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-gray-900 text-white border border-transparent rounded-lg hover:bg-gray-700 transition-all duration-150"
+              >
+                <Plus size={12} /> Post Update
+              </Link>
+            </div>
           )}
         </div>
 
         {latestAnnouncements.length > 0 ? (
           <>
             <div className="flex flex-col gap-3">
-              {/* {latestAnnouncements.map((a) => (
-                <AnnouncementCard key={a._id} announcement={a} />
-              ))} */}
               {latestAnnouncements.map((a) => (
                 <AnnouncementCard
                   key={a._id}
                   announcement={a}
                   variant="detail"
-                  // no avatarBg override — defaults to bg-gray-800
+                  onDelete={handleDeleteAnnouncement}
+                  isEligible={isOrganizer}
                 />
               ))}
             </div>

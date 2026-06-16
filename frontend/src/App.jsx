@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route} from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 
 import Layout from "./components/layout/Layout";
@@ -19,7 +19,7 @@ import ClubDetail from "./pages/clubs/ClubDetail";
 import CreateClub from "./pages/clubs/CreateClub";
 import Events from "./pages/events/Events.jsx";
 import EventDetail from "./pages/events/EventDetail.jsx";
-import CreateEvent from "./pages/events/CreateEvent.jsx";
+import EventForm from "./pages/events/EventForm.jsx";
 import MyEvents from "./pages/events/MyEvents.jsx";
 import Announcements from "./pages/announcements/AnnouncementCard.jsx";
 import AnnouncementForm from "./pages/announcements/AnnouncementForm.jsx";
@@ -36,7 +36,7 @@ import CareerDashboard from "./pages/career/CareerDashboard.jsx";
 import DrivesList from "./pages/career/DrivesList.jsx";
 import MyApplications from "./pages/career/MyApplications.jsx";
 import DriveDetail from "./pages/career/DriveDetail.jsx";
-import CreateDrive from "./pages/career/CreateDrive.jsx"
+import CreateDrive from "./pages/career/CreateDrive.jsx";
 
 // Admin workspace
 import AdminPanel from "./pages/admin/AdminPanel";
@@ -51,8 +51,6 @@ import CreateDeadline from "./pages/academics/classroom/CreateDeadline.jsx";
 import DiscussionDetail from "./pages/discussions/DiscussionDetail.jsx";
 import useAuth from "./hooks/useAuth.js";
 import EditClub from "./pages/clubs/EditClub.jsx";
-
-
 
 const adminTabs = [
   { label: "Clubs", path: "/admin", end: true },
@@ -73,81 +71,103 @@ function App() {
   }
 
   return (
-    
-      <BrowserRouter>
-        <Routes>
-          {/* Public — no layout */}
-          <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} />
+    <BrowserRouter>
+      <Routes>
+        {/* Public — no layout */}
+        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
 
-          {/* 3. WRAP THE MASTER LAYOUT ROUTE IN PROTECTEDROUTE */}
-          <Route 
+        {/* 3. WRAP THE MASTER LAYOUT ROUTE IN PROTECTEDROUTE */}
+        <Route
+          element={
+            <ProtectedRoute>
+              <Layout />
+            </ProtectedRoute>
+          }
+        >
+          {/* All nested internal routes are now automatically hidden behind login */}
+          <Route path="/" element={<Dashboard />} />
+
+          {/* Community workspace */}
+          <Route path="/community" element={<Community />} />
+          <Route path="/community/clubs" element={<Clubs />} />
+          <Route path="/community/clubs/:clubId" element={<ClubDetail />} />
+          <Route
+            path="/community/clubs/create"
             element={
-              <ProtectedRoute>
-                <Layout />
+              <ProtectedRoute allowedRoles={["superadmin"]}>
+                <CreateClub />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/community/clubs/:clubId/edit" element={<EditClub />} />
+          <Route path="/community/events" element={<Events />} />
+          <Route path="/community/events/:id" element={<EventDetail />} />
+          <Route
+            path="/community/clubs/:clubId/events/create"
+            element={<EventForm mode="create" />}
+          />
+          <Route
+            path="/community/events/:eventId/edit"
+            element={<EventForm mode="edit" />}
+          />
+          <Route
+            path="/community/:targetType/:targetId/announcements/create"
+            element={<AnnouncementForm />}
+          />
+          <Route path="/community/announcements" element={<Announcements />} />
+
+          {/* Academics workspace */}
+          <Route
+            path="/academics/classroom/:classroomId"
+            element={<Classroom />}
+          />
+          <Route path="/academics/competitive" element={<CompetitivePrep />} />
+          <Route path="/academics/subjects/:name" element={<SubjectDetail />} />
+          <Route
+            path="/:targetType/:targetId/create-notice"
+            element={<NoticeForm />}
+          />
+          <Route
+            path="/academics/:classroomId/deadline/form/:deadlineId?"
+            element={<CreateDeadline />}
+          />
+
+          {/* Career workspace */}
+          <Route path="/career" element={<CareerDashboard />} />
+          <Route path="/career/drives" element={<DrivesList />} />
+          <Route path="/career/drives/create" element={<CreateDrive />} />
+          <Route path="/career/drives/:id" element={<DriveDetail />} />
+          <Route path="/career/my-applications" element={<MyApplications />} />
+
+          {/* Discussions */}
+          <Route path="/discussions" element={<Discussions />} />
+          <Route path="/discussions/:id" element={<DiscussionDetail />} />
+
+          {/* Admin workspace — Fine-grained specific role verification option */}
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute
+                allowedRoles={["superadmin", "placementCoordinator"]}
+              >
+                <WorkspaceLayout tabs={adminTabs} />
               </ProtectedRoute>
             }
           >
-            {/* All nested internal routes are now automatically hidden behind login */}
-            <Route path="/" element={<Dashboard />} />
-
-            {/* Community workspace */}
-            <Route path="/community" element={<Community />} />
-            <Route path="/community/clubs" element={<Clubs />} />
-            <Route path="/community/clubs/:clubId" element={<ClubDetail />} />
-            <Route path="/community/clubs/create" element={<ProtectedRoute allowedRoles={["superadmin"]}><CreateClub /></ProtectedRoute>} />
-            <Route path="/community/clubs/:clubId/edit" element={<EditClub />} />
-            <Route path="/community/events" element={<Events />} />
-            <Route path="/community/events/:id" element={<EventDetail />} />
-            <Route path="/community/clubs/:clubId/events/create" element={
-              <ProtectedRoute allowedRoles={["superadmin","clubadmin"]}><CreateEvent /> </ProtectedRoute>
-              } />
-            <Route path="/community/:targetType/:targetId/announcements/create" element={
-              
-              <AnnouncementForm />} />
-            <Route path="/community/announcements" element={<Announcements />} />
-
-            {/* Academics workspace */}
-            <Route path="/academics/classroom/:classroomId" element={<Classroom />} />
-            <Route path="/academics/competitive" element={<CompetitivePrep />} />
-            <Route path="/academics/subjects/:name" element={<SubjectDetail />} />
-            <Route path="/:targetType/:targetId/create-notice" element={<NoticeForm />} />
-            <Route path="/academics/:classroomId/deadline/form/:deadlineId?" element={<CreateDeadline />} />
-
-            {/* Career workspace */}
-            <Route path="/career" element={<CareerDashboard />} />
-            <Route path="/career/drives" element={<DrivesList />} />
-            <Route path="/career/drives/create" element={<CreateDrive />} />
-            <Route path="/career/drives/:id" element={<DriveDetail />} />
-            <Route path="/career/my-applications" element={<MyApplications />} />
-
-              {/* Discussions */}
-            <Route path="/discussions" element={<Discussions />} />
-            <Route path="/discussions/:id" element={<DiscussionDetail />} />
-
-            {/* Admin workspace — Fine-grained specific role verification option */}
-            <Route 
-              path="/admin" 
-              element={
-                <ProtectedRoute allowedRoles={["superadmin", "placementCoordinator"]}>
-                  <WorkspaceLayout tabs={adminTabs} />
-                </ProtectedRoute>
-              }
-            >
-              <Route index element={<AdminPanel />} />
-              <Route path="drives" element={<ManageDrives />} />
-              <Route path="moderation" element={<ModerationQueue />} />
-              <Route path="notices" element={<ManageClubs />} />
-            </Route>
-
-            {/* Profile — no tabs */}
-            <Route path="/profile" element={<Profile />} />
+            <Route index element={<AdminPanel />} />
+            <Route path="drives" element={<ManageDrives />} />
+            <Route path="moderation" element={<ModerationQueue />} />
+            <Route path="notices" element={<ManageClubs />} />
           </Route>
 
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
-    
+          {/* Profile — no tabs */}
+          <Route path="/profile" element={<Profile />} />
+        </Route>
+
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
 

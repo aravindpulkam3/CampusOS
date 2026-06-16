@@ -17,6 +17,7 @@ import { followClub, getClubDetails } from "../../api/club.api";
 import useAuth from "../../hooks/useAuth";
 import NoticeFeed from "../../components/cards/NoticeFeed";
 import AnnouncementCard from "../announcements/AnnouncementCard";
+import { deleteAnnouncement } from "../../api/announcement.api";
 
 // ─── Helpers ──────────────────────────────────────────────────
 const clubBg = [
@@ -236,6 +237,18 @@ const ClubDetail = () => {
       setIsFollowing(payload.data.data.isFollowing);
     } catch (error) {
       console.error(error);
+    }
+  };
+
+  const handleDeleteAnnouncement = async (id) => {
+    try {
+      const payload = await deleteAnnouncement(id);
+      setAnnouncements((prevAnnouncements) =>
+        prevAnnouncements.filter((announcement) => announcement._id !== id),
+      );
+    } catch (error) {
+      console.error("Failed to delete announcement from database:", error);
+      alert("Something went wrong while deleting. Please try again.");
     }
   };
 
@@ -461,7 +474,8 @@ const ClubDetail = () => {
                 key={a._id}
                 announcement={a}
                 variant="detail"
-                avatarBg={bgClass} // passes the club's accent color as author avatar bg
+                avatarBg={bgClass}
+                onDelete={handleDeleteAnnouncement} // passes the club's accent color as author avatar bg
               />
             ))}
           </div>
