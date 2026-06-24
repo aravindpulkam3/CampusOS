@@ -298,9 +298,7 @@ const Classroom = () => {
         ]);
         setClassroom(classroomRes?.data?.data.classroom || null);
         setIsClassRep(classroomRes?.data.data.isClassRep);
-        console.log(classroomRes?.data.data.isClassRep);
         setDeadlines(deadlinesRes?.data?.data || []);
-        // console.log(deadlinesRes);
       } catch (err) {
         console.error(err);
       } finally {

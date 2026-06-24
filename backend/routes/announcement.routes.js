@@ -6,5 +6,5 @@ const announcementRouter = express.Router();
 announcementRouter.post("/:targetType/:targetId",authMiddleware,createAnnouncement);
 announcementRouter.get("/:targetType/:targetId",authMiddleware,getAnnouncements);
 announcementRouter.get("/community",authMiddleware,getCommunityFeed);
-announcementRouter.delete("/:id",deleteAnnouncement);
+announcementRouter.delete("/:id",authMiddleware,deleteAnnouncement);
 export default announcementRouter;

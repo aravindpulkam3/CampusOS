@@ -47,14 +47,6 @@ const typeConfig = {
   },
 };
 
-// ─── AnnouncementCard ─────────────────────────────────────────
-// Props:
-//   announcement  — the raw announcement document from the API
-//   variant       — "feed" | "detail"
-//                   feed   → community dashboard, shows source (club/event name)
-//                   detail → club or event page, shows author name
-//   avatarBg      — override avatar bg class (e.g. the club's accent color)
-//   onClick       — click handler (feed variant only, for navigation)
 const AnnouncementCard = ({
   announcement,
   variant = "detail",

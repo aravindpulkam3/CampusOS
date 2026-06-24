@@ -25,7 +25,9 @@ export default function Login() {
       setUser(res.data.data);
       navigate("/");
     } catch (err) {
-      setError(err.response?.data?.message || "Login failed. Please try again.");
+      setError(
+        err.response?.data?.message || "Login failed. Please try again.",
+      );
       console.log(err);
     } finally {
       setLoading(false);
@@ -37,18 +39,24 @@ export default function Login() {
       {/* Left panel */}
       <div className="hidden lg:flex lg:w-1/2 bg-gray-950 flex-col justify-between p-14">
         <div>
-          <span className="text-white text-xl font-semibold tracking-tight">EventSphere</span>
+          <span className="text-white text-xl font-semibold tracking-tight">
+            EventSphere
+          </span>
         </div>
         <div>
           <h1 className="text-white text-4xl font-light leading-tight mb-6">
-            Your campus,<br />
+            Your campus,
+            <br />
             <span className="font-semibold">centralised.</span>
           </h1>
           <p className="text-gray-400 text-sm leading-relaxed max-w-xs">
-            Events, clubs, placements, academics — everything your college life runs on, in one place.
+            Events, clubs, placements, academics — everything your college life
+            runs on, in one place.
           </p>
         </div>
-        <p className="text-gray-600 text-xs">© {new Date().getFullYear()} EventSphere</p>
+        <p className="text-gray-600 text-xs">
+          © {new Date().getFullYear()} EventSphere
+        </p>
       </div>
 
       {/* Right panel */}
@@ -56,12 +64,18 @@ export default function Login() {
         <div className="w-full max-w-sm">
           {/* Mobile logo */}
           <div className="lg:hidden mb-10">
-            <span className="text-gray-900 text-xl font-semibold tracking-tight">EventSphere</span>
+            <span className="text-gray-900 text-xl font-semibold tracking-tight">
+              EventSphere
+            </span>
           </div>
 
           <div className="mb-8">
-            <h2 className="text-2xl font-semibold text-gray-900 mb-1">Sign in</h2>
-            <p className="text-sm text-gray-500">Welcome back. Enter your credentials to continue.</p>
+            <h2 className="text-2xl font-semibold text-gray-900 mb-1">
+              Sign in
+            </h2>
+            <p className="text-sm text-gray-500">
+              Welcome back. Enter your credentials to continue.
+            </p>
           </div>
 
           {error && (
@@ -88,7 +102,9 @@ export default function Login() {
 
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-medium text-gray-700">Password</label>
+                <label className="block text-xs font-medium text-gray-700">
+                  Password
+                </label>
               </div>
               <input
                 type="password"
@@ -119,7 +135,10 @@ export default function Login() {
 
           <p className="mt-6 text-sm text-gray-500 text-center">
             Don't have an account?{" "}
-            <Link to="/signup" className="text-gray-900 font-medium hover:underline underline-offset-2">
+            <Link
+              to="/signup"
+              className="text-gray-900 font-medium hover:underline underline-offset-2"
+            >
               Create one
             </Link>
           </p>

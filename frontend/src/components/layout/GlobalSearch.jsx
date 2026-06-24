@@ -1,40 +1,46 @@
 import { useState, useEffect, useRef } from "react";
-import { useNavigate }                  from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import {
-  Search, Users, Calendar, Briefcase,
-  MessageSquare, X, Loader2, ArrowRight,
+  Search,
+  Users,
+  Calendar,
+  Briefcase,
+  MessageSquare,
+  X,
+  Loader2,
+  ArrowRight,
 } from "lucide-react";
 import { globalSearchApi } from "../../api/dashboard.api";
 
 // ─── Config ───────────────────────────────────────────────────
 const TYPE_CONFIG = {
   club: {
-    label:  "Clubs",
-    icon:   Users,
-    color:  "text-blue-500",
-    bg:     "bg-blue-50",
-    pill:   "bg-blue-50 text-blue-600",
+    label: "Clubs",
+    icon: Users,
+    color: "text-blue-500",
+    bg: "bg-blue-50",
+    pill: "bg-blue-50 text-blue-600",
   },
   event: {
-    label:  "Events",
-    icon:   Calendar,
-    color:  "text-violet-500",
-    bg:     "bg-violet-50",
-    pill:   "bg-violet-50 text-violet-600",
+    label: "Events",
+    icon: Calendar,
+    color: "text-violet-500",
+    bg: "bg-violet-50",
+    pill: "bg-violet-50 text-violet-600",
   },
   drive: {
-    label:  "Placement Drives",
-    icon:   Briefcase,
-    color:  "text-emerald-500",
-    bg:     "bg-emerald-50",
-    pill:   "bg-emerald-50 text-emerald-600",
+    label: "Placement Drives",
+    icon: Briefcase,
+    color: "text-emerald-500",
+    bg: "bg-emerald-50",
+    pill: "bg-emerald-50 text-emerald-600",
   },
   discussion: {
-    label:  "Discussions",
-    icon:   MessageSquare,
-    color:  "text-amber-500",
-    bg:     "bg-amber-50",
-    pill:   "bg-amber-50 text-amber-600",
+    label: "Discussions",
+    icon: MessageSquare,
+    color: "text-amber-500",
+    bg: "bg-amber-50",
+    pill: "bg-amber-50 text-amber-600",
   },
 };
 
@@ -53,9 +59,15 @@ const ResultRow = ({ result, isFocused, onNavigate, onHover }) => {
         ${isFocused ? "bg-gray-50" : "hover:bg-gray-50/70"}`}
     >
       {/* Avatar */}
-      <div className={`w-8 h-8 rounded-lg flex-shrink-0 overflow-hidden flex items-center justify-center ${conf.bg}`}>
+      <div
+        className={`w-8 h-8 rounded-lg flex-shrink-0 overflow-hidden flex items-center justify-center ${conf.bg}`}
+      >
         {result.image ? (
-          <img src={result.image} alt="" className="w-full h-full object-cover" />
+          <img
+            src={result.image}
+            alt=""
+            className="w-full h-full object-cover"
+          />
         ) : (
           <Icon size={14} className={conf.color} />
         )}
@@ -84,16 +96,16 @@ const ResultRow = ({ result, isFocused, onNavigate, onHover }) => {
 const GlobalSearch = () => {
   const navigate = useNavigate();
 
-  const [query,        setQuery]        = useState("");
-  const [results,      setResults]      = useState([]);
-  const [loading,      setLoading]      = useState(false);
-  const [isOpen,       setIsOpen]       = useState(false);
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState(-1);
 
-  const inputRef     = useRef(null);
+  const inputRef = useRef(null);
   const containerRef = useRef(null);
-  const abortRef     = useRef(null);
-  const debounceRef  = useRef(null);
+  const abortRef = useRef(null);
+  const debounceRef = useRef(null);
 
   // ── Click outside ──────────────────────────────────────────
   useEffect(() => {
@@ -108,7 +120,10 @@ const GlobalSearch = () => {
   // ── Escape key ─────────────────────────────────────────────
   useEffect(() => {
     const handler = (e) => {
-      if (e.key === "Escape") { setIsOpen(false); inputRef.current?.blur(); }
+      if (e.key === "Escape") {
+        setIsOpen(false);
+        inputRef.current?.blur();
+      }
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
@@ -133,7 +148,10 @@ const GlobalSearch = () => {
       abortRef.current = new AbortController();
 
       try {
-        const res = await globalSearchApi(query.trim(), abortRef.current.signal);
+        const res = await globalSearchApi(
+          query.trim(),
+          abortRef.current.signal,
+        );
         setResults(res.data.data || []);
         setFocusedIndex(-1);
       } catch (err) {
@@ -147,13 +165,15 @@ const GlobalSearch = () => {
   }, [query]);
 
   // ── Group + flatten ────────────────────────────────────────
-  const grouped    = TYPE_ORDER.reduce((acc, t) => {
+  const grouped = TYPE_ORDER.reduce((acc, t) => {
     const items = results.filter((r) => r.type === t);
     if (items.length) acc[t] = items;
     return acc;
   }, {});
 
-  const flatResults = TYPE_ORDER.flatMap((t) => results.filter((r) => r.type === t));
+  const flatResults = TYPE_ORDER.flatMap((t) =>
+    results.filter((r) => r.type === t),
+  );
 
   // ── Navigation ─────────────────────────────────────────────
   const handleNavigate = (url) => {
@@ -192,10 +212,12 @@ const GlobalSearch = () => {
   return (
     <div ref={containerRef} className="relative">
       {/* ── Input ── */}
-      <div className={`flex items-center gap-2 px-3 py-1.5 border rounded-xl transition-all duration-200 w-56
-        ${isOpen && query
-          ? "bg-white border-gray-300 shadow-sm w-72"
-          : "bg-gray-50 border-gray-200 hover:border-gray-300"
+      <div
+        className={`flex items-center gap-2 px-3 py-1.5 border rounded-xl transition-all duration-200 w-56
+        ${
+          isOpen && query
+            ? "bg-white border-gray-300 shadow-sm w-72"
+            : "bg-gray-50 border-gray-200 hover:border-gray-300"
         }`}
       >
         <Search size={13} className="text-gray-400 flex-shrink-0" />
@@ -204,17 +226,25 @@ const GlobalSearch = () => {
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          onFocus={() => { if (query.trim().length >= 2) setIsOpen(true); }}
+          onFocus={() => {
+            if (query.trim().length >= 2) setIsOpen(true);
+          }}
           onKeyDown={handleKeyDown}
           placeholder="Search everything..."
           className="text-xs text-gray-700 placeholder:text-gray-400 outline-none bg-transparent w-full"
         />
         {loading && (
-          <Loader2 size={12} className="text-gray-400 animate-spin flex-shrink-0" />
+          <Loader2
+            size={12}
+            className="text-gray-400 animate-spin flex-shrink-0"
+          />
         )}
         {!loading && query && (
           <button onClick={handleClear} className="flex-shrink-0">
-            <X size={12} className="text-gray-400 hover:text-gray-700 transition-colors" />
+            <X
+              size={12}
+              className="text-gray-400 hover:text-gray-700 transition-colors"
+            />
           </button>
         )}
       </div>
@@ -229,7 +259,10 @@ const GlobalSearch = () => {
                 <div key={i} className="flex items-center gap-3 animate-pulse">
                   <div className="w-8 h-8 bg-gray-100 rounded-lg flex-shrink-0" />
                   <div className="flex-1 space-y-1.5">
-                    <div className={`h-2.5 bg-gray-100 rounded`} style={{ width: `${w}%` }} />
+                    <div
+                      className={`h-2.5 bg-gray-100 rounded`}
+                      style={{ width: `${w}%` }}
+                    />
                     <div className="h-2 bg-gray-100 rounded w-1/2" />
                   </div>
                 </div>
@@ -242,7 +275,9 @@ const GlobalSearch = () => {
                 <Search size={16} className="text-gray-300" />
               </div>
               <div className="text-center">
-                <p className="text-xs font-medium text-gray-500">No results found</p>
+                <p className="text-xs font-medium text-gray-500">
+                  No results found
+                </p>
                 <p className="text-[10px] text-gray-400 mt-0.5">
                   Try searching for clubs, events, drives, or discussions
                 </p>
@@ -254,9 +289,9 @@ const GlobalSearch = () => {
               <div className="overflow-y-auto flex-1">
                 {TYPE_ORDER.map((type) => {
                   if (!grouped[type]) return null;
-                  const conf   = TYPE_CONFIG[type];
-                  const Icon   = conf.icon;
-                  const items  = grouped[type];
+                  const conf = TYPE_CONFIG[type];
+                  const Icon = conf.icon;
+                  const items = grouped[type];
 
                   return (
                     <div key={type}>
@@ -273,8 +308,8 @@ const GlobalSearch = () => {
 
                       {/* Items */}
                       {items.map((result) => {
-                        const flatIdx = flatResults.findIndex((r) =>
-                          String(r._id) === String(result._id)
+                        const flatIdx = flatResults.findIndex(
+                          (r) => String(r._id) === String(result._id),
                         );
                         return (
                           <ResultRow
@@ -294,16 +329,22 @@ const GlobalSearch = () => {
               {/* Footer */}
               <div className="flex items-center justify-between px-4 py-2 border-t border-gray-50 flex-shrink-0">
                 <span className="text-[10px] text-gray-400">
-                  {flatResults.length} result{flatResults.length !== 1 ? "s" : ""}
+                  {flatResults.length} result
+                  {flatResults.length !== 1 ? "s" : ""}
                 </span>
                 <div className="flex items-center gap-3">
                   {[
-                    { key: "↑↓",    label: "navigate" },
-                    { key: "↵",     label: "open"     },
-                    { key: "Esc",   label: "close"    },
+                    { key: "↑↓", label: "navigate" },
+                    { key: "↵", label: "open" },
+                    { key: "Esc", label: "close" },
                   ].map(({ key, label }) => (
-                    <span key={key} className="flex items-center gap-1 text-[9px] text-gray-400">
-                      <kbd className="px-1 py-px bg-gray-100 rounded text-[9px] font-mono">{key}</kbd>
+                    <span
+                      key={key}
+                      className="flex items-center gap-1 text-[9px] text-gray-400"
+                    >
+                      <kbd className="px-1 py-px bg-gray-100 rounded text-[9px] font-mono">
+                        {key}
+                      </kbd>
                       {label}
                     </span>
                   ))}

@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import useAuth from "../../hooks/useAuth";
 import { getCareerDashboard } from "../../api/career.api";
-import NoticeCard from "../../components/cards/NoticeCard";
+import NoticeFeed from "../../components/cards/NoticeFeed";
 
 // ─── Helpers ──────────────────────────────────────────────────
 const timeLeft = (d) => {
@@ -427,19 +427,19 @@ const CareerDashboard = () => {
             </div>
 
             <div className="p-3">
-              {recentNotices.length > 0 ? (
-                <div className="space-y-2">
-                  {recentNotices.map((n) => (
-                    <NoticeCard
-                      key={n._id}
-                      notice={n}
-                      canManage={isCoordinator}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <Empty text="No notices yet." />
-              )}
+              <NoticeFeed
+                targetType="career"
+                compact={true}
+                title="Placement Notices"
+                canPost={
+                  user?.role === "superadmin" ||
+                  user?.role == "placementCoordinator"
+                }
+                showActions={
+                  user?.role === "superadmin" ||
+                  user?.role == "placementCoordinator"
+                }
+              />
             </div>
           </div>
 

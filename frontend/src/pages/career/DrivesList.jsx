@@ -1,30 +1,27 @@
 import { useState, useEffect, useCallback } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { Search, X, Briefcase, ChevronRight, Plus, Clock } from "lucide-react";
 import useAuth from "../../hooks/useAuth";
 import useDebounce from "../../hooks/useDebounce";
 import { getAllDrives } from "../../api/career.api";
 
 // ─── Helpers ──────────────────────────────────────────────────
+const isOpenNow = (deadline) =>
+  deadline ? new Date(deadline) >= new Date() : false;
+
 const formatDeadline = (d) => {
   if (!d) return null;
   const diff = new Date(d) - new Date();
   const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-  if (diff < 0) return { label: "Closed", color: "text-gray-400" };
-  if (days === 0) return { label: "Closes Today", color: "text-red-600" };
-  if (days === 1) return { label: "Tomorrow", color: "text-amber-600" };
-  return { label: `${days}d left`, color: "text-gray-500" };
-};
-
-const statusConfig = {
-  upcoming: { label: "Upcoming", color: "bg-gray-100 text-gray-600" },
-  open: { label: "Open", color: "bg-green-50 text-green-700" },
-  closed: { label: "Closed", color: "bg-gray-100 text-gray-400" },
+  if (diff < 0) return null;
+  if (days === 0) return { label: "Closes today", color: "text-red-500" };
+  if (days === 1) return { label: "1 day left", color: "text-amber-500" };
+  return { label: `${days}d left`, color: "text-gray-400" };
 };
 
 const jobTypeConfig = {
-  internship: { label: "Internship", color: "bg-blue-50 text-blue-700" },
-  fulltime: { label: "Full Time", color: "bg-purple-50 text-purple-700" },
+  internship: { label: "Internship", color: "bg-blue-50 text-blue-600" },
+  fulltime: { label: "Full Time", color: "bg-violet-50 text-violet-600" },
 };
 
 const driveTypeLabel = {
@@ -34,18 +31,21 @@ const driveTypeLabel = {
 };
 
 // ─── Drive Card ───────────────────────────────────────────────
+// ─── Drive Card ───────────────────────────────────────────────
 const DriveCard = ({ drive }) => {
+  const open = isOpenNow(drive.registrationDeadline);
   const deadline = formatDeadline(drive.registrationDeadline);
-  const statusCfg = statusConfig[drive.status] || statusConfig.open;
   const jobCfg = jobTypeConfig[drive.jobType] || jobTypeConfig.fulltime;
+  const pay = drive.jobType === "internship" ? drive.stipend : drive.ctc;
 
   return (
     <Link
       to={`/career/drives/${drive._id}`}
-      className="flex items-start gap-4 p-4 bg-white border border-gray-100 rounded-xl hover:border-gray-300 hover:shadow-sm transition-all duration-200 group"
+      className="flex items-center gap-4 p-4 bg-white border border-gray-100 rounded-xl
+        hover:border-gray-300 hover:shadow-sm transition-all duration-200 group"
     >
       {/* Logo */}
-      <div className="w-12 h-12 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center flex-shrink-0 overflow-hidden">
+      <div className="w-11 h-11 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center flex-shrink-0 overflow-hidden">
         {drive.companyLogo ? (
           <img
             src={drive.companyLogo}
@@ -53,71 +53,81 @@ const DriveCard = ({ drive }) => {
             className="w-full h-full object-contain p-1.5"
           />
         ) : (
-          <span className="text-sm font-bold text-gray-500">
+          <span className="text-xs font-bold text-gray-500">
             {drive.companyName?.slice(0, 2).toUpperCase()}
           </span>
         )}
       </div>
 
-      {/* Content */}
+      {/* Body */}
       <div className="flex-1 min-w-0">
-        <div className="flex items-start justify-between gap-2">
+        {/* Row 1 */}
+        <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
-            <h3 className="text-sm font-semibold text-gray-900 truncate group-hover:text-gray-700">
+            <p className="text-sm font-semibold text-gray-900 truncate">
               {drive.companyName}
-            </h3>
-            <p className="text-xs text-gray-500 mt-0.5">{drive.role}</p>
+            </p>
+            <p className="text-xs text-gray-500 mt-px truncate">{drive.role}</p>
           </div>
-          <span
-            className={`text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0 ${statusCfg.color}`}
-          >
-            {statusCfg.label}
-          </span>
-        </div>
 
-        <div className="flex items-center gap-2 mt-2 flex-wrap">
-          <span
-            className={`text-xs font-medium px-2 py-0.5 rounded-full ${jobCfg.color}`}
-          >
-            {jobCfg.label}
-          </span>
-          {drive.driveType && (
-            <span className="text-xs text-gray-400 bg-gray-50 border border-gray-100 px-2 py-0.5 rounded-full">
-              {driveTypeLabel[drive.driveType]}
+          {/* ✅ STATUS ROW: drive.hasApplied always displays "Registered" badge */}
+          {drive.hasApplied ? (
+            <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full flex-shrink-0 bg-blue-50 text-blue-700 border border-blue-100">
+              Registered
+            </span>
+          ) : (
+            <span
+              className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full flex-shrink-0 ${open ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-400"}`}
+            >
+              {open ? "Open" : "Closed"}
             </span>
           )}
-          {drive.location && (
-            <span className="text-xs text-gray-400">{drive.location}</span>
-          )}
         </div>
 
-        <div className="flex items-center justify-between mt-2">
-          <div className="flex items-center gap-3">
-            <p className="text-xs font-semibold text-gray-700">
-              {drive.jobType === "internship"
-                ? drive.stipend || "Stipend TBD"
-                : drive.ctc || "CTC TBD"}
-            </p>
+        {/* Row 2 */}
+        <div className="flex items-center justify-between mt-2.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span
+              className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${jobCfg.color}`}
+            >
+              {jobCfg.label}
+            </span>
+            {drive.driveType && (
+              <span className="text-[10px] text-gray-400 bg-gray-50 border border-gray-100 px-2 py-0.5 rounded-full">
+                {driveTypeLabel[drive.driveType]}
+              </span>
+            )}
             {drive.eligibleBranches?.length > 0 && (
-              <p className="text-xs text-gray-400">
-                {drive.eligibleBranches.slice(0, 3).join(", ")}
-                {drive.eligibleBranches.length > 3 &&
-                  ` +${drive.eligibleBranches.length - 3}`}
-              </p>
+              <span className="text-[10px] text-gray-400 hidden sm:inline">
+                {drive.eligibleBranches.slice(0, 2).join(", ")}
+                {drive.eligibleBranches.length > 2 &&
+                  ` +${drive.eligibleBranches.length - 2}`}
+              </span>
             )}
           </div>
-          <div className="flex items-center gap-1.5">
-            <Clock size={10} className="text-gray-400" />
-            {deadline && (
-              <span className={`text-xs font-medium ${deadline.color}`}>
-                {deadline.label}
-              </span>
+
+          <div className="flex items-center gap-3 flex-shrink-0">
+            {pay && (
+              <span className="text-xs font-semibold text-gray-700">{pay}</span>
+            )}
+
+            {/* ✅ Hide tracking countdown timelines if the student is already registered */}
+            {!drive.hasApplied && deadline && (
+              <div className="flex items-center gap-1">
+                <Clock size={9} className={deadline.color} />
+                <span className={`text-[10px] font-medium ${deadline.color}`}>
+                  {deadline.label}
+                </span>
+              </div>
             )}
           </div>
         </div>
       </div>
 
-      <ChevronRight size={14} className="text-gray-300 flex-shrink-0 mt-1" />
+      <ChevronRight
+        size={13}
+        className="text-gray-300 group-hover:text-gray-500 flex-shrink-0 transition-colors"
+      />
     </Link>
   );
 };
@@ -130,16 +140,19 @@ const Skeleton = () => (
         key={i}
         className="flex gap-4 p-4 bg-white border border-gray-100 rounded-xl animate-pulse"
       >
-        <div className="w-12 h-12 bg-gray-100 rounded-xl flex-shrink-0" />
-        <div className="flex-1 space-y-2">
+        <div className="w-11 h-11 bg-gray-100 rounded-xl flex-shrink-0" />
+        <div className="flex-1 space-y-2.5">
           <div className="flex justify-between">
             <div className="w-32 h-4 bg-gray-100 rounded" />
-            <div className="w-14 h-4 bg-gray-100 rounded-full" />
+            <div className="w-12 h-4 bg-gray-100 rounded-full" />
           </div>
           <div className="w-48 h-3 bg-gray-100 rounded" />
-          <div className="flex gap-2">
-            <div className="w-20 h-5 bg-gray-100 rounded-full" />
-            <div className="w-20 h-5 bg-gray-100 rounded-full" />
+          <div className="flex justify-between">
+            <div className="flex gap-2">
+              <div className="w-18 h-4 bg-gray-100 rounded-full" />
+              <div className="w-18 h-4 bg-gray-100 rounded-full" />
+            </div>
+            <div className="w-16 h-3 bg-gray-100 rounded" />
           </div>
         </div>
       </div>
@@ -150,7 +163,6 @@ const Skeleton = () => (
 // ─── Filter Pill ──────────────────────────────────────────────
 const FilterPill = ({ label, active, onClick }) => (
   <button
-    type="button"
     onClick={onClick}
     className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-all duration-150
       ${
@@ -170,15 +182,12 @@ const DrivesList = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [pagination, setPagination] = useState({ total: 0, page: 1, pages: 1 });
-
-  // Active filters matrix
   const [status, setStatus] = useState("all");
   const [jobType, setJobType] = useState("all");
   const [eligible, setEligible] = useState(false);
 
   const debouncedSearch = useDebounce(search, 400);
 
-  // API handler execution block with page tracking inputs
   const fetchDrives = useCallback(
     async (pageNumber = 1) => {
       setLoading(true);
@@ -191,7 +200,10 @@ const DrivesList = () => {
           page: pageNumber,
           limit: 20,
         });
-        setDrives(res.data.data.drives || []);
+
+        const rawDrives = res.data.data.drives || [];
+
+        setDrives(rawDrives);
         setPagination(res.data.data.pagination);
       } catch (err) {
         console.error(err);
@@ -202,12 +214,10 @@ const DrivesList = () => {
     [status, jobType, eligible, debouncedSearch],
   );
 
-  // Triggers reload fallback to page 1 upon filter mutations
   useEffect(() => {
     fetchDrives(1);
   }, [fetchDrives]);
 
-  // Superadmin & Placement Coordinator Permission Authorization Boundary check
   const isAdmin = ["superadmin", "placementCoordinator"].includes(user?.role);
 
   return (
@@ -225,7 +235,7 @@ const DrivesList = () => {
         {isAdmin && (
           <Link
             to="/career/drives/create"
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-gray-900 text-white rounded-lg hover:bg-gray-700 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold bg-gray-900 text-white rounded-lg hover:bg-gray-700 transition-colors"
           >
             <Plus size={13} /> Create Drive
           </Link>
@@ -233,7 +243,7 @@ const DrivesList = () => {
       </div>
 
       {/* Search */}
-      <div className="relative w-full sm:w-80 mb-4">
+      <div className="relative w-full sm:w-72 mb-4">
         <Search
           size={14}
           className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
@@ -243,7 +253,8 @@ const DrivesList = () => {
           placeholder="Search company or role..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full pl-9 pr-8 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 placeholder:text-gray-300 transition-colors"
+          className="w-full pl-9 pr-8 py-2 text-sm bg-white border border-gray-200 rounded-lg
+            focus:outline-none focus:border-gray-400 placeholder:text-gray-300 transition-colors"
         />
         {search && (
           <button
@@ -257,7 +268,6 @@ const DrivesList = () => {
 
       {/* Filters */}
       <div className="flex flex-wrap gap-2 mb-6">
-        {/* Status */}
         <FilterPill
           label="All"
           active={status === "all"}
@@ -273,10 +283,7 @@ const DrivesList = () => {
           active={status === "closed"}
           onClick={() => setStatus(status === "closed" ? "all" : "closed")}
         />
-
         <span className="w-px bg-gray-200 self-stretch mx-1" />
-
-        {/* Job type */}
         <FilterPill
           label="Internship"
           active={jobType === "internship"}
@@ -291,10 +298,7 @@ const DrivesList = () => {
             setJobType(jobType === "fulltime" ? "all" : "fulltime")
           }
         />
-
         <span className="w-px bg-gray-200 self-stretch mx-1" />
-
-        {/* Eligibility */}
         <FilterPill
           label="Eligible Only"
           active={eligible}
@@ -302,30 +306,28 @@ const DrivesList = () => {
         />
       </div>
 
-      {/* List Feed rendering blocks */}
+      {/* List */}
       {loading ? (
         <Skeleton />
       ) : drives.length > 0 ? (
         <>
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             {drives.map((drive) => (
               <DriveCard key={drive._id} drive={drive} />
             ))}
           </div>
-
-          {/* Core Multi-page interactive layout wrapper */}
           {pagination.pages > 1 && (
             <div className="flex items-center justify-center gap-2 mt-6">
               {Array.from({ length: pagination.pages }, (_, i) => i + 1).map(
                 (p) => (
                   <button
                     key={p}
-                    type="button"
                     onClick={() => fetchDrives(p)}
-                    className={`w-8 h-8 text-xs font-medium rounded-lg border transition-all ${
+                    className={`w-8 h-8 text-xs font-semibold rounded-lg border transition-all
+                    ${
                       p === pagination.page
                         ? "bg-gray-900 text-white border-gray-900"
-                        : "bg-white text-gray-600 border-gray-200 hover:border-gray-400"
+                        : "bg-white text-gray-500 border-gray-200 hover:border-gray-400"
                     }`}
                   >
                     {p}
@@ -336,7 +338,7 @@ const DrivesList = () => {
           )}
         </>
       ) : (
-        <div className="flex flex-col items-center justify-center py-20 bg-white border border-gray-100 rounded-xl text-center">
+        <div className="flex flex-col items-center justify-center py-20 bg-white border border-gray-100 rounded-xl">
           <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center mb-3">
             <Briefcase size={16} className="text-gray-400" />
           </div>
@@ -346,7 +348,7 @@ const DrivesList = () => {
           <p className="text-xs text-gray-400">
             {search
               ? `No results for "${search}"`
-              : "No drives match your current filters"}
+              : "No drives match your filters"}
           </p>
         </div>
       )}

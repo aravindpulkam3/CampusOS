@@ -2,6 +2,8 @@ import Notice from "../models/Notice.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import sendResponse from "../utils/sendResponse.js";
 import mongoose from "mongoose";
+import Drive from "../models/Drive.js";
+import Application from "../models/Application.js";
 
 // ─── permission check ─────────────────────────────────────────────────────────
 // Returns true if the user is allowed to post a notice for the given targetType
@@ -77,46 +79,102 @@ export const createNotice = asyncHandler(async (req, res) => {
   sendResponse(res, 201, "Notice posted.", notice);
 });
 
-// ─── GET /api/notices?targetType=&targetId=&page=&limit= ─────────────────────
-// Used by every module — classroom, club, event, drive, platform
 export const getNotices = asyncHandler(async (req, res) => {
-  const { targetType, targetId, page = 1, limit = 20 } = req.query;
+  const { targetType, targetId } = req.query;
   const user = req.user;
 
   // Base persistent query layer
   const query = { isArchived: false };
 
-  // ─── 1. DYNAMIC COMMUNITY FEED INTERCEPTION ───
-  if (targetType === "community") {
+  if (targetType === "dashboard") {
     if (!user) {
-      return res
-        .status(401)
-        .json({
-          success: false,
-          message: "Authentication required for community feed.",
-        });
+      throw new ApiError(401, "Authentication required for dashboard feed.");
     }
 
-    // Combine both followed and joined clubs, filtering out potential duplicates safely
+    // Step A: Aggregate Career Drive boundaries
+    const studentApplications = await Application.find({ student: user._id })
+      .select("drive")
+      .lean();
+    const appliedDriveIds = studentApplications.map((app) => app.drive);
+
+    const eligibleDrives = await Drive.find({
+      $or: [
+        { _id: { $in: appliedDriveIds } },
+        {
+          eligibleBranches: user.branch,
+          minCGPA: { $lte: user.cgpa || 0 },
+          minYear: { $lte: user.year || 1 },
+          maxYear: { $gte: user.year || 4 },
+        },
+      ],
+    })
+      .select("_id")
+      .lean();
+
+    const driveIds = eligibleDrives.map((d) => d._id);
     const clubIds = [
       ...(user.followedClubs || []),
       ...(user.joinedClubs || []),
     ];
-
     const registeredEventIds = user.registeredEvents || [];
-   
+
+    // Step B: Match across all authorized student lifecycles
     query.$or = [
-      {
-        targetType: "clubs",
-        targetId: { $in: clubIds },
-      },
-      {
-        targetType: "events",
-        targetId: { $in: registeredEventIds },
-      },
+      { targetType: "platform" },
+      { targetType: "classroom", targetId: user.classroom },
+      { targetType: "drive", targetId: { $in: driveIds } },
+      { targetType: "clubs", targetId: { $in: clubIds } },
+      { targetType: "events", targetId: { $in: registeredEventIds } },
     ];
+
+    // ─── 2. DYNAMIC COMMUNITY FEED INTERCEPTION ───────────────────
+  } else if (targetType === "community") {
+    if (!user) {
+      throw new ApiError(401, "Authentication required for community feed.");
+    }
+
+    const clubIds = [
+      ...(user.followedClubs || []),
+      ...(user.joinedClubs || []),
+    ];
+    const registeredEventIds = user.registeredEvents || [];
+
+    query.$or = [
+      { targetType: "clubs", targetId: { $in: clubIds } },
+      { targetType: "events", targetId: { $in: registeredEventIds } },
+    ];
+
+    // ─── 3. DYNAMIC CAREER FEED INTERCEPTION ──────────────────────
+  } else if (targetType === "career") {
+    if (!user) {
+      throw new ApiError(401, "Authentication required for career feed.");
+    }
+
+    const studentApplications = await Application.find({ student: user._id })
+      .select("drive")
+      .lean();
+    const appliedDriveIds = studentApplications.map((app) => app.drive);
+
+    const eligibleDrives = await Drive.find({
+      $or: [
+        { _id: { $in: appliedDriveIds } },
+        {
+          eligibleBranches: user.branch,
+          minCGPA: { $lte: user.cgpa || 0 },
+          minYear: { $lte: user.year || 1 },
+          maxYear: { $gte: user.year || 4 },
+        },
+      ],
+    })
+      .select("_id")
+      .lean();
+
+    const driveIds = eligibleDrives.map((drive) => drive._id);
+    query.targetType = { $in: ["drive", "drives"] };
+    query.targetId = { $in: driveIds };
+
+    // ─── 4. DIRECT TARGET SPECIFIC LOOKUPS ────────────────────────
   } else {
-    // ─── 2. STANDARD FEED LOGIC (PLACEMENT, INDIVIDUAL SCOPES) ───
     if (targetType) query.targetType = targetType;
 
     if (targetId && targetId !== "null" && targetId !== "undefined") {
@@ -128,38 +186,67 @@ export const getNotices = asyncHandler(async (req, res) => {
     }
   }
 
-  // 3. Dynamic Unexpired Dates Rule Group Isolation Block
+  // ─── 5. UNEXPIRED DATES RULE GROUP ISOLATION ──────────────────
   query.$and = [
     {
       $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }],
     },
   ];
 
-  // 4. Cursor Pagination Execution
-  const skip = (Number(page) - 1) * Number(limit);
+  // ─── 6. EXECUTE FETCH PIPELINE ────────────────────────────────
+  let notices = await Notice.find(query)
+    .populate("createdBy", "firstName lastName role")
+    .sort({ isPinned: -1, createdAt: -1 })
+    .limit(15)
+    .lean();
 
-  const [notices, total] = await Promise.all([
-    Notice.find(query)
-      .populate("createdBy", "firstName lastName role")
-      .sort({ isPinned: -1, createdAt: -1 })
-      .skip(skip)
-      .limit(Number(limit))
-      .lean(),
-    Notice.countDocuments(query),
-  ]);
+  // ─── 7. DYNAMIC REF POPULATORS ────────────────────────────────
+  if (notices.length > 0) {
+    const clubsNotices = notices.filter((n) => n.targetType === "clubs");
+    const eventsNotices = notices.filter((n) => n.targetType === "events");
+    const driveNotices = notices.filter(
+      (n) => n.targetType === "drive" || n.targetType === "drives",
+    );
 
-  // console.log(notices);
+    if (clubsNotices.length > 0) {
+      await Notice.populate(clubsNotices, {
+        path: "targetId",
+        model: "Club",
+        select: "clubName logo",
+      });
+    }
+    if (eventsNotices.length > 0) {
+      await Notice.populate(eventsNotices, {
+        path: "targetId",
+        model: "Event",
+        select: "eventName",
+      });
+    }
+    if (driveNotices.length > 0) {
+      await Notice.populate(driveNotices, {
+        path: "targetId",
+        model: "Drive",
+        select: "companyName role",
+      });
+    }
+  }
+
+  // ─── 8. PRIORITIZATION SORTING & SLICING ──────────────────────
+  const priorityWeights = { urgent: 3, high: 2, normal: 1, low: 0 };
+  notices.sort((a, b) => {
+    if (a.isPinned !== b.isPinned) return b.isPinned - a.isPinned;
+    return (
+      (priorityWeights[b.priority] || 0) - (priorityWeights[a.priority] || 0)
+    );
+  });
+
+  // Keep final presentation compact and fast
+  const finalFeed = notices.slice(0, 5);
 
   return sendResponse(res, 200, "Notices fetched safely.", {
-    notices,
-    pagination: {
-      total,
-      page: Number(page),
-      pages: Math.ceil(total / Number(limit)),
-    },
+    notices: finalFeed,
   });
 });
-
 // ─── GET /api/notices/:id ─────────────────────────────────────────────────────
 export const getNoticeById = asyncHandler(async (req, res) => {
   const notice = await Notice.findByIdAndUpdate(

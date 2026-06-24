@@ -5,21 +5,14 @@ import {
   ExternalLink,
   FileText,
   MapPin,
-  Users,
-  Award,
-  Bell,
-  ChevronRight,
   CheckCircle2,
-  Circle,
   Plus,
   Pencil,
+  Clock,
 } from "lucide-react";
 import useAuth from "../../hooks/useAuth";
-import {
-  getDriveById,
-  // getDriveNotices,
-  registerForDrive,
-} from "../../api/career.api";
+import { getDriveById, registerForDrive } from "../../api/career.api";
+import NoticeFeed from "../../components/cards/NoticeFeed";
 
 // ─── Helpers ──────────────────────────────────────────────────
 const formatDate = (d) =>
@@ -31,14 +24,6 @@ const formatDate = (d) =>
       })
     : "—";
 
-const relativeTime = (d) => {
-  const mins = Math.floor((Date.now() - new Date(d)) / 60000);
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
-};
-
 const formatDeadline = (d) => {
   if (!d) return null;
   const diff = new Date(d) - new Date();
@@ -46,21 +31,15 @@ const formatDeadline = (d) => {
   if (diff < 0)
     return { label: "Closed", color: "text-gray-400", urgent: false };
   if (days === 0)
-    return { label: "Closes Today", color: "text-red-600", urgent: true };
+    return { label: "Closes today", color: "text-red-600", urgent: true };
   if (days === 1)
-    return { label: "Tomorrow", color: "text-amber-600", urgent: true };
-  return { label: `${days} days left`, color: "text-gray-600", urgent: false };
-};
-
-const statusConfig = {
-  upcoming: { label: "Upcoming", color: "bg-gray-100 text-gray-600" },
-  open: { label: "Open", color: "bg-green-50 text-green-700" },
-  closed: { label: "Closed", color: "bg-gray-100 text-gray-500" },
+    return { label: "1 day left", color: "text-amber-600", urgent: true };
+  return { label: `${days} days left`, color: "text-gray-500", urgent: false };
 };
 
 const jobTypeConfig = {
   internship: { label: "Internship", color: "bg-blue-50 text-blue-700" },
-  fulltime: { label: "Full Time", color: "bg-purple-50 text-purple-700" },
+  fulltime: { label: "Full Time", color: "bg-violet-50 text-violet-700" },
 };
 
 const driveTypeLabel = {
@@ -72,38 +51,49 @@ const driveTypeLabel = {
 // ─── Skeleton ─────────────────────────────────────────────────
 const Skeleton = () => (
   <div className="max-w-3xl mx-auto animate-pulse space-y-4">
-    <div className="w-20 h-4 bg-gray-100 rounded" />
-    <div className="bg-white border border-gray-100 rounded-xl p-6">
-      <div className="flex gap-4">
-        <div className="w-16 h-16 bg-gray-100 rounded-xl" />
-        <div className="flex-1 space-y-2">
-          <div className="w-40 h-5 bg-gray-100 rounded" />
-          <div className="w-24 h-3 bg-gray-100 rounded" />
-          <div className="flex gap-2">
-            <div className="w-20 h-5 bg-gray-100 rounded-full" />
-            <div className="w-20 h-5 bg-gray-100 rounded-full" />
+    <div className="w-16 h-3 bg-gray-100 rounded" />
+    <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden">
+      <div className="p-6 space-y-4">
+        <div className="flex gap-4">
+          <div className="w-14 h-14 bg-gray-100 rounded-xl" />
+          <div className="flex-1 space-y-2">
+            <div className="w-40 h-5 bg-gray-100 rounded" />
+            <div className="w-24 h-3 bg-gray-100 rounded" />
+            <div className="flex gap-2 pt-1">
+              <div className="w-20 h-5 bg-gray-100 rounded-full" />
+              <div className="w-20 h-5 bg-gray-100 rounded-full" />
+            </div>
           </div>
         </div>
+      </div>
+      <div className="border-t border-gray-50 p-6 flex justify-between">
+        <div className="space-y-2">
+          <div className="w-24 h-3 bg-gray-100 rounded" />
+          <div className="w-32 h-6 bg-gray-100 rounded" />
+        </div>
+        <div className="w-28 h-3 bg-gray-100 rounded" />
       </div>
     </div>
   </div>
 );
 
+// ─── Sub-components ───────────────────────────────────────────
 const InfoRow = ({ label, value }) =>
   value ? (
-    <div className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
-      <span className="text-xs text-gray-400 w-32 flex-shrink-0 pt-0.5">
+    <div className="flex items-start gap-4 py-2.5 border-b border-gray-50 last:border-0">
+      <span className="text-xs text-gray-400 w-36 flex-shrink-0 pt-px">
         {label}
       </span>
       <span className="text-xs font-medium text-gray-800">{value}</span>
     </div>
   ) : null;
 
-const Section = ({ title, children }) => (
+const Section = ({ title, children, action }) => (
   <div className="bg-white border border-gray-100 rounded-xl p-5">
-    <h2 className="text-sm font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-50">
-      {title}
-    </h2>
+    <div className="flex items-center justify-between mb-3 pb-2.5 border-b border-gray-50">
+      <h2 className="text-sm font-semibold text-gray-900">{title}</h2>
+      {action && <div className="flex-shrink-0">{action}</div>}
+    </div>
     {children}
   </div>
 );
@@ -115,7 +105,6 @@ const DriveDetail = () => {
   const { user } = useAuth();
 
   const [drive, setDrive] = useState(null);
-  const [notices, setNotices] = useState([]);
   const [eligibility, setEligibility] = useState(null);
   const [application, setApplication] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -125,19 +114,14 @@ const DriveDetail = () => {
   const fetchData = useCallback(async () => {
     try {
       const driveRes = await getDriveById(id);
-
-      // Correct alignment mapping for backend response package
       const {
         drive: fetchedDrive,
         eligibility: fetchedEligibility,
         myApplication,
       } = driveRes.data.data;
-
       setDrive(fetchedDrive);
       setEligibility(fetchedEligibility);
-      // console.log(fetchedEligibility);
       setApplication(myApplication);
-      // setNotices(noticesRes.data.data || []);
     } catch (err) {
       console.error(err);
     } finally {
@@ -150,19 +134,15 @@ const DriveDetail = () => {
   }, [fetchData]);
 
   const handleApply = async () => {
-    console.log("came to handle apply")
     setApplying(true);
     setApplyError("");
     try {
       await registerForDrive(id);
-      console.log("registered")
-      // Re-fetch data from server to seamlessly load updated application timeline blocks
       await fetchData();
     } catch (err) {
       setApplyError(
         err.response?.data?.message || "Failed to register. Try again.",
       );
-      console.log(error);
     } finally {
       setApplying(false);
     }
@@ -182,153 +162,190 @@ const DriveDetail = () => {
       </div>
     );
 
+  const isClosed = drive.registrationDeadline
+    ? new Date(drive.registrationDeadline) < new Date()
+    : true;
   const deadline = formatDeadline(drive.registrationDeadline);
-  const statusCfg = statusConfig[drive.status] || statusConfig.open;
   const jobCfg = jobTypeConfig[drive.jobType] || jobTypeConfig.fulltime;
-
   const isAdmin = ["superadmin", "placementCoordinator"].includes(user?.role);
-  const isClosed = drive.status === "closed";
   const hasApplied = !!application;
-
-  // Uses direct server calculation logic values cleanly
   const isEligible = eligibility ? eligibility.eligible : true;
   const ineligibilityReasons = eligibility ? eligibility.reasons : [];
-  // console.log(eligibility?.reasons);
-  const canApply =
-     isEligible && !hasApplied && !isClosed;
-    // console.log(canApply);
-    // const canApply=true;
-
+  const canApply = isEligible && !hasApplied && !isClosed;
   const compensation =
     drive.jobType === "internship" ? drive.stipend : drive.ctc;
+  const isPlacementAdmin =
+    user?.role === "superadmin" || user?.role === "placementCoordinator";
 
   return (
-    <div className="max-w-3xl mx-auto">
+    <div className="max-w-3xl mx-auto space-y-4">
       {/* Back */}
       <button
         onClick={() => navigate(-1)}
-        className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-700 transition-colors mb-6"
+        className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-700 transition-colors"
       >
-        <ArrowLeft size={14} /> Back
+        <ArrowLeft size={13} /> Back
       </button>
 
-      {/* ── Company Header ── */}
-      <div className="bg-white border border-gray-100 rounded-xl p-5 mb-4">
-        <div className="flex items-start gap-4">
-          <div className="w-14 h-14 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center flex-shrink-0 overflow-hidden">
-            {drive.companyLogo ? (
-              <img
-                src={drive.companyLogo}
-                alt={drive.companyName}
-                className="w-full h-full object-contain p-1.5"
-              />
-            ) : (
-              <span className="text-lg font-bold text-gray-500">
-                {drive.companyName?.slice(0, 2).toUpperCase()}
-              </span>
-            )}
-          </div>
-
-          <div className="flex-1 min-w-0">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h1 className="text-lg font-semibold text-gray-900">
-                  {drive.companyName}
-                </h1>
-                <p className="text-sm text-gray-500 mt-0.5">{drive.role}</p>
-              </div>
-              {isAdmin && (
-                <Link
-                  to={`/career/drives/${id}/edit`}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-gray-200 text-gray-600 rounded-lg hover:border-gray-400 hover:text-gray-900 transition-all flex-shrink-0"
-                >
-                  <Pencil size={12} /> Edit
-                </Link>
+      {/* ── Company header card ── */}
+      <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden">
+        <div className="p-5">
+          <div className="flex items-start gap-4">
+            {/* Logo */}
+            <div
+              className="w-14 h-14 rounded-xl bg-gray-50 border border-gray-100 flex items-center
+              justify-center flex-shrink-0 overflow-hidden"
+            >
+              {drive.companyLogo ? (
+                <img
+                  src={drive.companyLogo}
+                  alt={drive.companyName}
+                  className="w-full h-full object-contain p-1.5"
+                />
+              ) : (
+                <span className="text-lg font-bold text-gray-500">
+                  {drive.companyName?.slice(0, 2).toUpperCase()}
+                </span>
               )}
             </div>
 
-            <div className="flex items-center gap-2 mt-2 flex-wrap">
-              <span
-                className={`text-xs font-medium px-2.5 py-1 rounded-full ${statusCfg.color}`}
-              >
-                {statusCfg.label}
-              </span>
-              <span
-                className={`text-xs font-medium px-2.5 py-1 rounded-full ${jobCfg.color}`}
-              >
-                {jobCfg.label}
-              </span>
-              {drive.driveType && (
-                <span className="text-xs text-gray-500 bg-gray-50 border border-gray-100 px-2.5 py-1 rounded-full">
-                  {driveTypeLabel[drive.driveType]}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h1 className="text-lg font-bold text-gray-900 leading-tight">
+                    {drive.companyName}
+                  </h1>
+                  <p className="text-sm text-gray-500 mt-0.5">{drive.role}</p>
+                </div>
+                {isAdmin && (
+                  <Link
+                    to={`/career/drives/${id}/edit`}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border
+                      border-gray-200 text-gray-600 rounded-lg hover:border-gray-400
+                      hover:text-gray-900 transition-all flex-shrink-0"
+                  >
+                    <Pencil size={11} /> Edit
+                  </Link>
+                )}
+              </div>
+
+              {/* Badges */}
+              <div className="flex items-center gap-2 mt-3 flex-wrap">
+                <span
+                  className={`text-[10px] font-bold px-2.5 py-1 rounded-full
+                  ${isClosed ? "bg-gray-100 text-gray-400" : "bg-green-50 text-green-700"}`}
+                >
+                  {isClosed ? "Closed" : "Open"}
                 </span>
-              )}
-              {drive.location && (
-                <span className="flex items-center gap-1 text-xs text-gray-400">
-                  <MapPin size={10} /> {drive.location}
+                <span
+                  className={`text-[10px] font-semibold px-2.5 py-1 rounded-full ${jobCfg.color}`}
+                >
+                  {jobCfg.label}
                 </span>
-              )}
+                {drive.driveType && (
+                  <span
+                    className="text-[10px] text-gray-500 bg-gray-50 border border-gray-100
+                    px-2.5 py-1 rounded-full"
+                  >
+                    {driveTypeLabel[drive.driveType]}
+                  </span>
+                )}
+                {drive.location && (
+                  <span className="flex items-center gap-1 text-[10px] text-gray-400">
+                    <MapPin size={9} /> {drive.location}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
         </div>
 
-        {compensation && (
-          <div className="mt-4 pt-4 border-t border-gray-50">
-            <p className="text-xs text-gray-400">
-              {drive.jobType === "internship" ? "Stipend" : "CTC"}
-            </p>
-            <p className="text-base font-bold text-gray-900 mt-0.5">
-              {compensation}
-            </p>
-          </div>
-        )}
+        {/* Compensation + deadline bar */}
+        <div className="border-t border-gray-50 px-5 py-4 flex items-center gap-6 bg-gray-50/50">
+          {compensation && (
+            <div>
+              <p className="text-[10px] text-gray-400 uppercase tracking-wide">
+                {drive.jobType === "internship" ? "Stipend" : "CTC"}
+              </p>
+              <p className="text-base font-bold text-gray-900 mt-0.5">
+                {compensation}
+              </p>
+            </div>
+          )}
+          {compensation && drive.registrationDeadline && (
+            <div className="w-px h-8 bg-gray-200" />
+          )}
+          {drive.registrationDeadline && (
+            <div>
+              <p className="text-[10px] text-gray-400 uppercase tracking-wide">
+                Registration Deadline
+              </p>
+              <div className="flex items-center gap-2 mt-0.5">
+                <p className="text-sm font-semibold text-gray-800">
+                  {formatDate(drive.registrationDeadline)}
+                </p>
+                {deadline && (
+                  <span
+                    className={`flex items-center gap-1 text-xs font-medium ${deadline.color}`}
+                  >
+                    <Clock size={10} /> {deadline.label}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* ── Apply / Registration ── */}
-      <div className="bg-white border border-gray-100 rounded-xl p-5 mb-4">
-        <div className="flex items-start justify-between gap-4">
+      {/* ── Registration / Apply card ── */}
+      <div className="bg-white border border-gray-100 rounded-xl p-5">
+        <div className="flex items-center justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2 mb-1">
-              <p className="text-xs text-gray-400">Registration Deadline</p>
-              {deadline && (
-                <span className={`text-xs font-semibold ${deadline.color}`}>
-                  {deadline.label}
-                </span>
-              )}
-            </div>
-            <p className="text-sm font-semibold text-gray-900">
-              {formatDate(drive.registrationDeadline)}
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+              Your Status
             </p>
-          </div>
-
-          <div className="flex flex-col items-end gap-1.5">
-            {hasApplied && (
-              <div className="flex flex-col items-end gap-1">
-                <div className="flex items-center gap-1.5 px-4 py-2 bg-green-50 border border-green-200 rounded-lg">
-                  <CheckCircle2 size={13} className="text-green-600" />
-                  <span className="text-xs font-medium text-green-700 capitalize">
-                    Status: {application.status?.replace("_", " ")}
-                  </span>
+            {hasApplied ? (
+              <div className="flex items-center gap-2">
+                <CheckCircle2 size={14} className="text-green-600" />
+                <div>
+                  <p className="text-sm font-semibold text-green-700">
+                    Registered
+                  </p>
+                  <p className="text-xs text-green-600 capitalize mt-px">
+                    {application.status?.replace("_", " ")}
+                  </p>
                 </div>
               </div>
+            ) : isClosed ? (
+              <p className="text-sm font-medium text-gray-400">
+                Registration closed
+              </p>
+            ) : !isEligible ? (
+              <p className="text-sm font-medium text-amber-600">Not eligible</p>
+            ) : (
+              <p className="text-sm font-medium text-gray-600">
+                Not yet registered
+              </p>
             )}
+          </div>
 
-            {!hasApplied && isClosed && (
-              <div className="px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg">
-                <span className="text-xs font-medium text-gray-500">
-                  Drive Closed
+          <div className="flex flex-col items-end gap-2">
+            {hasApplied && (
+              <div className="flex items-center gap-2 px-4 py-2.5 bg-green-50 border border-green-100 rounded-xl">
+                <CheckCircle2 size={13} className="text-green-600" />
+                <span className="text-xs font-semibold text-green-700">
+                  Registered
                 </span>
               </div>
             )}
 
             {!hasApplied && !isClosed && !isEligible && (
               <div className="text-right">
-                <button
-                  disabled
-                  className="px-4 py-2 bg-gray-100 text-gray-400 text-xs font-medium rounded-lg border border-gray-200 cursor-not-allowed"
-                >
-                  Not Eligible
-                </button>
+                <div className="px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl">
+                  <p className="text-xs font-medium text-gray-400">
+                    Not Eligible
+                  </p>
+                </div>
                 <div className="mt-1.5 space-y-0.5">
                   {ineligibilityReasons.map((r, i) => (
                     <p key={i} className="text-xs text-amber-600">
@@ -346,15 +363,18 @@ const DriveDetail = () => {
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={handleApply}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-gray-900 text-white text-xs font-medium rounded-lg hover:bg-gray-700 transition-colors"
+                  className="flex items-center gap-2 px-5 py-2.5 bg-gray-900 text-white
+                    text-xs font-semibold rounded-xl hover:bg-gray-700 transition-colors"
                 >
-                  <ExternalLink size={12} />{" "}
+                  <ExternalLink size={12} />
                   {applying ? "Processing..." : "Apply Now"}
                 </a>
                 {applyError && (
                   <p className="text-xs text-red-500">{applyError}</p>
                 )}
-                <p className="text-xs text-gray-400">Opens external portal</p>
+                <p className="text-[10px] text-gray-400">
+                  Opens external portal
+                </p>
               </div>
             )}
 
@@ -363,9 +383,9 @@ const DriveDetail = () => {
                 href={drive.brochureUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-800 transition-colors mt-1"
+                className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-700 transition-colors"
               >
-                <FileText size={12} /> View Brochure
+                <FileText size={11} /> View Brochure
               </a>
             )}
           </div>
@@ -380,7 +400,6 @@ const DriveDetail = () => {
           </p>
         </Section>
       )}
-      {drive.description && <div className="mb-4" />}
 
       {/* ── Job Details ── */}
       <Section title="Job Details">
@@ -402,7 +421,6 @@ const DriveDetail = () => {
           <InfoRow label="Slots" value={`${drive.slots} positions`} />
         )}
       </Section>
-      <div className="mb-4" />
 
       {/* ── Eligibility ── */}
       <Section title="Eligibility">
@@ -428,88 +446,60 @@ const DriveDetail = () => {
         />
         {drive.minYear && drive.maxYear && (
           <InfoRow
-            label="Year Constraint"
-            value={`Year ${drive.minYear} – ${drive.maxYear}`}
+            label="Year"
+            value={
+              drive.minYear === drive.maxYear
+                ? `Year ${drive.minYear}`
+                : `Years ${drive.minYear} – ${drive.maxYear}`
+            }
           />
         )}
       </Section>
-      <div className="mb-4" />
 
       {/* ── Selection Process ── */}
       {drive.selectionProcess?.length > 0 && (
-        <>
-          <Section title="Selection Process">
-            <div className="space-y-3">
-              {drive.selectionProcess.map((round, i) => (
-                <div key={i} className="flex items-center gap-3">
-                  <div className="w-6 h-6 rounded-full bg-gray-900 flex items-center justify-center flex-shrink-0">
-                    <span className="text-xs text-white font-bold">
-                      {round.order || i + 1}
-                    </span>
-                  </div>
-                  <p className="text-sm font-medium text-gray-800">
-                    {round.name}
-                  </p>
+        <Section title="Selection Process">
+          <div className="space-y-3">
+            {drive.selectionProcess.map((round, i) => (
+              <div key={i} className="flex items-center gap-3">
+                <div className="w-6 h-6 rounded-full bg-gray-900 flex items-center justify-center flex-shrink-0">
+                  <span className="text-[10px] text-white font-bold">
+                    {round.order || i + 1}
+                  </span>
                 </div>
-              ))}
-            </div>
-          </Section>
-          <div className="mb-4" />
-        </>
-      )}
-
-      {/* ── Placement Notices ── */}
-      <Section title="Placement Notices">
-        <div className="flex items-center justify-between -mt-2 mb-3">
-          <span />
-          {isAdmin && (
-            <Link
-              to={`/drive/${id}/create-notice`}
-              className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-900 transition-colors border border-gray-200 px-3 py-1.5 rounded-lg hover:border-gray-400"
-            >
-              <Plus size={12} /> Post Notice
-            </Link>
-          )}
-        </div>
-
-        {notices.length > 0 ? (
-          <div className="space-y-2">
-            {notices.map((notice) => (
-              <div
-                key={notice._id}
-                className={`flex gap-3 p-3.5 border rounded-xl ${
-                  notice.priority === "high"
-                    ? "bg-red-50 border-red-100 text-red-800"
-                    : notice.priority === "medium"
-                      ? "bg-amber-50 border-amber-100 text-amber-800"
-                      : "bg-gray-50 border-gray-100 text-gray-700"
-                }`}
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="text-xs font-semibold leading-snug">
-                      {notice.title}
-                    </p>
-                    <span className="text-xs opacity-60 flex-shrink-0">
-                      {relativeTime(notice.createdAt)}
-                    </span>
-                  </div>
-                  {notice.message && (
-                    <p className="text-xs mt-1 opacity-80 leading-relaxed">
-                      {notice.message}
-                    </p>
-                  )}
-                </div>
+                <p className="text-sm font-medium text-gray-800">
+                  {round.name}
+                </p>
               </div>
             ))}
           </div>
-        ) : (
-          <p className="text-xs text-gray-400 text-center py-6 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-            No notices for this drive yet.
-          </p>
-        )}
+        </Section>
+      )}
+
+      {/* ── Drive Notices ── */}
+      <Section
+        title="Drive Notices"
+        action={
+          isPlacementAdmin && (
+            <Link
+              to={`/drive/${id}/create-notice`}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-gray-200 text-gray-600 rounded-lg hover:border-gray-400 hover:text-gray-900 transition-all duration-150 backdrop-blur-md bg-white/80"
+            >
+              <Plus size={12} />
+              Post Notice
+            </Link>
+          )
+        }
+      >
+        <NoticeFeed
+          targetType="drive" 
+          targetId={id}
+          canPost={isPlacementAdmin}
+          showActions={isPlacementAdmin}
+        />
       </Section>
-      <div className="mb-8" />
+
+      <div className="pb-8" />
     </div>
   );
 };

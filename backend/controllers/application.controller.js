@@ -8,7 +8,6 @@ export const applyToDrive = asyncHandler(async (req, res) => {
   const { driveId } = req.params;
   const user = req.user;
 
-  console.log("applying");
 
   // 1. Fetch drive document matching schema definition name
   const drive = await Drive.findById(driveId);

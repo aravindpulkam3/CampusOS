@@ -4,16 +4,16 @@ import Drive      from "../models/Drive.js";
 import Discussion from "../models/Discussion.js";
 
 export const searchAll = async (q) => {
-  const regex = new RegExp(q.trim(), "i");
+  const regex = new RegExp(q.trim(), "i"); // to  make it case sensitive
 
-  const [clubs, events, drives, discussions] = await Promise.all([
+  const [clubs, events, drives, discussions] = await Promise.all([ // Promiseall starts all 4 together
     Club.find({
       isActive: true,
       $or: [{ clubName: regex }, { description: regex }],
     })
       .select("_id clubName description logo")
       .limit(5)
-      .lean(),
+      .lean(), // lean returns plain js objects instead of mongoose documents, you can just read em , cant to operations like save , validate,populate
 
     Event.find({
       $or: [{ eventName: regex }, { description: regex }],
@@ -36,7 +36,7 @@ export const searchAll = async (q) => {
       .lean(),
   ]);
 
-  return [
+  return [  //creating just one plain array of objects
     ...clubs.map((c) => ({
       _id:      c._id,
       type:     "club",

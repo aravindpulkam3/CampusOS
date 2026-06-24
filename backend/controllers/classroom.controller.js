@@ -35,7 +35,6 @@ export const upsertDeadline = asyncHandler(async (req, res) => {
   const { title, description, type, dueDate } = req.body;
 
   if (deadlineId) {
-    console.log(deadlineId);
     const updatedDeadline = await Deadline.findOneAndUpdate(
       { _id: deadlineId },
       {

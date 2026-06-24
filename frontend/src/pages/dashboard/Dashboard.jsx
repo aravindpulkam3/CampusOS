@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import useAuth from "../../hooks/useAuth";
 import { getDashboard } from "../../api/dashboard.api";
+import NoticeFeed from "../../components/cards/NoticeFeed";
 
 // ─── Helpers ──────────────────────────────────────────────────
 const getGreeting = () => {
@@ -86,55 +87,55 @@ const getCurrentDay = () =>
 
 const deadlineTypeColor = {
   assignment: "text-blue-700 bg-blue-50",
-  quiz:       "text-purple-700 bg-purple-50",
-  exam:       "text-red-700 bg-red-50",
-  lab:        "text-green-700 bg-green-50",
-  project:    "text-amber-700 bg-amber-50",
+  quiz: "text-purple-700 bg-purple-50",
+  exam: "text-red-700 bg-red-50",
+  lab: "text-green-700 bg-green-50",
+  project: "text-amber-700 bg-amber-50",
 };
 
 const noticePriorityConfig = {
   urgent: {
     border: "border-red-200",
-    bg:     "bg-red-50",
-    dot:    "bg-red-500",
-    text:   "text-red-800",
+    bg: "bg-red-50",
+    dot: "bg-red-500",
+    text: "text-red-800",
   },
   high: {
     border: "border-amber-200",
-    bg:     "bg-amber-50",
-    dot:    "bg-amber-500",
-    text:   "text-amber-800",
+    bg: "bg-amber-50",
+    dot: "bg-amber-500",
+    text: "text-amber-800",
   },
   normal: {
     border: "border-gray-100",
-    bg:     "bg-white",
-    dot:    "bg-gray-400",
-    text:   "text-gray-700",
+    bg: "bg-white",
+    dot: "bg-gray-400",
+    text: "text-gray-700",
   },
   low: {
     border: "border-gray-100",
-    bg:     "bg-gray-50",
-    dot:    "bg-gray-300",
-    text:   "text-gray-500",
+    bg: "bg-gray-50",
+    dot: "bg-gray-300",
+    text: "text-gray-500",
   },
 };
 
 const categoryColors = {
-  general:        "bg-gray-100 text-gray-600",
-  coding:         "bg-blue-50 text-blue-700",
-  projects:       "bg-green-50 text-green-700",
+  general: "bg-gray-100 text-gray-600",
+  coding: "bg-blue-50 text-blue-700",
+  projects: "bg-green-50 text-green-700",
   higher_studies: "bg-purple-50 text-purple-700",
-  research:       "bg-amber-50 text-amber-700",
-  study_tips:     "bg-rose-50 text-rose-700",
+  research: "bg-amber-50 text-amber-700",
+  study_tips: "bg-rose-50 text-rose-700",
 };
 
 const categoryLabel = {
-  general:        "General",
-  coding:         "Coding",
-  projects:       "Projects",
+  general: "General",
+  coding: "Coding",
+  projects: "Projects",
   higher_studies: "Higher Studies",
-  research:       "Research",
-  study_tips:     "Study Tips",
+  research: "Research",
+  study_tips: "Study Tips",
 };
 
 const periodAccents = [
@@ -173,7 +174,6 @@ const Empty = ({ message }) => (
   </div>
 );
 
-// ─── Skeleton ─────────────────────────────────────────────────
 const Skeleton = () => (
   <div className="space-y-5 animate-pulse">
     <div className="bg-white border border-gray-100 rounded-2xl p-6">
@@ -188,17 +188,26 @@ const Skeleton = () => (
     <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
       <div className="lg:col-span-3 space-y-4">
         {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="bg-white border border-gray-100 rounded-2xl h-40" />
+          <div
+            key={i}
+            className="bg-white border border-gray-100 rounded-2xl h-40"
+          />
         ))}
       </div>
       <div className="lg:col-span-2 space-y-4">
         <div className="grid grid-cols-2 gap-2">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-20 bg-white border border-gray-100 rounded-xl" />
+            <div
+              key={i}
+              className="h-20 bg-white border border-gray-100 rounded-xl"
+            />
           ))}
         </div>
         {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="bg-white border border-gray-100 rounded-2xl h-36" />
+          <div
+            key={i}
+            className="bg-white border border-gray-100 rounded-2xl h-36"
+          />
         ))}
       </div>
     </div>
@@ -220,45 +229,45 @@ const TodaySummary = ({ stats, todayClassesCount, deadlines, notices }) => {
 
   const items = [
     {
-      label:  "Classes Today",
-      value:  todayClassesCount,
-      color:  "text-blue-600",
-      bg:     "bg-blue-50/80",
+      label: "Classes Today",
+      value: todayClassesCount,
+      color: "text-blue-600",
+      bg: "bg-blue-50/80",
       urgent: false,
     },
     {
-      label:  "Assignments Due",
-      value:  assignmentsDue,
-      color:  hasUrgentDeadlines ? "text-red-600" : "text-emerald-600",
-      bg:     hasUrgentDeadlines ? "bg-red-50/80" : "bg-emerald-50/80",
+      label: "Deadlines",
+      value: assignmentsDue,
+      color: hasUrgentDeadlines ? "text-red-600" : "text-emerald-600",
+      bg: hasUrgentDeadlines ? "bg-red-50/80" : "bg-emerald-50/80",
       urgent: hasUrgentDeadlines,
     },
     {
-      label:  "New Notices",
-      value:  newNoticesCount,
-      color:  "text-violet-600",
-      bg:     "bg-violet-50/80",
+      label: "New Notices",
+      value: newNoticesCount,
+      color: "text-violet-600",
+      bg: "bg-violet-50/80",
       urgent: false,
     },
     {
-      label:  "Upcoming Events",
-      value:  stats.upcomingEvents ?? 0,
-      color:  "text-amber-600",
-      bg:     "bg-amber-50/80",
+      label: "Upcoming Events",
+      value: stats.upcomingEvents ?? 0,
+      color: "text-amber-600",
+      bg: "bg-amber-50/80",
       urgent: false,
     },
     {
-      label:  "Open Drives",
-      value:  stats.openDrives ?? 0,
-      color:  "text-emerald-600",
-      bg:     "bg-emerald-50/80",
+      label: "Open Drives",
+      value: stats.openDrives ?? 0,
+      color: "text-emerald-600",
+      bg: "bg-emerald-50/80",
       urgent: false,
     },
     {
-      label:  "Active Applications",
-      value:  stats.activeApplications ?? stats.applied ?? 0,
-      color:  "text-rose-600",
-      bg:     "bg-rose-50/80",
+      label: "Active Applications",
+      value: stats.activeApplications ?? stats.applied ?? 0,
+      color: "text-rose-600",
+      bg: "bg-rose-50/80",
       urgent: false,
     },
   ];
@@ -335,9 +344,9 @@ const PeriodRow = ({ period, index, isEvent }) => (
 const Dashboard = () => {
   const { user } = useAuth();
 
-  const [data,    setData]    = useState(null);
+  const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error,   setError]   = useState("");
+  const [error, setError] = useState("");
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -357,13 +366,13 @@ const Dashboard = () => {
   if (loading) return <Skeleton />;
 
   const {
-    classroom   = null,
-    deadlines   = [],
-    notices     = [],
-    events      = [],
-    drives      = [],
+    classroom = null,
+    deadlines = [],
+    notices = [],
+    events = [],
+    drives = [],
     discussions = [],
-    stats       = {},
+    stats = {},
   } = data || {};
 
   const today = getCurrentDay();
@@ -387,17 +396,6 @@ const Dashboard = () => {
     return aTime - bTime;
   });
 
-  // Notices: pinned first → urgent → newest (backend already sorts this way,
-  // but re-sort client-side in case order drifts)
-  const sortedNotices = [...notices].sort((a, b) => {
-    if (a.isPinned !== b.isPinned) return b.isPinned - a.isPinned;
-    const priorityOrder = { urgent: 0, high: 1, normal: 2, low: 3 };
-    const pa = priorityOrder[a.priority] ?? 2;
-    const pb = priorityOrder[b.priority] ?? 2;
-    if (pa !== pb) return pa - pb;
-    return new Date(b.createdAt) - new Date(a.createdAt);
-  });
-
   return (
     <div className="max-w-6xl mx-auto space-y-5 pb-10">
       {error && (
@@ -416,9 +414,9 @@ const Dashboard = () => {
             <p className="text-sm text-gray-400 mt-0.5">
               {new Date().toLocaleDateString("en-IN", {
                 weekday: "long",
-                day:     "numeric",
-                month:   "long",
-                year:    "numeric",
+                day: "numeric",
+                month: "long",
+                year: "numeric",
               })}
             </p>
           </div>
@@ -446,7 +444,7 @@ const Dashboard = () => {
             <Section
               title="Today's Schedule"
               icon={Clock}
-              linkTo="/academics"
+              linkTo={`/academics/classroom/${user?.classroom}`}
               linkLabel="Timetable"
             >
               {todaySchedule.length > 0 ? (
@@ -519,7 +517,10 @@ const Dashboard = () => {
                         )}
                       </div>
                     </div>
-                    <ChevronRight size={13} className="text-gray-300 flex-shrink-0" />
+                    <ChevronRight
+                      size={13}
+                      className="text-gray-300 flex-shrink-0"
+                    />
                   </Link>
                 ))}
               </div>
@@ -585,64 +586,22 @@ const Dashboard = () => {
 
         {/* ── Right col — 2/5 ── */}
         <div className="lg:col-span-2 space-y-4">
-          {/* Quick access */}
-          <div className="grid grid-cols-2 gap-2">
-            {[
-              {
-                label: "Classroom",
-                icon:  GraduationCap,
-                to:    `/academics/classroom/${user.classroom}`,
-                bg:    "bg-blue-50",
-                ic:    "text-blue-600",
-                hbg:   "group-hover:bg-blue-100",
-              },
-              {
-                label: "My Clubs",
-                icon:  Users,
-                to:    "/community/clubs",
-                bg:    "bg-purple-50",
-                ic:    "text-purple-600",
-                hbg:   "group-hover:bg-purple-100",
-              },
-              {
-                label: "My Applications",
-                icon:  Briefcase,
-                to:    "/career/my-applications",
-                bg:    "bg-emerald-50",
-                ic:    "text-emerald-600",
-                hbg:   "group-hover:bg-emerald-100",
-              },
-              {
-                label: "Competitive Prep",
-                icon:  Trophy,
-                to:    "/academics/competitive",
-                bg:    "bg-amber-50",
-                ic:    "text-amber-600",
-                hbg:   "group-hover:bg-amber-100",
-              },
-            ].map((item) => (
-              <Link
-                key={item.to}
-                to={item.to}
-                className="flex flex-col items-center justify-center gap-2 py-4 px-3 bg-white border border-gray-100 rounded-2xl hover:border-gray-300 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 group"
-              >
-                <div
-                  className={`w-9 h-9 rounded-xl ${item.bg} ${item.hbg} flex items-center justify-center transition-colors duration-200`}
-                >
-                  <item.icon size={16} className={item.ic} />
-                </div>
-                <p className="text-xs font-medium text-gray-700 text-center leading-tight">
-                  {item.label}
-                </p>
-              </Link>
-            ))}
-          </div>
 
-          {/* Upcoming deadlines */}
+            {/* Notices */}
+          <Section
+            title="Important Notices"
+            icon={Bell}
+            linkTo="/notices"
+            linkLabel="All notices"
+          >
+            <NoticeFeed targetType="dashboard" compact={true} />
+          </Section>
+
+           {/* Upcoming deadlines */}
           <Section
             title="Upcoming Deadlines"
             icon={BookOpen}
-            linkTo="/academics"
+            linkTo={`/academics/classroom/${user?.classroom}`}
             linkLabel="Classroom"
           >
             {deadlines.length > 0 ? (
@@ -697,54 +656,59 @@ const Dashboard = () => {
             )}
           </Section>
 
-          {/* Important notices */}
-          <Section
-            title="Important Notices"
-            icon={Bell}
-            linkTo="/notices"
-            linkLabel="All notices"
-          >
-            {sortedNotices.length > 0 ? (
-              <div className="space-y-2">
-                {sortedNotices.slice(0, 5).map((notice) => {
-                  const cfg =
-                    noticePriorityConfig[notice.priority] ||
-                    noticePriorityConfig.normal;
-                  return (
-                    <div
-                      key={notice._id}
-                      className={`flex gap-3 p-3 border rounded-xl ${cfg.border} ${cfg.bg}`}
-                    >
-                      {notice.isPinned ? (
-                        <Pin size={10} className="text-gray-400 mt-1 flex-shrink-0" />
-                      ) : (
-                        <div
-                          className={`w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1.5 ${cfg.dot}`}
-                        />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-xs font-semibold leading-snug ${cfg.text}`}>
-                          {notice.title}
-                        </p>
-                        {notice.content && (
-                          <p className="text-xs text-gray-500 mt-0.5 line-clamp-1 leading-relaxed">
-                            {notice.content}
-                          </p>
-                        )}
-                        <p className="text-xs text-gray-400 mt-1">
-                          {relativeTime(notice.createdAt)}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <Empty message="No important notices" />
-            )}
-          </Section>
+          {/* Quick access */}
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              {
+                label: "Classroom",
+                icon: GraduationCap,
+                to: `/academics/classroom/${user.classroom}`,
+                bg: "bg-blue-50",
+                ic: "text-blue-600",
+                hbg: "group-hover:bg-blue-100",
+              },
+              {
+                label: "My Clubs",
+                icon: Users,
+                to: "/community/clubs",
+                bg: "bg-purple-50",
+                ic: "text-purple-600",
+                hbg: "group-hover:bg-purple-100",
+              },
+              {
+                label: "My Applications",
+                icon: Briefcase,
+                to: "/career/my-applications",
+                bg: "bg-emerald-50",
+                ic: "text-emerald-600",
+                hbg: "group-hover:bg-emerald-100",
+              },
+              {
+                label: "Competitive Prep",
+                icon: Trophy,
+                to: "/academics/competitive",
+                bg: "bg-amber-50",
+                ic: "text-amber-600",
+                hbg: "group-hover:bg-amber-100",
+              },
+            ].map((item) => (
+              <Link
+                key={item.to}
+                to={item.to}
+                className="flex flex-col items-center justify-center gap-2 py-4 px-3 bg-white border border-gray-100 rounded-2xl hover:border-gray-300 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 group"
+              >
+                <div
+                  className={`w-9 h-9 rounded-xl ${item.bg} ${item.hbg} flex items-center justify-center transition-colors duration-200`}
+                >
+                  <item.icon size={16} className={item.ic} />
+                </div>
+                <p className="text-xs font-medium text-gray-700 text-center leading-tight">
+                  {item.label}
+                </p>
+              </Link>
+            ))}
+          </div>
 
-          {/* Open placement drives */}
           <Section
             title="Open Drives"
             icon={Briefcase}
@@ -783,7 +747,9 @@ const Dashboard = () => {
                         </p>
                       </div>
                       {dl && (
-                        <span className={`text-xs font-semibold flex-shrink-0 ${dl.color}`}>
+                        <span
+                          className={`text-xs font-semibold flex-shrink-0 ${dl.color}`}
+                        >
                           {dl.label}
                         </span>
                       )}

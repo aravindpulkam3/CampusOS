@@ -43,7 +43,6 @@ export default function CreateDeadline() {
   useEffect(()=>{
     const fetchData=async()=>{
       const payload= await getClassroom()
-      console.log(payload);
       if(!payload.data.data.isClassRep){
         navigate(-1);
       }
@@ -113,7 +112,7 @@ export default function CreateDeadline() {
     });
   } catch (err) {
     setSubmitError(err.response?.data?.message || "Something went wrong. Try again.");
-    console.log(err);
+    console.error(err);
   } finally {
     setLoading(false);
   }

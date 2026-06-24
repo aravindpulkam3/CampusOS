@@ -431,36 +431,7 @@ export default function EventDetail() {
         </p>
       </section>
 
-      {/* ── Eligibility Parameters Scope ── */}
-      <section className="bg-white border border-gray-100 rounded-xl p-5 mb-4">
-        <h2 className="text-sm font-semibold text-gray-900 mb-3">
-          Eligibility
-        </h2>
-        <div className="grid grid-cols-3 gap-3">
-          <div>
-            <p className="text-xs text-gray-400 mb-1">Branches</p>
-            <p className="text-xs font-medium text-gray-700">
-              {event.eligibleBranches?.length > 0
-                ? event.eligibleBranches.join(", ")
-                : "All branches"}
-            </p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-400 mb-1">Years</p>
-            <p className="text-xs font-medium text-gray-700">
-              {event.eligibleYears?.length > 0
-                ? `Year ${event.eligibleYears.join(", ")}`
-                : "All years"}
-            </p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-400 mb-1">Min. CGPA</p>
-            <p className="text-xs font-medium text-gray-700">
-              {event.minCGPA > 0 ? event.minCGPA.toFixed(1) : "No minimum"}
-            </p>
-          </div>
-        </div>
-      </section>
+      
 
       {/* ── Organizer Layout Card ── */}
       {event.organizerClub && (
@@ -493,8 +464,16 @@ export default function EventDetail() {
         </section>
       )}
 
+      <NoticeFeed
+        targetType="events"
+        targetId={id}
+        title="Event Notices"
+        canPost={user?.role === "superadmin"}
+        showActions={user?.role === "superadmin"}
+      />
+
       {/* ── Announcements Routing Section ── */}
-      <section className="mb-8">
+      <section className="mb-8 mt-4">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <Megaphone size={15} className="text-gray-400" />

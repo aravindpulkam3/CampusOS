@@ -11,7 +11,6 @@ export const createAnnouncement = asyncHandler(async (req, res) => {
   const { targetType, targetId } = req.params;
   const { title, body, image } = req.body;
 
-  console.log(targetType);
 
   if (!targetType) {
     throw new ApiError(400, "Invalid target type");

@@ -1,26 +1,30 @@
 import asyncHandler from "../utils/asyncHandler.js";
 import sendResponse from "../utils/sendResponse.js";
-import Deadline     from "../models/Deadline.js";
-import Notice       from "../models/Notice.js";
-import Event        from "../models/Event.js";
-import Drive        from "../models/Drive.js";
-import Discussion   from "../models/Discussion.js";
-import Application  from "../models/Application.js";
-import Classroom    from "../models/Classroom.js";
-import { searchAll }     from "../services/dashboard.service.js";
+import Deadline from "../models/Deadline.js";
+import Notice from "../models/Notice.js";
+import Event from "../models/Event.js";
+import Drive from "../models/Drive.js";
+import Discussion from "../models/Discussion.js";
+import Application from "../models/Application.js";
+import Classroom from "../models/Classroom.js";
+import { searchAll } from "../services/dashboard.service.js";
 
 export const getDashboard = asyncHandler(async (req, res) => {
   const user = req.user;
 
+  const studentApplications = await Application.find({ student: user._id })
+    .select("drive")
+    .lean();
+  const appliedDriveIds = studentApplications.map((app) => app.drive);
+
   const [classroom, deadlines, notices, events, drives, discussions, counts] =
     await Promise.all([
-
       Classroom.findById(user.classroom).lean(),
 
       // 1. Deadlines for this user's classroom, upcoming, nearest first
       Deadline.find({
         classroom: user.classroom,
-        dueDate:   { $gte: new Date() },
+        dueDate: { $gte: new Date() },
       })
         .sort({ dueDate: 1 })
         .limit(5)
@@ -29,7 +33,7 @@ export const getDashboard = asyncHandler(async (req, res) => {
       // 2. Notices: platform-wide or classroom-specific, pinned first then newest
       Notice.find({
         isArchived: false,
-        expiresAt:  { $not: { $lt: new Date() } },
+        expiresAt: { $not: { $lt: new Date() } },
         $or: [
           { targetType: "platform" },
           { targetType: "classroom", targetId: user.classroom },
@@ -47,16 +51,18 @@ export const getDashboard = asyncHandler(async (req, res) => {
         .limit(5)
         .lean(),
 
-      // 4. Open drives matching user eligibility, nearest deadline first
       Drive.find({
-       
+        _id: { $nin: appliedDriveIds },
+
+        registrationDeadline: { $gte: new Date() },
+
         minCGPA: { $lte: user.cgpa || 0 },
         $or: [
           { eligibleBranches: { $size: 0 } },
           { eligibleBranches: user.branch },
         ],
       })
-        .sort({ registrationDeadline: 1 })
+        .sort({ registrationDeadline: 1 }) // Closes soonest drops first
         .limit(5)
         .lean(),
 
@@ -64,7 +70,7 @@ export const getDashboard = asyncHandler(async (req, res) => {
       Discussion.find({ isDeleted: false })
         .populate("author", "firstName lastName")
         .sort({ lastActivityAt: -1 })
-        .limit(5)
+        .limit(3)
         .lean(),
 
       // 6. Stats — all in parallel
@@ -73,20 +79,25 @@ export const getDashboard = asyncHandler(async (req, res) => {
 
         Application.countDocuments({ student: user._id }),
 
-        Application.countDocuments({ student: user._id, status: "oa_scheduled" }),
+        Application.countDocuments({
+          student: user._id,
+          status: "oa_scheduled",
+        }),
 
-        Application.countDocuments({ student: user._id, status: "interview_scheduled" }),
+        Application.countDocuments({
+          student: user._id,
+          status: "interview_scheduled",
+        }),
 
         Event.countDocuments({
-          startDateTime: { $gte: new Date() },
-          status:        "Upcoming",
+          endDateTime: { $gte: new Date() },
         }),
 
         // NEW — notices created in the last 24 hours for this user
         Notice.countDocuments({
           isArchived: false,
-          expiresAt:  { $not: { $lt: new Date() } },
-          createdAt:  { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+          expiresAt: { $not: { $lt: new Date() } },
+          createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
           $or: [
             { targetType: "platform" },
             { targetType: "classroom", targetId: user.classroom },
@@ -96,7 +107,7 @@ export const getDashboard = asyncHandler(async (req, res) => {
         // NEW — active applications (not rejected / withdrawn)
         Application.countDocuments({
           student: user._id,
-          status:  { $nin: ["rejected", "withdrawn"] },
+          status: { $nin: ["rejected", "withdrawn"] },
         }),
       ]),
     ]);
@@ -107,8 +118,8 @@ export const getDashboard = asyncHandler(async (req, res) => {
     upcomingOA,
     upcomingInterviews,
     upcomingEvents,
-    newNoticesCount,      // NEW
-    activeApplications,   // NEW
+    newNoticesCount, // NEW
+    activeApplications, // NEW
   ] = counts;
 
   return sendResponse(res, 200, "Dashboard data fetched.", {
@@ -124,8 +135,8 @@ export const getDashboard = asyncHandler(async (req, res) => {
       upcomingOA,
       upcomingInterviews,
       upcomingEvents,
-      newNoticesCount,      // NEW
-      activeApplications,   // NEW
+      newNoticesCount, // NEW
+      activeApplications, // NEW
     },
   });
 });

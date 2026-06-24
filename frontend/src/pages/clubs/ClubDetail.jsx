@@ -278,14 +278,6 @@ const ClubDetail = () => {
 
       {/* ── Club Header ── */}
       <div className="mb-6">
-        <NoticeFeed
-          targetType="clubs"
-          targetId={clubId}
-          title="Club Notices"
-          canPost={user?.role === "superadmin"}
-          showActions={user?.role === "superadmin"}
-        />
-
         {/* ─── FIXED CLOUDINARY BANNER DISPLAY LAYER ─── */}
         <div className="h-40 bg-gray-100 rounded-xl relative overflow-hidden border border-gray-100 shadow-xs">
           {club.banner ? (
@@ -406,6 +398,8 @@ const ClubDetail = () => {
         </div>
       </div>
 
+      
+
       {/* ── About Description ── */}
       {club.description && (
         <section className="bg-white border border-gray-100 rounded-xl p-5 mb-4 shadow-2xs">
@@ -416,9 +410,17 @@ const ClubDetail = () => {
         </section>
       )}
 
+      <NoticeFeed
+        targetType="clubs"
+        targetId={clubId}
+        title="Club Notices"
+        canPost={user?.role === "superadmin"}
+        showActions={user?.role === "superadmin"}
+      />
+
       {/* ── Club Leads Team ── */}
       {club.clubAdmins?.length > 0 && (
-        <section className="bg-white border border-gray-100 rounded-xl p-5 mb-4 shadow-2xs">
+        <section className="bg-white border border-gray-100 rounded-xl p-5 mb-4 mt-4 shadow-2xs">
           <h2 className="text-sm font-semibold text-gray-900 mb-3">
             Club Leads
           </h2>
@@ -444,7 +446,7 @@ const ClubDetail = () => {
       )}
 
       {/* ── Announcements Segment ── */}
-      <section className="mb-4">
+      <section className="mb-4 mt-4">
         <SectionHeader
           title="Announcements"
           icon={Megaphone}

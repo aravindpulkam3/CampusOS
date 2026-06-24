@@ -101,7 +101,7 @@ export const updateClub = async (req, res) => {
   const { clubId } = req.params;
   const { clubName, description, category, logo, banner, isActive, adminIds } =
     req.body;
-  console.log(req.body);
+
   const currentUser = req.user; // Appended by your authentication verifyJWT middleware
 
   // 1. Fetch target club record with existing admins pre-populated

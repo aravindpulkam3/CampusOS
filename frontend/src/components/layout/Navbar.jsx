@@ -2,6 +2,7 @@ import { PanelLeftClose, PanelLeftOpen, Bell } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import useAuth from "../../hooks/useAuth";
 import GlobalSearch from "./GlobalSearch";
+import { useState,useEffect } from "react";
 
 const pageTitles = {
   "/": "Dashboard",
@@ -28,6 +29,15 @@ const Navbar = ({ onToggleSidebar, sidebarOpen }) => {
 
   const title = pageTitles[pathname] ?? "EventSphere";
 
+  const avatarUrl = user?.profilePicture;
+
+  // ✅ 2. Use a local state key tied to the image URL to reset tracking flags on login/updates
+  const [imgError, setImgError] = useState(false);
+
+  useEffect(() => {
+    setImgError(false);
+  }, [avatarUrl]);
+
   return (
     <header className="h-14 bg-white border-b border-gray-100 flex items-center justify-between px-6 flex-shrink-0 z-30">
       {/* Left */}
@@ -49,7 +59,6 @@ const Navbar = ({ onToggleSidebar, sidebarOpen }) => {
 
       {/* Right */}
       <div className="flex items-center gap-2">
-        {/* Global Search */}
         <GlobalSearch />
 
         {user ? (
@@ -58,11 +67,23 @@ const Navbar = ({ onToggleSidebar, sidebarOpen }) => {
               <Bell size={17} />
               <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-red-500 rounded-full" />
             </button>
+
+            {/* PROFILE IMAGE / INITIAL BUTTON */}
             <button
               onClick={() => navigate("/profile")}
-              className="w-8 h-8 rounded-full bg-gray-900 text-white text-xs font-bold flex items-center justify-center hover:bg-gray-700 transition-colors"
+              className="w-8 h-8 rounded-full bg-gray-900 text-white text-xs font-bold flex items-center justify-center hover:bg-gray-700 transition-colors overflow-hidden border border-gray-100"
             >
-              {user.firstName?.charAt(0).toUpperCase()}
+              {/* ✅ 3. Only render image if a valid URL exists and it hasn't failed */}
+              {avatarUrl && !imgError ? (
+                <img
+                  src={avatarUrl}
+                  alt={`${user.firstName}'s profile`}
+                  className="w-full h-full object-cover"
+                  onError={() => setImgError(true)} 
+                />
+              ) : (
+                user.firstName?.charAt(0).toUpperCase() || "?"
+              )}
             </button>
           </>
         ) : (
