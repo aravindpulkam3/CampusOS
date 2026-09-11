@@ -1,7 +1,8 @@
-import { PanelLeftClose, PanelLeftOpen, Bell } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import useAuth from "../../hooks/useAuth";
 import GlobalSearch from "./GlobalSearch";
+import NotificationBell from "./NotificationBell";
 import { useState,useEffect } from "react";
 
 const pageTitles = {
@@ -63,10 +64,7 @@ const Navbar = ({ onToggleSidebar, sidebarOpen }) => {
 
         {user ? (
           <>
-            <button className="relative p-2 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors">
-              <Bell size={17} />
-              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-red-500 rounded-full" />
-            </button>
+            <NotificationBell />
 
             {/* PROFILE IMAGE / INITIAL BUTTON */}
             <button
