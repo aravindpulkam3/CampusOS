@@ -1,83 +1,105 @@
 import mongoose from "mongoose";
 
-const periodSchema = new mongoose.Schema(
-  {
-    subject: {
-      type: String,
-      required: true,
-    },
-
-    faculty: {
-      type: String,
-      required: true,
-    },
-
-    room: {
-      type: String,
-    },
-
-    startTime: {
-      type: String,
-      required: true,
-    },
-
-    endTime: {
-      type: String,
-      required: true,
-    },
+const periodSchema = new mongoose.Schema({
+  day: {
+    type: String,
+    enum: [
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday",
+      "Saturday",
+    ],
+    required: true,
   },
-  { _id: false }
-);
+
+  // Points at curriculum.subjects[]._id (a different document) — validated
+  // in the controller, not via `ref`, since it targets an embedded subdoc.
+  subject: {
+    type: mongoose.Schema.Types.ObjectId,
+    required: true,
+  },
+
+  // Section-specific — who actually teaches this subject to THIS section.
+  faculty: {
+    type: String,
+    trim: true,
+  },
+
+  room: {
+    type: String,
+    trim: true,
+  },
+
+  startTime: {
+    type: Number,
+    required: true,
+    min: 0,
+    max: 1439,
+  },
+
+  endTime: {
+    type: Number,
+    required: true,
+    min: 0,
+    max: 1439,
+  },
+});
 
 const classroomSchema = new mongoose.Schema(
   {
-    className: {
-      type: String,
-      required: true,
-      unique: true,
-    },
-
     branch: {
       type: String,
       required: true,
+      trim: true,
     },
 
-    year: {
+    batch: {
       type: Number,
       required: true,
     },
 
     section: {
       type: String,
+      required: true,
+      uppercase: true,
+      trim: true,
     },
 
     classRepresentative: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
+      default: null,
     },
 
-    students: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
-      },
-    ],
-
-    timetable: {
-      Monday: [periodSchema],
-      Tuesday: [periodSchema],
-      Wednesday: [periodSchema],
-      Thursday: [periodSchema],
-      Friday: [periodSchema],
-      Saturday: [periodSchema],
+    currentSemesterNumber: {
+      type: Number,
+      default: null,
+      min: 1,
+      max: 8,
     },
+
+    curriculum: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Curriculum",
+      default: null,
+    },
+
+    periods: [periodSchema],
   },
   {
     timestamps: true,
   }
 );
 
-export default mongoose.model(
-  "Classroom",
-  classroomSchema
-);
+classroomSchema.virtual("displayLabel").get(function () {
+  return `${this.branch} ${this.batch} - ${this.section}`;
+});
+
+classroomSchema.set("toJSON", { virtuals: true });
+classroomSchema.set("toObject", { virtuals: true });
+
+classroomSchema.index({ branch: 1, batch: 1, section: 1 }, { unique: true });
+
+export default mongoose.model("Classroom", classroomSchema);
