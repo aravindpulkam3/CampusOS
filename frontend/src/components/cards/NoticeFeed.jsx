@@ -143,7 +143,7 @@ const NoticeFeed = ({
           <div className={compact ? "" : "space-y-2"}>
             {notices.map((notice) => {
               const isOwner =
-                user?._id === (notice.createdBy?._id ?? notice.createdBy);
+                user?._id === notice.createdBy;
               const canManage =
                 showActions && (isOwner || user?.role === "superadmin");
               return (

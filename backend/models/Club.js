@@ -16,7 +16,7 @@ const clubSchema = new mongoose.Schema(
     category: {
       type: String,
       required: [true, "Category is required"],
-      enum: ["Technical", "Cultural", "Creative", "Business"],
+      enum: ["Technical", "Cultural", "Creative", "Business","Sports"],
     },
     logo: {
       type: String,
@@ -32,18 +32,10 @@ const clubSchema = new mongoose.Schema(
         ref: "User",
       },
     ],
-    clubMembers: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
-      },
-    ],
-    clubFollowers: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
-      },
-    ],
+    followerCount: {
+      type: Number,
+      default: 0,
+    },
     isActive: {
       type: Boolean,
       default: false, // false until approved by Super Admin

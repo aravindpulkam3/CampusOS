@@ -62,6 +62,7 @@ const applicationSchema = new mongoose.Schema(
 
 // One application per student per drive — enforced at DB level
 applicationSchema.index({ student: 1, drive: 1 }, { unique: true });
+applicationSchema.index({ drive: 1, status: 1 });
 
 const Application = mongoose.model("Application", applicationSchema);
 export default Application;

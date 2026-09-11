@@ -244,7 +244,7 @@ const EventForm = ({ mode = "create" }) => {
         await updateEvent(eventId, payload);
         navigate(`/community/events/${eventId}`); // Route back to refreshed Detail page
       } else {
-        await createEvent(...payload);
+        await createEvent(payload);
         navigate(`/community/clubs/${clubId || form.organizerClub}`);
       }
     } catch (err) {

@@ -1,4 +1,6 @@
-// Usage: roleMiddleware("superadmin") or roleMiddleware("superadmin", "classRep")
+// Usage: roleMiddleware("superadmin") or roleMiddleware("superadmin", "placementCoordinator")
+// For resource-scoped authority (e.g. "is this user the CR of THIS classroom"),
+// use a relationship check instead — see classroomAuthMiddleware/clubAdminMiddleware.
 const roleMiddleware = (...allowedRoles) => {
   return (req, res, next) => {
     if (!req.user) {

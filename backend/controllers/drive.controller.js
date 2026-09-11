@@ -5,6 +5,7 @@ import Application from "../models/Application.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import sendResponse from "../utils/sendResponse.js";
 import Notice from "../models/Notice.js";
+import { notifyEligibleStudents } from "../services/notification.service.js";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -157,6 +158,16 @@ export const getDriveById = asyncHandler(async (req, res) => {
 // ─── POST /api/drives  (placementCoordinator or superadmin only) ──────────────
 export const createDrive = asyncHandler(async (req, res) => {
   const drive = await Drive.create({ ...req.body, postedBy: req.user._id });
+
+  notifyEligibleStudents(drive, req.user._id, {
+    type: "drive_new",
+    title: "New placement drive",
+    message: `${drive.companyName} is hiring for ${drive.role} — check your eligibility.`,
+    targetType: "drive",
+    targetId: drive._id,
+    createdBy: req.user._id,
+  });
+
   sendResponse(res, 201, "Drive created.", drive);
 });
 

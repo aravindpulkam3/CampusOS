@@ -162,7 +162,7 @@ const TrendingClubsWidget = ({ clubs, loading }) => (
                 {club.clubName}
               </p>
               <p className="text-[11px] text-slate-400 font-medium mt-px">
-                {club.clubFollowers?.length || 0} active followers
+                {club.followerCount || 0} active followers
               </p>
             </div>
             <ChevronRight

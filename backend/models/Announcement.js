@@ -68,6 +68,9 @@ announcementSchema.pre("validate", function (next) {
   next();
 });
 
+announcementSchema.index({ targetType: 1, club: 1, createdAt: -1 });
+announcementSchema.index({ targetType: 1, event: 1, createdAt: -1 });
+
 export const Announcement = mongoose.model(
   "Announcement",
   announcementSchema

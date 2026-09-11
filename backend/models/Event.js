@@ -55,14 +55,11 @@ const eventSchema = new mongoose.Schema(
         ref: "User",
       },
     ]
-      
     ,
-    registeredStudents: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
-      },
-    ],
+    registrationCount: {
+      type: Number,
+      default: 0,
+    },
     eligibleBranches: {
       type: [String],
       default: [], // empty array means open to all branches
@@ -78,6 +75,10 @@ const eventSchema = new mongoose.Schema(
   },
   { timestamps: true },
 );
+
+eventSchema.index({ organizerClub: 1, startDateTime: 1 });
+eventSchema.index({ endDateTime: 1 });
+eventSchema.index({ status: 1 });
 
 const Event = mongoose.model("Event", eventSchema);
 export default Event;

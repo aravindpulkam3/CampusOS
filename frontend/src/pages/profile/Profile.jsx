@@ -26,6 +26,7 @@ import {
   FileText,
 } from "lucide-react";
 import useAuth from "../../hooks/useAuth";
+import useIsClassRep from "../../hooks/useIsClassRep";
 import axios from "../../api/axios";
 import { getProfile, logoutApi, updateProfile } from "../../api/auth.api";
 import ImageUploadZone from "../../components/forms/ImageUploadZone.jsx";
@@ -79,15 +80,17 @@ const clubInitials = (name) =>
     .join("")
     .toUpperCase() || "?";
 
+// "classrep" is deliberately not a role here — see useIsClassRep, which
+// resolves it from Classroom.classRepresentative instead.
 const roleLabel = {
   student: "Student",
-  classRep: "Class Representative",
+  placementCoordinator: "Placement Coordinator",
   superadmin: "Super Admin",
 };
 
 const roleBadge = {
   student: "bg-gray-100 text-gray-600",
-  classRep: "bg-blue-50 text-blue-700",
+  placementCoordinator: "bg-purple-50 text-purple-700",
   superadmin: "bg-red-50 text-red-700",
 };
 
@@ -566,6 +569,7 @@ const StatCard = ({ label, value, icon: Icon, color }) => (
 // ─── Main ─────────────────────────────────────────────────────
 const Profile = () => {
   const { user: authUser, logout } = useAuth();
+  const { isClassRep } = useIsClassRep();
   const navigate = useNavigate();
 
   const [profile, setProfile] = useState(null);
@@ -652,11 +656,18 @@ const Profile = () => {
                 </p>
               </div>
 
-              <span
-                className={`mt-2 text-xs font-medium px-2.5 py-1 rounded-full ${roleBadge[user.role] || roleBadge.student}`}
-              >
-                {roleLabel[user.role] || "Student"}
-              </span>
+              <div className="mt-2 flex items-center gap-1.5">
+                <span
+                  className={`text-xs font-medium px-2.5 py-1 rounded-full ${roleBadge[user.role] || roleBadge.student}`}
+                >
+                  {roleLabel[user.role] || "Student"}
+                </span>
+                {isClassRep && (
+                  <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-blue-50 text-blue-700">
+                    Class Representative
+                  </span>
+                )}
+              </div>
 
               {/* Bio Sub-text Section */}
               {user.bio && (
@@ -754,7 +765,7 @@ const Profile = () => {
                 <span className="text-xs text-gray-500">Classroom</span>
               </div>
               <span className="text-xs font-medium text-gray-800">
-                {classroom?.className || "Not assigned"}
+                {classroom ? `${classroom.branch} ${classroom.batch} - ${classroom.section}` : "Not assigned"}
               </span>
             </div>
             <div className="flex items-center justify-between py-2.5">

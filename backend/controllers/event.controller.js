@@ -4,6 +4,7 @@ import User from "../models/User.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import sendResponse from "../utils/sendResponse.js";
 import ApiError from "../utils/apiError.js";
+import { notifyClubFollowers, notifyEventRegistrants } from "../services/notification.service.js";
 // TODO: implement controller function
 export const createEvent = asyncHandler(async (req, res) => {
   const event = await Event.create({
@@ -11,12 +12,79 @@ export const createEvent = asyncHandler(async (req, res) => {
     createdBy: req.user._id,
   });
 
+  notifyClubFollowers(event.organizerClub, req.user._id, {
+    type: "club_event",
+    title: "New club event",
+    message: `${event.eventName} was just posted.`,
+    targetType: "event",
+    targetId: event._id,
+    createdBy: req.user._id,
+  });
+
   sendResponse(res, 201, "Event created successfully", event);
 });
 
 export const getAllEvents = asyncHandler(async (req, res) => {
-  const events = await Event.find();
-  sendResponse(res, 200, "Events fetched Successfully", events);
+  const { category, search, offset = 0 } = req.query;
+  const skipCount = Number(offset) || 0;
+  const limitCount = 15;
+  const now = new Date();
+
+  // 1. Construct Dynamic Aggregate Filters
+  const matchConditions = { status: { $ne: "Cancelled" } };
+  
+  if (category && category !== "All") {
+    matchConditions.category = category;
+  }
+
+  if (search && search.trim() !== "") {
+    const searchRegex = new RegExp(search.trim(), "i");
+    matchConditions.$or = [
+      { eventName: searchRegex },
+      { venue: searchRegex },
+      { category: searchRegex }
+    ];
+  }
+
+  // 2. Fetch the target data map with uniform chronological priority sorting pipeline
+  // Order: 1. Ongoing, 2. Upcoming (nearest first), 3. Completed (most recent first)
+  const eventsPipeline = await Event.find(matchConditions)
+    .populate("organizerClub", "clubName logo")
+    .lean();
+
+  const ongoing = [];
+  const upcoming = [];
+  const completed = [];
+
+  eventsPipeline.forEach(event => {
+    const start = new Date(event.startDateTime);
+    const end = new Date(event.endDateTime);
+    
+    if (now >= start && now <= end) {
+      ongoing.push(event);
+    } else if (now < start) {
+      upcoming.push(event);
+    } else {
+      completed.push(event);
+    }
+  });
+
+  // Sort within chronological tiers
+  upcoming.sort((a, b) => new Date(a.startDateTime) - new Date(b.startDateTime)); // Nearest upcoming first
+  completed.sort((a, b) => new Date(b.endDateTime) - new Date(a.endDateTime));     // Most recently completed first
+
+  const unifiedSortedFeed = [...ongoing, ...upcoming, ...completed];
+  
+  // 3. Apply Offset Array Slicing Constraints
+  const paginatedResults = unifiedSortedFeed.slice(skipCount, skipCount + limitCount);
+  const hasMore = skipCount + limitCount < unifiedSortedFeed.length;
+
+  return sendResponse(res, 200, "Events synchronization synchronized successfully.", {
+    events: paginatedResults,
+    hasMore,
+    nextOffset: skipCount + paginatedResults.length,
+    totalRecords: unifiedSortedFeed.length
+  });
 });
 
 export const getEventById = asyncHandler(async (req, res) => {
@@ -49,19 +117,19 @@ export const registerForEvent = asyncHandler(async (req, res) => {
   ) {
     throw new ApiError(403, "Your year is not eligible for this event");
   }
-  const alreadyRegistered = event.registeredStudents.some(
-    (student) => student.toString() === req.user._id.toString(),
+  const alreadyRegistered = user.registeredEvents.some(
+    (registeredEvent) => registeredEvent.toString() === req.params.id.toString(),
   );
 
   if (alreadyRegistered) {
     throw new ApiError(400, "Already registered");
   }
-  event.registeredStudents.push(req.user._id);
+  
   user.registeredEvents.push(req.params.id);
 
   await user.save();
-  await event.save();
-  sendResponse(res, 201, "Registered Successfully", {user,event});
+  const updatedEvent = await Event.findByIdAndUpdate(req.params.id, { $inc: { registrationCount: 1 } }, { new: true });
+  sendResponse(res, 201, "Registered Successfully", {user, event: updatedEvent});
 });
 
 export const getUpcomingEvents = asyncHandler(async (req, res) => {
@@ -78,9 +146,13 @@ export const getUpcomingEvents = asyncHandler(async (req, res) => {
   sendResponse(res, 200, "Upcoming and ongoing events fetched", events);
 });
 
-export const registeredEvents=asyncHandler(async(req,res)=>{
-  const events= await User.find(req.user._id);
-})
+export const registeredEvents = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.user._id).populate("registeredEvents");
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+  sendResponse(res, 200, "Registered events fetched", user.registeredEvents);
+});
 
 export const updateEvent = asyncHandler(async (req, res) => {
   const { id } = req.params; 
@@ -107,6 +179,15 @@ export const updateEvent = asyncHandler(async (req, res) => {
   if (!updatedEvent) {
     return sendResponse(res, 404, "Target event configuration does not exist");
   }
+
+  notifyEventRegistrants(updatedEvent._id, req.user._id, {
+    type: "event_update",
+    title: "Event updated",
+    message: `${updatedEvent.eventName} was just updated.`,
+    targetType: "event",
+    targetId: updatedEvent._id,
+    createdBy: req.user._id,
+  });
 
   return sendResponse(res, 200, "Event parameters synced successfully", { event: updatedEvent });
 });

@@ -543,6 +543,10 @@ const CreateNotice = () => {
     expiresAt: "",
   });
   const [meta, setMeta] = useState({});
+  // Only meaningful for classroom notices — the server resolves the actual
+  // semester id from the target classroom's current active semester; this
+  // component only ever sends a boolean, never an id.
+  const [scopeToCurrentSemester, setScopeToCurrentSemester] = useState(false);
   const [errors, setErrors] = useState({});
   const [submitError, setSubmitError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -692,6 +696,7 @@ const CreateNotice = () => {
         metadata: meta,
         expiresAt: form.expiresAt || null,
         attachments,
+        ...(resolvedType === "classroom" ? { scopeToCurrentSemester } : {}),
       });
 
       const backRoutes = {
@@ -807,6 +812,21 @@ const CreateNotice = () => {
             />
             <FieldError message={errors.content} />
           </div>
+
+          {resolvedType === "classroom" && (
+            <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={scopeToCurrentSemester}
+                onChange={(e) => setScopeToCurrentSemester(e.target.checked)}
+                className="rounded border-gray-300"
+              />
+              Only show for the current semester
+              <span className="text-gray-400">
+                — leave unchecked for a general notice that persists across semesters
+              </span>
+            </label>
+          )}
 
           <div>
             <Label>Priority</Label>

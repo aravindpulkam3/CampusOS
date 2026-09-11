@@ -2,6 +2,7 @@ import Application from "../models/Application.js";
 import Drive from "../models/Drive.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import sendResponse from "../utils/sendResponse.js";
+import { createNotification } from "../services/notification.service.js";
 
 // ─── POST /api/drives/:driveId/apply ──────────────────────────────────────────
 export const applyToDrive = asyncHandler(async (req, res) => {
@@ -184,6 +185,17 @@ export const updateApplicationStatus = asyncHandler(async (req, res) => {
   });
 
   await application.save();
+
+  createNotification({
+    recipientId: application.student,
+    type: "application_status",
+    title: "Application status updated",
+    message: `Your application status was updated to "${status}".`,
+    targetType: "application",
+    targetId: application._id,
+    createdBy: req.user._id,
+  });
+
   sendResponse(res, 200, "Status updated.", application);
 });
 

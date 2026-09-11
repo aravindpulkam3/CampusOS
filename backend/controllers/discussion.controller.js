@@ -3,6 +3,7 @@ import Comment from "../models/Comment.js";
 import Reply from "../models/Reply.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import sendResponse from "../utils/sendResponse.js";
+import { createNotification } from "../services/notification.service.js";
 
 // ─────────────────────────────────────────────
 // DISCUSSIONS
@@ -197,6 +198,18 @@ export const addComment = asyncHandler(async (req, res) => {
     lastActivityAt: new Date(),
   });
 
+  if (discussion.author.toString() !== req.user._id.toString()) {
+    createNotification({
+      recipientId: discussion.author,
+      type: "discussion_reply",
+      title: "New reply to your discussion",
+      message: `Someone replied to "${discussion.title}".`,
+      targetType: "discussion",
+      targetId: discussion._id,
+      createdBy: req.user._id,
+    });
+  }
+
   await comment.populate("author", "firstName lastName branch year role");
   sendResponse(res, 201, "Comment added.", { ...comment.toObject(), replies: [] });
 });
@@ -292,6 +305,19 @@ export const addReply = asyncHandler(async (req, res) => {
 
   await Comment.findByIdAndUpdate(req.params.commentId, { $inc: { replyCount: 1 } });
   await Discussion.findByIdAndUpdate(req.params.id, { lastActivityAt: new Date() });
+
+  const replyRecipient = replyingTo || comment.author;
+  if (replyRecipient.toString() !== req.user._id.toString()) {
+    createNotification({
+      recipientId: replyRecipient,
+      type: "discussion_reply",
+      title: "New reply",
+      message: "Someone replied to your comment.",
+      targetType: "discussion",
+      targetId: req.params.id,
+      createdBy: req.user._id,
+    });
+  }
 
   await reply.populate("author", "firstName lastName branch year role");
   await reply.populate("replyingTo", "firstName lastName");

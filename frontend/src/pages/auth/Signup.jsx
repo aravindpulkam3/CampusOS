@@ -6,6 +6,12 @@ import { BRANCHES } from "../../constants/branches.js";
 const YEARS = [1, 2, 3, 4];
 const SECTIONS = ["A", "B"];
 
+const CURRENT_YEAR = new Date().getFullYear();
+// A student's admission year — collected explicitly (not derived from roll
+// number, which has no enforced format) since it anchors them to a stable
+// Classroom for their whole program, unlike `year`, which changes yearly.
+const BATCH_YEARS = Array.from({ length: 6 }, (_, i) => CURRENT_YEAR - i);
+
 const INITIAL_FORM = {
   firstName: "",
   lastName: "",
@@ -13,6 +19,7 @@ const INITIAL_FORM = {
   password: "",
   confirmPassword: "",
   branch: "",
+  batch: "",
   year: "",
   section: "",
   rollNumber: "",
@@ -72,6 +79,7 @@ export default function Signup() {
     if (form.password !== form.confirmPassword)
       errors.confirmPassword = "Passwords do not match";
     if (!form.branch) errors.branch = "Required";
+    if (!form.batch) errors.batch = "Required";
     if (!form.year) errors.year = "Required";
     if (!form.section) errors.section = "Required";
     if (!form.rollNumber.trim()) errors.rollNumber = "Required";
@@ -98,6 +106,7 @@ export default function Signup() {
       await signupApi({
         ...payload,
         year: Number(payload.year),
+        batch: Number(payload.batch),
         cgpa: payload.cgpa ? Number(payload.cgpa) : 0,
       });
       navigate("/login", { state: { registered: true } });
@@ -229,6 +238,27 @@ export default function Signup() {
                   </select>
                   {fieldErrors.branch && (
                     <p className="mt-1 text-xs text-red-600">{fieldErrors.branch}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1.5">Admission year</label>
+                  <select
+                    name="batch"
+                    value={form.batch}
+                    onChange={handleChange}
+                    className={selectClass(fieldErrors.batch)}
+                  >
+                    <option value="">Select admission year</option>
+                    {BATCH_YEARS.map((y) => (
+                      <option key={y} value={y}>{y}</option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-gray-400">
+                    The year you joined — this stays fixed and links you to your cohort's classroom.
+                  </p>
+                  {fieldErrors.batch && (
+                    <p className="mt-1 text-xs text-red-600">{fieldErrors.batch}</p>
                   )}
                 </div>
 

@@ -99,6 +99,16 @@ const driveSchema = new mongoose.Schema(
       required: true,
     },
 
+    startDate:{
+      type:Date,
+      required:true
+    },
+    
+    endDate:{
+      type:Date,
+      required:true
+    },
+
     applicationLink: {
       type: String,
       required: true,
@@ -132,5 +142,7 @@ const driveSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+driveSchema.index({ status: 1, registrationDeadline: 1 });
+driveSchema.index({ eligibleBranches: 1, minCGPA: 1 });
 
 export default mongoose.model("Drive", driveSchema);

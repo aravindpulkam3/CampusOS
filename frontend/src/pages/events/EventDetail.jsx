@@ -1,15 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   ArrowLeft,
   MapPin,
   Clock,
   Calendar,
-  Users,
-  Megaphone,
   Plus,
-  Edit3, // Imported Edit Icon
+  Edit3,
   ChevronRight,
+  Activity,
+  Megaphone,
+  Loader2,
 } from "lucide-react";
 import { getEventById, registerForEvent } from "../../api/event.api";
 import {
@@ -20,27 +21,36 @@ import NoticeFeed from "../../components/cards/NoticeFeed";
 import useAuth from "../../hooks/useAuth";
 import AnnouncementCard from "../announcements/AnnouncementCard";
 
-// ─── Helpers ──────────────────────────────────────────────────
 const categoryColor = {
-  Technical: "bg-blue-50 text-blue-700",
-  Cultural: "bg-purple-50 text-purple-700",
-  Creative: "bg-orange-50 text-orange-700",
-  Business: "bg-green-50 text-green-700",
+  Technical: "text-blue-700 bg-blue-50 border-blue-100/60",
+  Cultural: "text-purple-700 bg-purple-50 border-purple-100/60",
+  Creative: "text-orange-700 bg-orange-50 border-orange-100/60",
+  Business: "text-green-700 bg-green-50 border-green-100/60",
+  Sports: "text-emerald-700 bg-emerald-50 border-emerald-100/60",
 };
 
 const statusConfig = {
-  Upcoming: { color: "bg-emerald-50 text-emerald-700", dot: "bg-emerald-500" },
+  Upcoming: {
+    color: "bg-emerald-50 text-emerald-700 border-emerald-100/60",
+    dot: "bg-emerald-500",
+  },
   Ongoing: {
-    color: "bg-blue-50 text-blue-700",
+    color: "bg-blue-50 text-blue-700 border-blue-100/60",
     dot: "bg-blue-500 animate-pulse",
   },
-  Completed: { color: "bg-gray-100 text-gray-500", dot: "bg-gray-400" },
-  Cancelled: { color: "bg-red-50 text-red-600", dot: "bg-red-500" },
+  Completed: {
+    color: "bg-slate-100 text-slate-500 border-slate-200/60",
+    dot: "bg-slate-400",
+  },
+  Cancelled: {
+    color: "bg-red-50 text-red-600 border-red-100/60",
+    dot: "bg-red-500",
+  },
 };
 
 const formatEventSchedule = (startDateStr, endDateStr) => {
   if (!startDateStr || !endDateStr)
-    return { isMultiDay: false, start: "—", end: "—", timeLabel: "—" };
+    return { isMultiDay: false, dateLabel: "—", timeLabel: "—" };
 
   const start = new Date(startDateStr);
   const end = new Date(endDateStr);
@@ -53,8 +63,8 @@ const formatEventSchedule = (startDateStr, endDateStr) => {
   if (isMultiDay) {
     return {
       isMultiDay: true,
-      start: `${start.toLocaleDateString("en-IN", dateOpts)} · ${start.toLocaleTimeString("en-IN", timeOpts)}`,
-      end: `${end.toLocaleDateString("en-IN", dateOpts)} · ${end.toLocaleTimeString("en-IN", timeOpts)}`,
+      startLabel: `${start.toLocaleDateString("en-IN", { day: "2-digit", month: "short" })} • ${start.toLocaleTimeString("en-IN", timeOpts)}`,
+      endLabel: `${end.toLocaleDateString("en-IN", { day: "2-digit", month: "short" })} • ${end.toLocaleTimeString("en-IN", timeOpts)}`,
     };
   }
 
@@ -65,54 +75,28 @@ const formatEventSchedule = (startDateStr, endDateStr) => {
   };
 };
 
-const relativeTime = (d) => {
-  const mins = Math.floor((Date.now() - new Date(d)) / 60000);
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
-};
-
-const clubInitials = (name) =>
-  name
-    ?.split(" ")
-    .map((w) => w[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase() || "C";
-
-function checkEligibility(event, user) {
-  if (!user)
-    return { eligible: false, reason: "You must be logged in to register." };
-  const reasons = [];
-  if (
-    event.eligibleBranches?.length > 0 &&
-    !event.eligibleBranches.includes(user.branch)
-  )
-    reasons.push(`Open to ${event.eligibleBranches.join(", ")} only`);
-  if (
-    event.eligibleYears?.length > 0 &&
-    !event.eligibleYears.includes(user.year)
-  )
-    reasons.push(`Open to Year ${event.eligibleYears.join(", ")} only`);
-
-  if (event.minCGPA > 0 && user.cgpa < event.minCGPA)
-    reasons.push(
-      `Minimum CGPA ${event.minCGPA} required (yours: ${user.cgpa})`,
-    );
-
-  return reasons.length === 0
-    ? { eligible: true, reason: null }
-    : { eligible: false, reason: reasons.join(" · ") };
-}
-
 const Skeleton = () => (
-  <div className="max-w-3xl mx-auto animate-pulse px-4 py-6">
-    <div className="w-20 h-4 bg-gray-100 rounded mb-6" />
-    <div className="h-48 bg-gray-100 rounded-xl mb-6" />
-    <div className="w-64 h-6 bg-gray-100 rounded mb-3" />
-    <div className="w-full h-4 bg-gray-100 rounded mb-2" />
-    <div className="w-3/4 h-4 bg-gray-100 rounded" />
+  <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 animate-pulse space-y-6">
+    {/* Return link row skeleton */}
+    <div className="w-24 h-4 bg-slate-100 rounded-lg" />
+
+    {/* Notice block row skeleton */}
+    <div className="h-14 bg-slate-50/50 border border-slate-100 rounded-2xl" />
+
+    {/* Banner box card skeleton */}
+    <div className="bg-white border border-slate-100 rounded-2xl overflow-hidden shadow-3xs space-y-5 pb-5">
+      <div className="h-44 sm:h-48 bg-slate-100" />
+      <div className="px-5 space-y-3">
+        <div className="w-20 h-4 bg-slate-100 rounded-md" />
+        <div className="w-2/3 h-5 bg-slate-100 rounded-lg" />
+        <div className="w-32 h-3 bg-slate-50 rounded" />
+        <div className="grid grid-cols-3 gap-3.5 pt-2">
+          <div className="h-10 bg-slate-50 rounded-xl" />
+          <div className="h-10 bg-slate-50 rounded-xl" />
+          <div className="h-10 bg-slate-50 rounded-xl" />
+        </div>
+      </div>
+    </div>
   </div>
 );
 
@@ -122,26 +106,57 @@ export default function EventDetail() {
   const { user, setUser } = useAuth();
 
   const [event, setEvent] = useState(null);
-  const [announcements, setAnnouncements] = useState([]);
+  const [feedItems, setFeedItems] = useState([]); // ── Standardized variable naming
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  // Pagination & Load States
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [feedLoading, setFeedLoading] = useState(true);
+  const [loadMoreLoading, setLoadMoreLoading] = useState(false);
   const [registering, setRegistering] = useState(false);
   const [registered, setRegistered] = useState(false);
   const [registerError, setRegisterError] = useState("");
   const [isOrganizer, setIsOrganizer] = useState(false);
 
-  useEffect(() => {
-    const fetchData = async () => {
+  // 1. Core Fetch Thread Method
+  const fetchAnnouncementsFeed = useCallback(
+    async (currentOffset = 0, append = false) => {
       try {
-        const [eventRes, announcementRes] = await Promise.all([
-          getEventById(id),
-          getAnnouncements("event", id),
-        ]);
+        if (append) setLoadMoreLoading(true);
+        else setFeedLoading(true);
+
+        const res = await getAnnouncements("event", id, currentOffset);
+        const {
+          announcements = [],
+          hasMore: nextHasMore,
+          nextOffset,
+        } = res?.data?.data || {};
+
+        setFeedItems((prev) =>
+          append ? [...prev, ...announcements] : announcements,
+        );
+        setHasMore(nextHasMore);
+        setOffset(nextOffset);
+      } catch (err) {
+        console.error("Failed to load announcements:", err);
+      } finally {
+        setFeedLoading(false);
+        setLoadMoreLoading(false);
+      }
+    },
+    [id],
+  );
+
+  useEffect(() => {
+    const fetchEventData = async () => {
+      try {
+        setLoading(true);
+        const eventRes = await getEventById(id);
         const data = eventRes?.data?.data.event;
         setEvent(data);
         setIsOrganizer(eventRes.data.data.isOrganizer);
-
-        setAnnouncements(announcementRes?.data?.data || []);
 
         if (
           user &&
@@ -149,14 +164,23 @@ export default function EventDetail() {
         ) {
           setRegistered(true);
         }
+
+        // Load first page of announcements
+        fetchAnnouncementsFeed(0, false);
       } catch {
-        setError("Event not found or failed to load.");
+        setError("Event details offline.");
       } finally {
         setLoading(false);
       }
     };
-    fetchData();
-  }, [id, user]);
+    fetchEventData();
+  }, [id, user, fetchAnnouncementsFeed]);
+
+  const handleLoadMore = () => {
+    if (!loadMoreLoading && hasMore) {
+      fetchAnnouncementsFeed(offset, true);
+    }
+  };
 
   const handleRegister = async () => {
     setRegistering(true);
@@ -167,372 +191,294 @@ export default function EventDetail() {
       setUser(payload.data.data.user);
       setRegistered(true);
     } catch (err) {
-      setRegisterError(
-        err.response?.data?.message || "Registration failed. Please try again.",
-      );
+      setRegisterError(err.response?.data?.message || "Registration failed.");
     } finally {
       setRegistering(false);
     }
   };
 
-  // ─── Edit Event Navigation Handler ──────────────────────────
-  const handleEditClick = () => {
-    // Navigates to edit form, embedding current layout state into history
-    navigate(`/community/events/${id}/edit`, { state: { event } });
-  };
-
-  const handleDeleteAnnouncement = async (id) => {
+  const handleDeleteAnnouncement = async (annId) => {
     try {
-      const payload = await deleteAnnouncement(id);
-      setAnnouncements((prevAnnouncements) =>
-        prevAnnouncements.filter((announcement) => announcement._id !== id),
-      );
+      await deleteAnnouncement(annId);
+      setFeedItems((prev) => prev.filter((a) => a._id !== annId));
     } catch (error) {
-      console.error("Failed to delete announcement from database:", error);
-      alert("Something went wrong while deleting. Please try again.");
+      console.error(error);
     }
   };
 
   if (loading) return <Skeleton />;
-
   if (error || !event)
     return (
-      <div className="max-w-3xl mx-auto text-center py-20 px-4">
-        <p className="text-sm text-gray-400 mb-3">
-          {error || "Event not found."}
-        </p>
-        <button
-          onClick={() => navigate(-1)}
-          className="text-xs text-gray-500 underline hover:text-gray-800"
-        >
-          Go back
-        </button>
+      <div className="text-center py-20 text-xs font-semibold text-slate-400">
+        {error || "Asset node offline."}
       </div>
     );
 
-  const calculateCurrentStatus = () => {
-    if (event.status === "Cancelled") return "Cancelled";
-    const now = new Date();
-    const start = new Date(event.startDateTime);
-    const end = new Date(event.endDateTime);
-
-    if (now < start) return "Upcoming";
-    if (now >= start && now <= end) return "Ongoing";
-    return "Completed";
-  };
-
-  const computedStatus = calculateCurrentStatus();
-  const isCancelled = computedStatus === "Cancelled";
-  const isCompleted = computedStatus === "Completed";
-
-  const { eligible, reason: ineligibilityReason } = checkEligibility(
-    event,
-    user,
-  );
-  const canRegister = eligible && !registered && !isCancelled && !isCompleted;
-
-  const catColor = categoryColor[event.category] ?? "bg-gray-100 text-gray-600";
-  const statusCfg = statusConfig[computedStatus] ?? statusConfig.Upcoming;
-  const latestAnnouncements = announcements.slice(0, 3);
+  const computedStatus =
+    event.status === "Cancelled"
+      ? "Cancelled"
+      : new Date() < new Date(event.startDateTime)
+        ? "Upcoming"
+        : new Date() <= new Date(event.endDateTime)
+          ? "Ongoing"
+          : "Completed";
+  const catStyle =
+    categoryColor[event.category] ||
+    "text-slate-600 bg-slate-100 border-slate-200";
+  const statusCfg = statusConfig[computedStatus] || statusConfig.Upcoming;
+  const schedule = formatEventSchedule(event.startDateTime, event.endDateTime);
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-6">
-      {/* Back Button */}
-      <button
-        onClick={() => navigate(-1)}
-        className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-700 transition-colors mb-6"
-      >
-        <ArrowLeft size={14} /> Back
-      </button>
-
-      {/* ── Banner ── */}
-      {event.banner && (
-        <div className="h-52 rounded-xl overflow-hidden border border-gray-100 mb-6">
-          <img
-            src={event.banner}
-            alt={event.eventName}
-            className="w-full h-full object-cover"
-          />
-        </div>
-      )}
-
-      {/* ── Header ── */}
-      <div className="mb-6">
-        <div className="flex items-center gap-2 flex-wrap mb-3">
-          <span
-            className={`text-xs font-medium px-2.5 py-1 rounded-full ${catColor}`}
-          >
-            {event.category}
-          </span>
-          <span
-            className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${statusCfg.color}`}
-          >
-            <span className={`w-1.5 h-1.5 rounded-full ${statusCfg.dot}`} />
-            {computedStatus}
-          </span>
-          {event.tags?.map((tag) => (
-            <span
-              key={tag}
-              className="text-xs text-gray-400 bg-gray-50 border border-gray-100 px-2.5 py-1 rounded-full"
-            >
-              #{tag}
-            </span>
-          ))}
-        </div>
-
-        <h1 className="text-xl font-semibold text-gray-900 leading-snug mb-2">
-          {event.eventName}
-        </h1>
-
-        {event.organizerClub && (
-          <button
-            onClick={() =>
-              navigate(
-                `/community/clubs/${event.organizerClub._id || event.organizerClub}`,
-              )
-            }
-            className="text-xs text-gray-500 hover:text-gray-900 transition-colors"
-          >
-            by{" "}
-            <span className="font-medium text-gray-700">
-              {event.organizerClub.clubName || "Club Domain"}
-            </span>
-          </button>
-        )}
-      </div>
-
-      {/* ── Meta Parameters Info Row ── */}
-      {(() => {
-        const schedule = formatEventSchedule(
-          event.startDateTime,
-          event.endDateTime,
-        );
-        const gridItems = schedule.isMultiDay
-          ? [
-              { icon: Calendar, label: "Starts", value: schedule.start },
-              { icon: Clock, label: "Ends", value: schedule.end },
-              { icon: MapPin, label: "Venue", value: event.venue ?? "—" },
-              {
-                icon: Users,
-                label: "Registered",
-                value: `${event.registeredStudents?.length ?? 0} students`,
-              },
-            ]
-          : [
-              { icon: Calendar, label: "Date", value: schedule.dateLabel },
-              { icon: Clock, label: "Time", value: schedule.timeLabel },
-              { icon: MapPin, label: "Venue", value: event.venue ?? "—" },
-              {
-                icon: Users,
-                label: "Registered",
-                value: `${event.registeredStudents?.length ?? 0} students`,
-              },
-            ];
-
-        return (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-            {gridItems.map(({ icon: Icon, label, value }) => (
-              <div
-                key={label}
-                className="bg-white border border-gray-100 rounded-xl p-3 flex flex-col justify-between"
-              >
-                <div>
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <Icon size={12} className="text-gray-400" />
-                    <span className="text-xs text-gray-400">{label}</span>
-                  </div>
-                  <p className="text-xs font-semibold text-gray-800 leading-snug break-words">
-                    {value}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        );
-      })()}
-
-      {/* ── Registration Access Interface Block ── */}
-      <div className="mb-8">
-        {registered && (
-          <div className="flex items-center gap-2 px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-xl">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            <span className="text-sm font-medium text-emerald-700">
-              You're registered for this event
-            </span>
-          </div>
-        )}
-
-        {!registered && isCancelled && (
-          <div className="px-4 py-3 bg-red-50 border border-red-100 rounded-xl">
-            <p className="text-sm font-medium text-red-600">
-              This event has been cancelled
-            </p>
-          </div>
-        )}
-
-        {!registered && isCompleted && (
-          <div className="px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl">
-            <p className="text-sm font-medium text-gray-500">
-              This event has ended
-            </p>
-          </div>
-        )}
-
-        {!registered && !isCancelled && !isCompleted && !eligible && (
-          <div className="space-y-2">
-            <button
-              disabled
-              className="w-full sm:w-auto px-6 py-2.5 bg-gray-100 text-gray-400 text-sm font-medium rounded-xl cursor-not-allowed border border-gray-200"
-            >
-              Not eligible to register
-            </button>
-            <p className="text-xs text-amber-600 flex items-center gap-1.5">
-              <span className="w-1 h-1 rounded-full bg-amber-500 flex-shrink-0" />
-              {ineligibilityReason}
-            </p>
-          </div>
-        )}
-
-        {!user && !isCancelled && !isCompleted && (
-          <button
-            onClick={() => navigate("/login")}
-            className="w-full sm:w-auto px-6 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-xl hover:bg-gray-700 transition-colors"
-          >
-            Sign in to register
-          </button>
-        )}
-
-        {canRegister && (
-          <div className="space-y-2">
-            <button
-              onClick={handleRegister}
-              disabled={registering}
-              className="w-full sm:w-auto px-6 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-xl hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-xs"
-            >
-              {registering && (
-                <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              )}
-              {registering ? "Registering..." : "Register for Event"}
-            </button>
-            {registerError && (
-              <p className="text-xs text-red-500">{registerError}</p>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* ── About Content Description ── */}
-      <section className="bg-white border border-gray-100 rounded-xl p-5 mb-4">
-        <h2 className="text-sm font-semibold text-gray-900 mb-2">
-          About this Event
-        </h2>
-        <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line">
-          {event.description || "No description provided."}
-        </p>
-      </section>
-
-      
-
-      {/* ── Organizer Layout Card ── */}
-      {event.organizerClub && (
-        <section
-          className="bg-white border border-gray-100 rounded-xl p-4 mb-4 flex items-center gap-3 cursor-pointer hover:border-gray-300 transition-colors"
-          onClick={() =>
-            navigate(
-              `/community/clubs/${event.organizerClub._id || event.organizerClub}`,
-            )
-          }
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-2 space-y-6">
+      {/* Upper Navigation Action Bar */}
+      <div className="flex items-center justify-between gap-4">
+        <button
+          onClick={() => navigate(-1)}
+          className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-slate-700 transition-colors"
         >
-          <div className="w-10 h-10 rounded-xl bg-gray-900 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
-            {event.organizerClub.logo ? (
-              <img
-                src={event.organizerClub.logo}
-                alt=""
-                className="w-full h-full object-cover rounded-xl"
-              />
-            ) : (
-              clubInitials(event.organizerClub.clubName)
-            )}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs text-gray-400 mb-0.5">Organised by</p>
-            <p className="text-sm font-semibold text-gray-900">
-              {event.organizerClub.clubName || "Club Chapter"}
-            </p>
-          </div>
-          <ChevronRight size={14} className="text-gray-300" />
-        </section>
-      )}
+          <ArrowLeft size={13} /> Return to Timelines
+        </button>
 
-      <NoticeFeed
-        targetType="events"
-        targetId={id}
-        title="Event Notices"
-        canPost={user?.role === "superadmin"}
-        showActions={user?.role === "superadmin"}
-      />
-
-      {/* ── Announcements Routing Section ── */}
-      <section className="mb-8 mt-4">
-        <div className="flex items-center justify-between mb-4">
+        {(isOrganizer || user?.role === "superadmin") && (
           <div className="flex items-center gap-2">
-            <Megaphone size={15} className="text-gray-400" />
-            <h2 className="text-sm font-semibold text-gray-900">
-              Announcements
-            </h2>
-            {announcements.length > 0 && (
-              <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
-                {announcements.length}
-              </span>
-            )}
+            <Link
+              to={`/events/${id}/create-notice`}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold border border-slate-200 text-slate-600 rounded-xl hover:border-slate-400 hover:text-slate-900 bg-white shadow-3xs transition-all"
+            >
+              <Plus size={12} /> Post Notice
+            </Link>
+            <button
+              onClick={() =>
+                navigate(`/community/events/${id}/edit`, { state: { event } })
+              }
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold border border-slate-200 text-slate-600 rounded-xl hover:border-slate-400 hover:text-slate-900 bg-white shadow-3xs transition-all"
+            >
+              <Edit3 size={12} /> Edit Event
+            </button>
+            <Link
+              to={`/community/event/${id}/announcements/create`}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-slate-900 text-white rounded-xl hover:bg-slate-800 shadow-3xs transition-all"
+            >
+              <Plus size={12} /> Post Update
+            </Link>
           </div>
+        )}
+      </div>
 
-          {/* ── Updated Controls Matrix (Organizer / Superadmin View) ── */}
-          {(isOrganizer || user?.role === "superadmin") && (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleEditClick}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-gray-200 text-gray-600 rounded-lg hover:border-gray-400 hover:text-gray-900 transition-all duration-150 bg-white"
-              >
-                <Edit3 size={12} /> Edit Event
-              </button>
-              <Link
-                to={`/community/event/${id}/announcements/create`}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-gray-900 text-white border border-transparent rounded-lg hover:bg-gray-700 transition-all duration-150"
-              >
-                <Plus size={12} /> Post Update
-              </Link>
+      {/* ── CENTRAL CRITICAL NOTICE BOARD STREAM (TOP PRIORITY) ── */}
+      <div className="bg-amber-50/40 border border-amber-200/60 rounded-2xl p-2.5 shadow-3xs">
+        <NoticeFeed
+          targetType="events"
+          targetId={id}
+          title="Event Notices "
+          canPost={isOrganizer}
+          showActions={isOrganizer}
+          compact={true}
+        />
+      </div>
+
+      {/* Main Metadata Display Billboard */}
+      <div className="bg-white border border-slate-100 rounded-2xl overflow-hidden shadow-2xs">
+        <div className="h-40 sm:h-48 bg-slate-50 relative overflow-hidden border-b border-slate-100">
+          {event.banner ? (
+            <img
+              src={event.banner}
+              alt=""
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="w-full h-full bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center opacity-90">
+              <Activity size={24} className="text-white/10" />
             </div>
           )}
         </div>
 
-        {latestAnnouncements.length > 0 ? (
-          <>
-            <div className="flex flex-col gap-3">
-              {latestAnnouncements.map((a) => (
-                <AnnouncementCard
-                  key={a._id}
-                  announcement={a}
-                  variant="detail"
-                  onDelete={handleDeleteAnnouncement}
-                  isEligible={isOrganizer}
-                />
-              ))}
-            </div>
+        <div className="p-5 space-y-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              className={`text-[10px] font-bold px-2 py-0.5 rounded-md border tracking-wide uppercase ${catStyle}`}
+            >
+              {event.category}
+            </span>
+            <span
+              className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md border ${statusCfg.color}`}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${statusCfg.dot}`} />
+              {computedStatus}
+            </span>
+          </div>
 
-            {announcements.length > 3 && (
-              <button className="w-full mt-3 py-2.5 text-xs font-medium text-gray-500 border border-gray-100 bg-white rounded-xl hover:border-gray-300 hover:text-gray-800 transition-colors flex items-center justify-center gap-1">
-                View all {announcements.length} announcements{" "}
-                <ChevronRight size={12} />
+          <div className="space-y-1">
+            <h1 className="text-base sm:text-lg font-black text-slate-800 tracking-tight">
+              {event.eventName}
+            </h1>
+            {event.organizerClub && (
+              <p className="text-xs font-semibold text-slate-400">
+                by{" "}
+                <span className="text-slate-600 font-bold underline decoration-slate-200">
+                  {event.organizerClub.clubName}
+                </span>
+              </p>
+            )}
+          </div>
+
+          {/* Quick Info Param Rows */}
+          {(() => {
+            const schedule = formatEventSchedule(
+              event.startDateTime,
+              event.endDateTime,
+            );
+
+            // ✅ Dynamically structuralize items based on timeline spans
+            const gridItems = schedule.isMultiDay
+              ? [
+                  {
+                    icon: Calendar,
+                    label: "Event Starts",
+                    value: schedule.startLabel,
+                  },
+                  {
+                    icon: Clock,
+                    label: "Event Ends",
+                    value: schedule.endLabel,
+                  },
+                  {
+                    icon: MapPin,
+                    label: "Venue Placement",
+                    value: event.venue || "Campus Grounds",
+                  },
+                ]
+              : [
+                  { icon: Calendar, label: "Date", value: schedule.dateLabel },
+                  {
+                    icon: Clock,
+                    label: "Schedule Window",
+                    value: schedule.timeLabel,
+                  },
+                  {
+                    icon: MapPin,
+                    label: "Venue Placement",
+                    value: event.venue || "Campus Grounds",
+                  },
+                ];
+
+            return (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 pt-4 border-t border-slate-50 text-xs font-medium text-slate-500">
+                {gridItems.map(({ icon: Icon, label, value }) => (
+                  <div
+                    key={label}
+                    className="flex items-center gap-2 bg-slate-50/60 border border-slate-100/80 rounded-xl p-2.5"
+                  >
+                    <Icon size={14} className="text-slate-400" />
+                    <div>
+                      <span className="text-[10px] text-slate-400 block font-bold uppercase">
+                        {label}
+                      </span>
+                      <span className="text-slate-700 font-bold truncate block max-w-[180px]">
+                        {value}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+
+          {/* Registration Trigger Handle Box */}
+          <div className="pt-2">
+            {registered ? (
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-emerald-50 border border-emerald-100 rounded-xl text-xs font-bold text-emerald-700">
+                ✓ Enrolled & Secured
+              </div>
+            ) : computedStatus === "Completed" ||
+              computedStatus === "Cancelled" ? (
+              <div className="inline-flex items-center px-4 py-1.5 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-400">
+                Timeline Closed
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <button
+                  onClick={handleRegister}
+                  disabled={registering}
+                  className="px-5 py-2 text-xs font-bold bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition shadow-3xs flex items-center gap-2"
+                >
+                  {registering && (
+                    <Loader2 size={12} className="animate-spin" />
+                  )}
+                  Submit Enrollment
+                </button>
+                {registerError && (
+                  <p className="text-[11px] text-red-500 font-semibold">
+                    {registerError}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Description Segment */}
+      {event.description && (
+        <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-3xs space-y-1.5">
+          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+            Event Overview
+          </h3>
+          <p className="text-xs text-slate-500 font-medium leading-relaxed whitespace-pre-line">
+            {event.description}
+          </p>
+        </div>
+      )}
+
+      {/* ── BROADCAST ANNOUNCEMENTS STREAM WITH PAGINATION (LOAD MORE) ── */}
+      <div className="space-y-3.5">
+        <div className="flex items-center gap-2 px-1">
+          <Megaphone size={14} className="text-slate-400" />
+          <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+            Broadcast Stream Logs
+          </h2>
+        </div>
+
+        {feedLoading && feedItems.length === 0 ? (
+          <div className="h-24 bg-slate-50 border border-slate-100 animate-pulse rounded-2xl" />
+        ) : feedItems.length > 0 ? (
+          <div className="space-y-3">
+            {feedItems.map((a) => (
+              <AnnouncementCard
+                key={a._id}
+                announcement={a}
+                variant="detail"
+                onDelete={handleDeleteAnnouncement}
+                isEligible={isOrganizer}
+              />
+            ))}
+
+            {hasMore && (
+              <button
+                onClick={handleLoadMore}
+                disabled={loadMoreLoading}
+                className="flex items-center justify-center gap-2 w-full py-2.5 text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:border-slate-400 hover:bg-slate-50 transition-all disabled:opacity-50"
+              >
+                {loadMoreLoading ? (
+                  <>
+                    <Loader2
+                      size={13}
+                      className="animate-spin text-slate-400"
+                    />{" "}
+                    Appending Stream...
+                  </>
+                ) : (
+                  "Load More Logs"
+                )}
               </button>
             )}
-          </>
+          </div>
         ) : (
-          <p className="text-xs text-gray-400 py-8 text-center bg-white border border-gray-100 rounded-xl">
-            No announcements yet.
+          <p className="text-xs font-medium text-slate-400 py-12 text-center bg-white border border-slate-100 rounded-2xl shadow-3xs">
+            No active updates published onto this stream.
           </p>
         )}
-      </section>
+      </div>
     </div>
   );
 }

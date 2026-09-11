@@ -26,5 +26,6 @@ const commentSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+commentSchema.index({ discussion: 1, isAcceptedAnswer: -1, createdAt: 1 });
 
 export default mongoose.model("Comment", commentSchema);

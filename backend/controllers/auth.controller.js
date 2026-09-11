@@ -56,6 +56,7 @@ export const login = asyncHandler(async (req, res) => {
     rollNumber: user.rollNumber,
     cgpa: user.cgpa,
     followedClubs: user.followedClubs,
+    mutedClubs: user.mutedClubs,
     registeredEvents: user.registeredEvents,
     classroom:user.classroom,
     profilePicture: user.profilePicture,

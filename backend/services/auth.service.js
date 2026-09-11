@@ -3,6 +3,7 @@ import { generateAccessToken, generateRefreshToken } from "../utils/generateToke
 import Classroom from "../models/Classroom.js"
 import Discussion from "../models/Discussion.js";
 import Application from "../models/Application.js";
+import { findClassroomForUser } from "./classroom.service.js";
 
 const COOKIE_OPTIONS = {
   httpOnly: true,
@@ -23,7 +24,7 @@ const REFRESH_COOKIE_OPTIONS = {
 export const registerUser = async (userData) => {
   const {
     firstName, lastName, email, password,
-    branch, year, section, rollNumber, cgpa,
+    branch, year, section, rollNumber, cgpa, batch,
   } = userData;
 
   const existingUser = await User.findOne({ $or: [{ email }, { rollNumber }] });
@@ -36,9 +37,18 @@ export const registerUser = async (userData) => {
 
   const user = await User.create({
     firstName, lastName, email, password,
-    branch, year, section, rollNumber,
+    branch, year, section, rollNumber, batch,
     cgpa: cgpa || 0,
   });
+
+  // Read-only lookup — a Classroom must already exist (admin-created) for
+  // this cohort. No match just means the student stays unassigned until an
+  // admin creates the matching classroom, which backfills them then.
+  const classroom = await findClassroomForUser({ branch, batch, section });
+  if (classroom) {
+    user.classroom = classroom._id;
+    await user.save({ validateBeforeSave: false });
+  }
 
   return user;
 };
@@ -134,7 +144,7 @@ export const getProfileData = async (userId) => {
   ] = await Promise.all([
     user.classroom
       ? Classroom.findById(user.classroom)
-          .select("className")
+          .select("branch batch section")
           .lean()
       : null,
 

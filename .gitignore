@@ -57,3 +57,9 @@ Thumbs.db
 # =========================
 *.pid
 *.seed
+
+# ===========================
+# Claude Code project memory
+# ===========================
+CLAUDE.md
+AGENTS.md

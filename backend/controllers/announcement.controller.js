@@ -6,6 +6,7 @@ import Event from "../models/Event.js";
 import { Announcement } from "../models/Announcement.js";
 import sendResponse from "../utils/sendResponse.js";
 import ApiError from "../utils/apiError.js";
+import { notifyClubFollowers, notifyEventRegistrants } from "../services/notification.service.js";
 // TODO: implement controller functions
 export const createAnnouncement = asyncHandler(async (req, res) => {
   const { targetType, targetId } = req.params;
@@ -33,33 +34,61 @@ export const createAnnouncement = asyncHandler(async (req, res) => {
 
   const announcement = await Announcement.create(announcementData);
 
+  if (targetType === "club") {
+    notifyClubFollowers(announcement.club, req.user._id, {
+      type: "club_announcement",
+      title: "New club announcement",
+      message: title,
+      targetType: "announcement",
+      targetId: announcement._id,
+      createdBy: req.user._id,
+    });
+  } else if (targetType === "event") {
+    notifyEventRegistrants(announcement.event, req.user._id, {
+      type: "event_announcement",
+      title: "New event announcement",
+      message: title,
+      targetType: "announcement",
+      targetId: announcement._id,
+      createdBy: req.user._id,
+    });
+  }
+
   sendResponse(res, 201, "announcement created", announcement);
 });
 
 export const getAnnouncements = asyncHandler(async (req, res) => {
   const { targetType, targetId } = req.params;
-
-  let data;
+  const offset = Number(req.query.offset) || 0;
+  const limitCount = 10; 
+  let queryFilter = { targetType };
 
   if (targetType === "club") {
-    data = await Announcement.find({
-      targetType: "club",
-      club: targetId,
-    })
-      .populate("postedBy", "firstName lastName")
-      .sort({ createdAt: -1 });
+    queryFilter.club = targetId;
   } else if (targetType === "event") {
-    data = await Announcement.find({
-      targetType: "event",
-      event: targetId,
-    })
-      .populate("postedBy", "firstName lastName")
-      .sort({ createdAt: -1 });
+    queryFilter.event = targetId;
   } else {
     throw new ApiError(400, "Invalid target type");
   }
 
-  sendResponse(res, 200, "Announcements fetched successfully", data);
+  // Count matches to evaluate boundary conditions
+  const totalCount = await Announcement.countDocuments(queryFilter);
+
+  const data = await Announcement.find(queryFilter)
+    .populate("postedBy", "firstName lastName profilePicture") 
+    .sort({ createdAt: -1 })
+    .skip(offset)
+    .limit(limitCount)
+    .lean();
+
+  const nextOffset = offset + data.length;
+  const hasMore = nextOffset < totalCount;
+
+  sendResponse(res, 200, "Announcements fetched successfully", {
+    announcements: data,
+    hasMore,
+    nextOffset,
+  });
 });
 
 export const getCommunityFeed = asyncHandler(async (req, res) => {
@@ -71,13 +100,8 @@ export const getCommunityFeed = asyncHandler(async (req, res) => {
   const generalOffset = Number(req.query.generalOffset) || 0;
 
   // 2. Resolve Targeted Entity Relationship Lists
-  const [followedClubs, registeredEvents] = await Promise.all([
-    Club.find({ clubFollowers: userId }).select("_id").lean(),
-    Event.find({ registeredStudents: userId }).select("_id").lean(),
-  ]);
-
-  const followedClubIds = followedClubs.map((c) => c._id);
-  const registeredEventIds = registeredEvents.map((e) => e._id);
+  const followedClubIds = req.user.followedClubs || [];
+  const registeredEventIds = req.user.registeredEvents || [];
 
   // 3. Define the Core Matching Criteria Filters
   const eventFilter = {

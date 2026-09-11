@@ -45,6 +45,12 @@ const userSchema = new mongoose.Schema(
     classroom: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Classroom",
+      index: true,
+    },
+    batch: {
+      type: Number,
+      required: [true, "Batch is required"],
+      immutable: true,
     },
     rollNumber: {
       type: String,
@@ -69,7 +75,7 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ["student", "classrep", "superadmin", "placementCoordinator"],
+      enum: ["student", "placementCoordinator", "superadmin"],
       default: "student",
     },
     registeredEvents: [
@@ -84,7 +90,8 @@ const userSchema = new mongoose.Schema(
         ref: "Club",
       },
     ],
-    joinedClubs: [
+
+    mutedClubs: [
       {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Club",

@@ -28,7 +28,6 @@ import AnnouncementForm from "./pages/announcements/AnnouncementForm.jsx";
 import Classroom from "./pages/academics/classroom/Classroom.jsx";
 import Discussions from "./pages/discussions/Discussions.jsx";
 import CompetitivePrep from "./pages/academics/competitive/CompetitivePrep.jsx";
-import SubjectDetail from "./pages/academics/classroom/SubjectDetail.jsx";
 import NoticeForm from "./components/forms/NoticeForm.jsx";
 
 // Career workspace
@@ -43,6 +42,8 @@ import AdminPanel from "./pages/admin/AdminPanel";
 import ManageClubs from "./pages/admin/ManageClubs";
 import ManageDrives from "./pages/admin/ManageDrives";
 import ModerationQueue from "./pages/admin/ModerationQueue";
+import ClassroomManagement from "./pages/admin/ClassroomManagement.jsx";
+import CurriculumManagement from "./pages/admin/CurriculumManagement.jsx";
 
 // Profile
 import Profile from "./pages/profile/Profile";
@@ -57,6 +58,8 @@ const adminTabs = [
   { label: "Drives", path: "/admin/drives", end: false },
   { label: "Moderation", path: "/admin/moderation", end: false },
   { label: "Notices", path: "/admin/notices", end: false },
+  { label: "Classrooms", path: "/admin/classrooms", end: false },
+  { label: "Curricula", path: "/admin/curricula", end: false },
 ];
 
 function App() {
@@ -123,7 +126,6 @@ function App() {
             element={<Classroom />}
           />
           <Route path="/academics/competitive" element={<CompetitivePrep />} />
-          <Route path="/academics/subjects/:name" element={<SubjectDetail />} />
           <Route
             path="/:targetType/:targetId/create-notice"
             element={<NoticeForm />}
@@ -159,6 +161,8 @@ function App() {
             <Route path="drives" element={<ManageDrives />} />
             <Route path="moderation" element={<ModerationQueue />} />
             <Route path="notices" element={<ManageClubs />} />
+            <Route path="classrooms" element={<ClassroomManagement />} />
+            <Route path="curricula" element={<CurriculumManagement />} />
           </Route>
 
           {/* Profile — no tabs */}
