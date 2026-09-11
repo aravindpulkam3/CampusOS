@@ -116,6 +116,24 @@ export const notifyDriveApplicants = safe(async (driveId, actorId, fields) => {
   await createNotificationsBulk(studentIds, { ...fields, excludeUserId: actorId });
 });
 
+// Round-outcome notifications (shortlisted/rejected/selected) all reuse this
+// one wrapper — they only ever differ by recipient list and message text,
+// not by recipient-resolution logic, so a single function covers all of them
+// (called twice per confirmShortlist, once per finishDrive).
+export const notifyApplicationOutcome = safe(
+  async (studentIds, { title, message, targetId }, actorId) => {
+    if (!studentIds?.length) return;
+    await createNotificationsBulk(studentIds, {
+      type: "application_status",
+      title,
+      message,
+      targetType: "drive",
+      targetId,
+      excludeUserId: actorId,
+    });
+  },
+);
+
 export const notifyClassroomStudents = safe(async (classroomId, actorId, fields) => {
   const students = await User.find({ classroom: classroomId }).select("_id").lean();
   if (!students.length) return;

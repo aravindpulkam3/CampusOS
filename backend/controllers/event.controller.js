@@ -46,44 +46,85 @@ export const getAllEvents = asyncHandler(async (req, res) => {
     ];
   }
 
-  // 2. Fetch the target data map with uniform chronological priority sorting pipeline
-  // Order: 1. Ongoing, 2. Upcoming (nearest first), 3. Completed (most recent first)
-  const eventsPipeline = await Event.find(matchConditions)
-    .populate("organizerClub", "clubName logo")
-    .lean();
-
-  const ongoing = [];
-  const upcoming = [];
-  const completed = [];
-
-  eventsPipeline.forEach(event => {
-    const start = new Date(event.startDateTime);
-    const end = new Date(event.endDateTime);
-    
-    if (now >= start && now <= end) {
-      ongoing.push(event);
-    } else if (now < start) {
-      upcoming.push(event);
-    } else {
-      completed.push(event);
+  // 2. Fetch the target data using an aggregation pipeline
+  const pipeline = [
+    { $match: matchConditions },
+    {
+      $addFields: {
+        tier: {
+          $switch: {
+            branches: [
+              {
+                case: {
+                  $and: [
+                    { $lte: ["$startDateTime", now] },
+                    { $gte: ["$endDateTime", now] }
+                  ]
+                },
+                then: 1 // Ongoing
+              },
+              {
+                case: { $gt: ["$startDateTime", now] },
+                then: 2 // Upcoming
+              }
+            ],
+            default: 3 // Completed
+          }
+        }
+      }
+    },
+    {
+      $addFields: {
+        sortDate: {
+          $cond: {
+            if: { $eq: ["$tier", 3] },
+            // For completed events, most recent first (descending end date)
+            then: { $multiply: [{ $toLong: "$endDateTime" }, -1] },
+            // For ongoing/upcoming, nearest first (ascending start date)
+            else: { $toLong: "$startDateTime" }
+          }
+        }
+      }
+    },
+    { $sort: { tier: 1, sortDate: 1 } },
+    {
+      $facet: {
+        metadata: [{ $count: "totalRecords" }],
+        data: [
+          { $skip: skipCount },
+          { $limit: limitCount },
+          {
+            $lookup: {
+              from: "clubs",
+              localField: "organizerClub",
+              foreignField: "_id",
+              pipeline: [
+                { $project: { clubName: 1, logo: 1 } }
+              ],
+              as: "organizerClub"
+            }
+          },
+          {
+            $unwind: {
+              path: "$organizerClub",
+              preserveNullAndEmptyArrays: true
+            }
+          }
+        ]
+      }
     }
-  });
+  ];
 
-  // Sort within chronological tiers
-  upcoming.sort((a, b) => new Date(a.startDateTime) - new Date(b.startDateTime)); // Nearest upcoming first
-  completed.sort((a, b) => new Date(b.endDateTime) - new Date(a.endDateTime));     // Most recently completed first
+  const results = await Event.aggregate(pipeline);
+  const totalRecords = results[0].metadata[0]?.totalRecords || 0;
+  const paginatedResults = results[0].data;
+  const hasMore = skipCount + limitCount < totalRecords;
 
-  const unifiedSortedFeed = [...ongoing, ...upcoming, ...completed];
-  
-  // 3. Apply Offset Array Slicing Constraints
-  const paginatedResults = unifiedSortedFeed.slice(skipCount, skipCount + limitCount);
-  const hasMore = skipCount + limitCount < unifiedSortedFeed.length;
-
-  return sendResponse(res, 200, "Events synchronization synchronized successfully.", {
+  return sendResponse(res, 200, "Events fetched successfully.", {
     events: paginatedResults,
     hasMore,
     nextOffset: skipCount + paginatedResults.length,
-    totalRecords: unifiedSortedFeed.length
+    totalRecords
   });
 });
 

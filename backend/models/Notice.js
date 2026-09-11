@@ -104,5 +104,6 @@ const noticeSchema = new mongoose.Schema(
   }
 );
 noticeSchema.index({ targetType: 1, targetId: 1, isArchived: 1, createdAt: -1 });
+noticeSchema.index({ targetType: 1, targetId: 1, isArchived: 1, expiresAt: 1 });
 
 export default mongoose.model("Notice", noticeSchema);

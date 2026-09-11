@@ -17,7 +17,6 @@ import applicationRouter from './routes/application.routes.js';
 import classRoomRouter, { adminClassroomRouter } from './routes/classroom.routes.js';
 import curriculumRouter from './routes/curriculum.routes.js';
 import discussionRouter from './routes/discussion.routes.js';
-import careerRouter from './routes/career.routes.js';
 import dashboardRouter from './routes/dashboard.routes.js';
 import uploadRouter from './routes/upload.route.js';
 import notificationRouter from './routes/notification.routes.js';
@@ -49,7 +48,6 @@ app.use('/api/notices', noticeRouter);
 app.use('/api/announcements', announcementRouter);
 
 app.use('/api/drives',driveRouter);
-app.use('/api/career',careerRouter);
 app.use('/api/applications', applicationRouter);
 
 app.use("/api/v1/upload", uploadRouter);

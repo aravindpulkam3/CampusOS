@@ -40,27 +40,9 @@ const formatDate = (d) =>
   });
 
 const statusConfig = {
-  registered: { label: "Registered", color: "bg-blue-50 text-blue-700" },
-  oa_scheduled: { label: "OA Scheduled", color: "bg-amber-50 text-amber-700" },
-  oa_completed: {
-    label: "OA Completed",
-    color: "bg-purple-50 text-purple-700",
-  },
-  interview_scheduled: {
-    label: "Interview Scheduled",
-    color: "bg-indigo-50 text-indigo-700",
-  },
-  interview_completed: {
-    label: "Interview Completed",
-    color: "bg-teal-50 text-teal-700",
-  },
-  offer_received: {
-    label: "Offer Received",
-    color: "bg-green-50 text-green-700",
-  },
+  active: { label: "Active", color: "bg-blue-50 text-blue-700" },
   selected: { label: "Selected", color: "bg-green-50 text-green-700" },
   rejected: { label: "Rejected", color: "bg-red-50 text-red-700" },
-  withdrawn: { label: "Withdrawn", color: "bg-gray-100 text-gray-500" },
 };
 
 const clubBg = [
@@ -922,7 +904,7 @@ const Profile = () => {
               <div className="space-y-2">
                 {recentApplications.map((app) => {
                   const cfg =
-                    statusConfig[app.status] || statusConfig.registered;
+                    statusConfig[app.status] || statusConfig.active;
                   return (
                     <Link
                       key={app._id}

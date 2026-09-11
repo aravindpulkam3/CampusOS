@@ -1,11 +1,20 @@
-// drive controller
-// TODO: implement controller functions
 import Drive from "../models/Drive.js";
 import Application from "../models/Application.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import sendResponse from "../utils/sendResponse.js";
+import ApiError from "../utils/apiError.js";
 import Notice from "../models/Notice.js";
-import { notifyEligibleStudents } from "../services/notification.service.js";
+import deriveRoundStates from "../utils/roundState.js";
+import {
+  notifyEligibleStudents,
+  notifyApplicationOutcome,
+} from "../services/notification.service.js";
+import {
+  parseCsv,
+  buildPreview,
+  applyShortlist,
+  finishDrive as finishDriveService,
+} from "../services/shortlist.service.js";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -25,6 +34,55 @@ const checkEligibility = (drive, user) => {
   return { eligible: reasons.length === 0, reasons };
 };
 
+// Fields a coordinator may change via the generic edit form. Deliberately
+// excludes status/rounds/currentRoundId/applicationCount/postedBy — those
+// only ever change through the dedicated lifecycle actions below, never a
+// blind mass-assignment.
+const EDITABLE_DRIVE_FIELDS = [
+  "companyName",
+  "companyLogo",
+  "role",
+  "description",
+  "jobType",
+  "driveType",
+  "location",
+  "ctc",
+  "stipend",
+  "bond",
+  "batch",
+  "eligibleBranches",
+  "minCGPA",
+  "minYear",
+  "maxYear",
+  "maxBacklogs",
+  "slots",
+  "registrationDeadline",
+  "startDate",
+  "endDate",
+  "applicationLink",
+  "brochureUrl",
+];
+
+// Preconditions shared by previewShortlist/confirmShortlist: only the live
+// current round, only once it's ended, only before it's been processed.
+const getShortlistableRound = (drive, roundId) => {
+  if (drive.status !== "active") {
+    throw new ApiError(400, "This drive is not active.");
+  }
+  if (!drive.currentRoundId || String(drive.currentRoundId) !== String(roundId)) {
+    throw new ApiError(400, "You can only process the shortlist for the current round.");
+  }
+  const round = drive.rounds.id(roundId);
+  if (!round) throw new ApiError(404, "Round not found.");
+  if (!round.endedAt) {
+    throw new ApiError(400, "End this round before processing its results.");
+  }
+  if (round.processedAt) {
+    throw new ApiError(400, "This round's results have already been processed.");
+  }
+  return round;
+};
+
 // ─── GET /api/drives  (list + filters + search + pagination) ──────────────────
 export const getDrives = asyncHandler(async (req, res) => {
   const {
@@ -37,7 +95,13 @@ export const getDrives = asyncHandler(async (req, res) => {
   } = req.query;
 
   const query = {};
-  if (status) query.status = status;
+  // NOTE: this "status" query param means registration open/closed (derived
+  // from registrationDeadline) — the UI's existing All/Open/Closed filter —
+  // not Drive.status (the active/completed/cancelled lifecycle field, which
+  // this endpoint doesn't filter on).
+  const now = new Date();
+  if (status === "open") query.registrationDeadline = { $gte: now };
+  else if (status === "closed") query.registrationDeadline = { $lt: now };
   if (jobType) query.jobType = jobType;
   if (search) query.$text = { $search: search };
 
@@ -52,21 +116,21 @@ export const getDrives = asyncHandler(async (req, res) => {
 
   const skip = (Number(page) - 1) * Number(limit);
 
-  // 1. Fetch data raw from collection
   const [drives, total] = await Promise.all([
     Drive.find(query)
-      .select("-selectionProcess -companyDescription")
+      .select("-rounds")
+      .sort({ createdAt: -1 })
       .skip(skip)
       .limit(Number(limit))
       .lean(),
     Drive.countDocuments(query),
   ]);
 
-  // 2. Map structural user applications snapshot maps
   let appliedDriveIdsSet = new Set();
   if (req.user) {
     const studentApplications = await Application.find({
       student: req.user._id,
+      drive: { $in: drives.map((d) => d._id) },
     })
       .select("drive")
       .lean();
@@ -75,24 +139,17 @@ export const getDrives = asyncHandler(async (req, res) => {
     );
   }
 
-  const now = new Date();
-
-  // 3. Process eligibility tracking parameters and attach hasApplied flags
   const processedDrives = drives.map((d) => {
     const hasApplied = appliedDriveIdsSet.has(d._id.toString());
     const isOpen = d.registrationDeadline
       ? new Date(d.registrationDeadline) >= now
       : false;
 
-    // ── Enforce exact priority weight scoring hierarchy ──
     let sortWeight = 0;
-    if (hasApplied && isOpen)
-      sortWeight = 4; // 1st: Registered + Open
-    else if (!hasApplied && isOpen)
-      sortWeight = 3; // 2nd: Open (Not Registered)
-    else if (hasApplied && !isOpen)
-      sortWeight = 2; // 3rd: Registered + Closed
-    else sortWeight = 1; // 4th: Closed (Not Registered)
+    if (hasApplied && isOpen) sortWeight = 4;
+    else if (!hasApplied && isOpen) sortWeight = 3;
+    else if (hasApplied && !isOpen) sortWeight = 2;
+    else sortWeight = 1;
 
     return {
       ...d,
@@ -100,15 +157,6 @@ export const getDrives = asyncHandler(async (req, res) => {
       sortWeight,
       ...(req.user ? { eligibility: checkEligibility(d, req.user) } : {}),
     };
-  });
-
-  // 4. ✅ Sort by designated weight priority rules, falling back to earliest deadline next
-  processedDrives.sort((a, b) => {
-    if (b.sortWeight !== a.sortWeight) {
-      return b.sortWeight - a.sortWeight; // Pushes higher weights (4, 3...) to top
-    }
-    // Secondary tier sort: Closes soonest drops first for active categories
-    return new Date(a.registrationDeadline) - new Date(b.registrationDeadline);
   });
 
   sendResponse(res, 200, "Drives fetched.", {
@@ -120,18 +168,15 @@ export const getDrives = asyncHandler(async (req, res) => {
     },
   });
 });
+
 // ─── GET /api/drives/:id ──────────────────────────────────────────────────────
 export const getDriveById = asyncHandler(async (req, res) => {
   const drive = await Drive.findById(req.params.id)
     .populate("postedBy", "firstName lastName")
     .lean();
 
-  if (!drive)
-    return res
-      .status(404)
-      .json({ success: false, message: "Drive not found." });
+  if (!drive) throw new ApiError(404, "Drive not found.");
 
-  // Attach eligibility + application status for logged-in user
   let eligibility = null;
   let myApplication = null;
 
@@ -141,15 +186,14 @@ export const getDriveById = asyncHandler(async (req, res) => {
       student: req.user._id,
       drive: req.params.id,
     })
-      .select("status currentRound appliedAt timeline")
+      .select("status timeline appliedAt")
       .lean();
   }
 
-  // Sort selection process steps by order
-  drive.selectionProcess?.sort((a, b) => a.order - b.order);
+  const rounds = deriveRoundStates(drive.rounds || [], drive.currentRoundId);
 
   sendResponse(res, 200, "Drive fetched.", {
-    drive,
+    drive: { ...drive, rounds },
     eligibility,
     myApplication,
   });
@@ -171,39 +215,65 @@ export const createDrive = asyncHandler(async (req, res) => {
   sendResponse(res, 201, "Drive created.", drive);
 });
 
-// ─── PATCH /api/drives/:id ────────────────────────────────────────────────────
+// ─── PATCH /api/drives/:id  (allow-listed fields only) ────────────────────────
 export const updateDrive = asyncHandler(async (req, res) => {
+  const updates = {};
+  for (const field of EDITABLE_DRIVE_FIELDS) {
+    if (req.body[field] !== undefined) updates[field] = req.body[field];
+  }
+
   const drive = await Drive.findByIdAndUpdate(
     req.params.id,
-    { $set: req.body },
+    { $set: updates },
     { new: true, runValidators: true },
   );
-  if (!drive)
-    return res
-      .status(404)
-      .json({ success: false, message: "Drive not found." });
+  if (!drive) throw new ApiError(404, "Drive not found.");
   sendResponse(res, 200, "Drive updated.", drive);
 });
 
 // ─── DELETE /api/drives/:id ───────────────────────────────────────────────────
 export const deleteDrive = asyncHandler(async (req, res) => {
   const drive = await Drive.findByIdAndDelete(req.params.id);
-  if (!drive)
-    return res
-      .status(404)
-      .json({ success: false, message: "Drive not found." });
+  if (!drive) throw new ApiError(404, "Drive not found.");
   sendResponse(res, 200, "Drive deleted.");
 });
 
+// ─── GET /api/drives/:id/applications  (coordinator only) ─────────────────────
+export const getDriveApplications = asyncHandler(async (req, res) => {
+  const { status, page = 1, limit = 50 } = req.query;
+  const query = { drive: req.params.id };
+  if (status) query.status = status;
+
+  const skip = (Number(page) - 1) * Number(limit);
+
+  const [applications, total] = await Promise.all([
+    Application.find(query)
+      .populate("student", "firstName lastName email branch year cgpa rollNumber")
+      .sort({ appliedAt: 1 })
+      .skip(skip)
+      .limit(Number(limit))
+      .lean(),
+    Application.countDocuments(query),
+  ]);
+
+  sendResponse(res, 200, "Applications fetched.", {
+    applications,
+    pagination: {
+      total,
+      page: Number(page),
+      pages: Math.ceil(total / Number(limit)),
+    },
+  });
+});
+
 // ─── GET /api/drives/dashboard  (career section landing page data) ────────────
-// Returns: upcoming drives, quick stats, recent notices (notices TBD via Notice model)
 export const getCareerDashboard = asyncHandler(async (req, res) => {
   const userId = req.user._id;
   const user = req.user;
   const now = new Date();
 
   const eligibilityFilter = {
-    registrationDeadline: { $gt: now }, // greater than
+    registrationDeadline: { $gt: now },
     $and: [
       {
         $or: [
@@ -211,8 +281,8 @@ export const getCareerDashboard = asyncHandler(async (req, res) => {
           { eligibleBranches: user.branch },
         ],
       },
-      { minCGPA: { $lte: user.cgpa ?? 10 } }, // less than or equal to
-      { maxBacklogs: { $gte: user.backlogs ?? 0 } }, // greater than or equal to
+      { minCGPA: { $lte: user.cgpa ?? 10 } },
+      { maxBacklogs: { $gte: user.backlogs ?? 0 } },
       { minYear: { $lte: user.year ?? 1 } },
       { maxYear: { $gte: user.year ?? 4 } },
     ],
@@ -222,7 +292,7 @@ export const getCareerDashboard = asyncHandler(async (req, res) => {
     .populate({
       path: "drive",
       select:
-        "companyName companyLogo role jobType ctc stipend registrationDeadline location",
+        "companyName companyLogo role jobType ctc stipend registrationDeadline location rounds currentRoundId",
     })
     .sort({ appliedAt: -1 })
     .lean();
@@ -230,10 +300,9 @@ export const getCareerDashboard = asyncHandler(async (req, res) => {
   const validApplications = myApplications.filter((a) => a.drive !== null);
   const appliedDriveIds = validApplications.map((a) => a.drive._id);
 
-  // ── 3. Eligible drives NOT yet applied to ──────────────────────────────
   const eligibleDrives = await Drive.find({
     ...eligibilityFilter,
-    _id: { $nin: appliedDriveIds }, // not in
+    _id: { $nin: appliedDriveIds },
   })
     .select(
       "companyName companyLogo role jobType ctc stipend registrationDeadline location",
@@ -242,7 +311,6 @@ export const getCareerDashboard = asyncHandler(async (req, res) => {
     .limit(6)
     .lean();
 
-  // ── 4. Notices: from applied drives OR eligible open drives ─────────────
   const allEligibleIds = await Drive.find(eligibilityFilter)
     .select("_id")
     .lean()
@@ -257,7 +325,7 @@ export const getCareerDashboard = asyncHandler(async (req, res) => {
     isArchived: false,
     $or: [
       { targetId: { $in: driveIdsForNotices } },
-      { targetId: null }, // platform-wide placement notices
+      { targetId: null },
     ],
   })
     .populate("createdBy", "firstName lastName")
@@ -265,26 +333,28 @@ export const getCareerDashboard = asyncHandler(async (req, res) => {
     .limit(8)
     .lean();
 
-  // ── 5. Upcoming OA / Interview activities ──────────────────────────────
+  // Active applications and the round they're actually at right now (derived
+  // via the same helper the Rounds tab uses) — no fixed OA/interview concept.
   const myActivities = validApplications
-    .filter((a) => ["oa_scheduled", "interview_scheduled"].includes(a.status))
-    .map((a) => ({
-      _id: a._id,
-      status: a.status,
-      drive: {
-        _id: a.drive._id,
-        companyName: a.drive.companyName,
-        companyLogo: a.drive.companyLogo,
-        oaDate:
-          a.timeline.find((t) => t.status === "oa_scheduled")?.changedAt ||
-          null,
-        interviewDate:
-          a.timeline.find((t) => t.status === "interview_scheduled")
-            ?.changedAt || null,
-      },
-    }));
+    .filter((a) => a.status === "active" && a.drive.currentRoundId)
+    .map((a) => {
+      const rounds = deriveRoundStates(a.drive.rounds || [], a.drive.currentRoundId);
+      const currentRound = rounds.find(
+        (r) => String(r._id) === String(a.drive.currentRoundId),
+      );
+      return {
+        _id: a._id,
+        drive: {
+          _id: a.drive._id,
+          companyName: a.drive.companyName,
+          companyLogo: a.drive.companyLogo,
+        },
+        round: currentRound
+          ? { name: currentRound.name, derivedState: currentRound.derivedState }
+          : null,
+      };
+    });
 
-  // ── 6. Stats ───────────────────────────────────────────────────────────
   const totalEligible = await Drive.countDocuments(eligibilityFilter);
 
   return sendResponse(res, 200, "Dashboard data compiled successfully.", {
@@ -309,11 +379,319 @@ export const getCareerDashboard = asyncHandler(async (req, res) => {
     stats: {
       eligibleDrives: totalEligible,
       applied: validApplications.length,
-      upcomingOA: validApplications.filter((a) => a.status === "oa_scheduled")
+      activeApplications: validApplications.filter((a) => a.status === "active")
         .length,
-      upcomingInterviews: validApplications.filter(
-        (a) => a.status === "interview_scheduled",
-      ).length,
     },
   });
+});
+
+// ─── Rounds ─────────────────────────────────────────────────────────────────
+
+// POST /api/drives/:id/rounds — pure append, never touches applicant state
+// or currentRoundId. Creating a round has no lifecycle side effect.
+export const addRound = asyncHandler(async (req, res) => {
+  const { name, startDate } = req.body;
+  if (!name || !name.toString().trim()) {
+    throw new ApiError(400, "Round name is required.");
+  }
+
+  const drive = await Drive.findById(req.params.id);
+  if (!drive) throw new ApiError(404, "Drive not found.");
+  if (drive.status !== "active") {
+    throw new ApiError(400, "Cannot add rounds to a drive that is not active.");
+  }
+
+  drive.rounds.push({ name: name.toString().trim(), startDate: startDate || null });
+  await drive.save();
+
+  sendResponse(res, 201, "Round added.", {
+    rounds: deriveRoundStates(drive.rounds, drive.currentRoundId),
+  });
+});
+
+// PATCH /api/drives/:id/rounds/:roundId — rename/reschedule, allowed on any
+// round at any lifecycle stage (purely cosmetic; timeline entries reference
+// a round only by id, never a name/date snapshot).
+export const updateRound = asyncHandler(async (req, res) => {
+  const { name, startDate } = req.body;
+
+  const drive = await Drive.findById(req.params.id);
+  if (!drive) throw new ApiError(404, "Drive not found.");
+  if (drive.status !== "active") {
+    throw new ApiError(400, "Cannot edit rounds on a drive that is not active.");
+  }
+
+  const round = drive.rounds.id(req.params.roundId);
+  if (!round) throw new ApiError(404, "Round not found.");
+
+  if (name !== undefined) {
+    if (!name.toString().trim()) throw new ApiError(400, "Round name cannot be empty.");
+    round.name = name.toString().trim();
+  }
+  if (startDate !== undefined) {
+    round.startDate = startDate || null;
+  }
+
+  await drive.save();
+  sendResponse(res, 200, "Round updated.", {
+    rounds: deriveRoundStates(drive.rounds, drive.currentRoundId),
+  });
+});
+
+// DELETE /api/drives/:id/rounds/:roundId — pending-only (never yet current).
+export const deleteRound = asyncHandler(async (req, res) => {
+  const drive = await Drive.findById(req.params.id);
+  if (!drive) throw new ApiError(404, "Drive not found.");
+  if (drive.status !== "active") {
+    throw new ApiError(400, "Cannot delete rounds on a drive that is not active.");
+  }
+
+  const roundIndex = drive.rounds.findIndex(
+    (r) => String(r._id) === req.params.roundId,
+  );
+  if (roundIndex === -1) throw new ApiError(404, "Round not found.");
+
+  const currentIndex = drive.currentRoundId
+    ? drive.rounds.findIndex((r) => String(r._id) === String(drive.currentRoundId))
+    : -1;
+
+  if (currentIndex !== -1 && roundIndex <= currentIndex) {
+    throw new ApiError(400, "Only pending rounds (not yet reached) can be deleted.");
+  }
+
+  drive.rounds.splice(roundIndex, 1);
+  await drive.save();
+
+  sendResponse(res, 200, "Round deleted.", {
+    rounds: deriveRoundStates(drive.rounds, drive.currentRoundId),
+  });
+});
+
+// POST /api/drives/:id/rounds/:roundId/end — marks the physical round over.
+// Never touches applicant state or currentRoundId; results are now awaited.
+export const endRound = asyncHandler(async (req, res) => {
+  const drive = await Drive.findById(req.params.id);
+  if (!drive) throw new ApiError(404, "Drive not found.");
+  if (drive.status !== "active") {
+    throw new ApiError(400, "This drive is not active.");
+  }
+  if (!drive.currentRoundId || String(drive.currentRoundId) !== req.params.roundId) {
+    throw new ApiError(400, "Only the current round can be ended.");
+  }
+
+  const round = drive.rounds.id(req.params.roundId);
+  if (!round) throw new ApiError(404, "Round not found.");
+  if (round.endedAt) throw new ApiError(400, "This round has already been ended.");
+  if (!round.startDate) {
+    throw new ApiError(400, "Set a start date for this round before ending it.");
+  }
+  if (new Date() < new Date(round.startDate)) {
+    throw new ApiError(400, "This round's start date hasn't arrived yet.");
+  }
+
+  round.endedAt = new Date();
+  await drive.save();
+
+  sendResponse(res, 200, "Round ended.", {
+    rounds: deriveRoundStates(drive.rounds, drive.currentRoundId),
+  });
+});
+
+// POST /api/drives/:id/rounds/:roundId/advance — the ONLY action that ever
+// sets currentRoundId. First assignment requires registration to be closed;
+// subsequent moves require the round being left to be ended + processed,
+// and only ever advance to the immediately-next round (no skipping).
+export const advanceRound = asyncHandler(async (req, res) => {
+  const drive = await Drive.findById(req.params.id);
+  if (!drive) throw new ApiError(404, "Drive not found.");
+
+  const targetRoundId = req.params.roundId;
+
+  // Idempotent no-op for a double-clicked/repeated call.
+  if (drive.currentRoundId && String(drive.currentRoundId) === targetRoundId) {
+    return sendResponse(res, 200, "Already on this round.", {
+      rounds: deriveRoundStates(drive.rounds, drive.currentRoundId),
+      currentRoundId: drive.currentRoundId,
+    });
+  }
+
+  if (drive.status !== "active") {
+    throw new ApiError(400, "This drive is not active.");
+  }
+
+  const targetIndex = drive.rounds.findIndex(
+    (r) => String(r._id) === targetRoundId,
+  );
+  if (targetIndex === -1) throw new ApiError(404, "Round not found.");
+
+  let previousCurrentRoundId = null;
+
+  if (!drive.currentRoundId) {
+    if (targetIndex !== 0) {
+      throw new ApiError(400, "Recruitment must begin with the first round.");
+    }
+    if (new Date() < new Date(drive.registrationDeadline)) {
+      throw new ApiError(400, "Registration must close before recruitment can begin.");
+    }
+  } else {
+    const currentIndex = drive.rounds.findIndex(
+      (r) => String(r._id) === String(drive.currentRoundId),
+    );
+    if (targetIndex !== currentIndex + 1) {
+      throw new ApiError(400, "You can only move to the immediately next round.");
+    }
+    const currentRound = drive.rounds[currentIndex];
+    if (!currentRound.endedAt || !currentRound.processedAt) {
+      throw new ApiError(
+        400,
+        "The current round must be ended and its results processed before advancing.",
+      );
+    }
+    previousCurrentRoundId = drive.currentRoundId;
+  }
+
+  const result = await Drive.updateOne(
+    { _id: drive._id, currentRoundId: previousCurrentRoundId },
+    { $set: { currentRoundId: drive.rounds[targetIndex]._id } },
+  );
+  if (result.modifiedCount !== 1) {
+    throw new ApiError(409, "This drive's current round changed — please refresh and try again.");
+  }
+
+  const updatedDrive = await Drive.findById(drive._id).lean();
+  sendResponse(res, 200, "Advanced to next round.", {
+    rounds: deriveRoundStates(updatedDrive.rounds, updatedDrive.currentRoundId),
+    currentRoundId: updatedDrive.currentRoundId,
+  });
+});
+
+// ─── Shortlist ──────────────────────────────────────────────────────────────
+
+// POST /api/drives/:id/rounds/:roundId/shortlist/preview — pure read, never
+// mutates anything.
+export const previewShortlist = asyncHandler(async (req, res) => {
+  const drive = await Drive.findById(req.params.id);
+  if (!drive) throw new ApiError(404, "Drive not found.");
+
+  getShortlistableRound(drive, req.params.roundId);
+
+  if (!req.file) throw new ApiError(400, "A CSV file is required.");
+
+  const rollNumbers = parseCsv(req.file.buffer);
+  const preview = await buildPreview(drive._id, rollNumbers);
+
+  sendResponse(res, 200, "Preview generated.", preview);
+});
+
+// POST /api/drives/:id/rounds/:roundId/shortlist/confirm — the only thing
+// this does is advance shortlisted / reject the rest for THIS round; it
+// never creates/selects/ends a round, moves currentRoundId, or finalizes
+// the drive.
+export const confirmShortlist = asyncHandler(async (req, res) => {
+  const { rollNumbers } = req.body;
+  if (!Array.isArray(rollNumbers)) {
+    throw new ApiError(400, "rollNumbers must be an array.");
+  }
+
+  const drive = await Drive.findById(req.params.id);
+  if (!drive) throw new ApiError(404, "Drive not found.");
+
+  getShortlistableRound(drive, req.params.roundId);
+
+  const normalizedRollNumbers = rollNumbers
+    .map((rn) => (rn || "").toString().trim().toUpperCase())
+    .filter((rn) => rn.length > 0);
+
+  const { shortlistedStudentIds, rejectedStudentIds } = await applyShortlist(
+    drive._id,
+    req.params.roundId,
+    { rollNumbers: normalizedRollNumbers, actorId: req.user._id },
+  );
+
+  const round = drive.rounds.id(req.params.roundId);
+  notifyApplicationOutcome(
+    shortlistedStudentIds,
+    {
+      title: "You've been shortlisted",
+      message: `You've been shortlisted to continue after ${round.name} for ${drive.companyName}.`,
+      targetId: drive._id,
+    },
+    req.user._id,
+  );
+  notifyApplicationOutcome(
+    rejectedStudentIds,
+    {
+      title: "Application update",
+      message: `You were not shortlisted to continue after ${round.name} for ${drive.companyName}.`,
+      targetId: drive._id,
+    },
+    req.user._id,
+  );
+
+  const updatedDrive = await Drive.findById(drive._id).lean();
+  sendResponse(res, 200, "Shortlist processed.", {
+    rounds: deriveRoundStates(updatedDrive.rounds, updatedDrive.currentRoundId),
+    shortlistedCount: shortlistedStudentIds.length,
+    rejectedCount: rejectedStudentIds.length,
+  });
+});
+
+// ─── Drive lifecycle ────────────────────────────────────────────────────────
+
+// POST /api/drives/:id/finish — only once the current round is the LAST
+// entry in rounds[] and has been ended + processed. No CSV — the narrowing
+// already happened via the last confirmShortlist.
+export const finishDrive = asyncHandler(async (req, res) => {
+  const drive = await Drive.findById(req.params.id);
+  if (!drive) throw new ApiError(404, "Drive not found.");
+
+  if (drive.status !== "active") {
+    throw new ApiError(400, "This drive is not active.");
+  }
+  if (!drive.currentRoundId) {
+    throw new ApiError(400, "This drive hasn't started any rounds yet.");
+  }
+
+  const currentIndex = drive.rounds.findIndex(
+    (r) => String(r._id) === String(drive.currentRoundId),
+  );
+  const currentRound = drive.rounds[currentIndex];
+  if (!currentRound.endedAt || !currentRound.processedAt) {
+    throw new ApiError(400, "The current round must be ended and its results processed before finishing the drive.");
+  }
+  if (currentIndex !== drive.rounds.length - 1) {
+    throw new ApiError(400, "Cannot finish the drive while pending rounds remain.");
+  }
+
+  const { selectedStudentIds } = await finishDriveService(
+    drive._id,
+    drive.currentRoundId,
+    req.user._id,
+  );
+
+  notifyApplicationOutcome(
+    selectedStudentIds,
+    {
+      title: "Congratulations!",
+      message: `You've been selected for ${drive.companyName} — ${drive.role}.`,
+      targetId: drive._id,
+    },
+    req.user._id,
+  );
+
+  sendResponse(res, 200, "Drive finished.", { selectedCount: selectedStudentIds.length });
+});
+
+// POST /api/drives/:id/cancel — terminal, no cascade to existing applications.
+export const cancelDrive = asyncHandler(async (req, res) => {
+  const result = await Drive.updateOne(
+    { _id: req.params.id, status: "active" },
+    { $set: { status: "cancelled" } },
+  );
+  if (result.matchedCount === 0) {
+    const exists = await Drive.exists({ _id: req.params.id });
+    if (!exists) throw new ApiError(404, "Drive not found.");
+    throw new ApiError(400, "This drive is not active.");
+  }
+  sendResponse(res, 200, "Drive cancelled.");
 });

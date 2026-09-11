@@ -157,10 +157,14 @@ export const getNotices = asyncHandler(async (req, res) => {
     const appliedDriveIds = studentApplications.map((app) => app.drive);
 
     const eligibleDrives = await Drive.find({
+      status: "active",
       $or: [
         { _id: { $in: appliedDriveIds } },
         {
-          eligibleBranches: user.branch,
+          $or: [
+            { eligibleBranches: { $size: 0 } },
+            { eligibleBranches: user.branch }
+          ],
           minCGPA: { $lte: user.cgpa || 0 },
           minYear: { $lte: user.year || 1 },
           maxYear: { $gte: user.year || 4 },
@@ -229,10 +233,14 @@ export const getNotices = asyncHandler(async (req, res) => {
     const appliedDriveIds = studentApplications.map((app) => app.drive);
 
     const eligibleDrives = await Drive.find({
+      status: "active",
       $or: [
         { _id: { $in: appliedDriveIds } },
         {
-          eligibleBranches: user.branch,
+          $or: [
+            { eligibleBranches: { $size: 0 } },
+            { eligibleBranches: user.branch }
+          ],
           minCGPA: { $lte: user.cgpa || 0 },
           minYear: { $lte: user.year || 1 },
           maxYear: { $gte: user.year || 4 },

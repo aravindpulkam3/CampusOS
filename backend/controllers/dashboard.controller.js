@@ -86,19 +86,15 @@ export const getDashboard = asyncHandler(async (req, res) => {
 
       // 6. Stats — all in parallel
       Promise.all([
-        Drive.countDocuments({ status: "open" }),
+        // Drives currently open for registration (active lifecycle status
+        // AND registration deadline not yet passed — two distinct concepts,
+        // both need to hold).
+        Drive.countDocuments({
+          status: "active",
+          registrationDeadline: { $gte: new Date() },
+        }),
 
         Application.countDocuments({ student: user._id }),
-
-        Application.countDocuments({
-          student: user._id,
-          status: "oa_scheduled",
-        }),
-
-        Application.countDocuments({
-          student: user._id,
-          status: "interview_scheduled",
-        }),
 
         Event.countDocuments({
           endDateTime: { $gte: new Date() },
@@ -119,10 +115,10 @@ export const getDashboard = asyncHandler(async (req, res) => {
           ],
         }),
 
-        // NEW — active applications (not rejected / withdrawn)
+        // NEW — applications still active (still participating)
         Application.countDocuments({
           student: user._id,
-          status: { $nin: ["rejected", "withdrawn"] },
+          status: "active",
         }),
       ]),
     ]);
@@ -130,8 +126,6 @@ export const getDashboard = asyncHandler(async (req, res) => {
   const [
     openDrives,
     applied,
-    upcomingOA,
-    upcomingInterviews,
     upcomingEvents,
     newNoticesCount, // NEW
     activeApplications, // NEW
@@ -147,8 +141,6 @@ export const getDashboard = asyncHandler(async (req, res) => {
     stats: {
       openDrives,
       applied,
-      upcomingOA,
-      upcomingInterviews,
       upcomingEvents,
       newNoticesCount, // NEW
       activeApplications, // NEW

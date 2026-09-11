@@ -6,9 +6,7 @@ import {
   Clock,
   Bell,
   TrendingUp,
-  Calendar,
   FileText,
-  MapPin,
   Timer,
 } from "lucide-react";
 import useAuth from "../../hooks/useAuth";
@@ -30,38 +28,21 @@ const timeLeft = (d) => {
   return { label: `${days}d left`, color: "text-gray-500", urgent: false };
 };
 
-const formatDateTime = (d) =>
-  new Date(d).toLocaleString("en-IN", {
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-
 const jobTypeLabel = { internship: "Internship", fulltime: "Full Time" };
 
+// Intentionally simple: active/rejected/selected only. No fixed OA/
+// interview vocabulary — round names and state come from the drive itself.
 const statusConfig = {
-  registered: { label: "Registered", color: "bg-blue-50 text-blue-700" },
-  oa_scheduled: { label: "OA Scheduled", color: "bg-amber-50 text-amber-700" },
-  oa_completed: {
-    label: "OA Completed",
-    color: "bg-purple-50 text-purple-700",
-  },
-  interview_scheduled: {
-    label: "Interview Scheduled",
-    color: "bg-indigo-50 text-indigo-700",
-  },
-  interview_completed: {
-    label: "Interview Completed",
-    color: "bg-teal-50 text-teal-700",
-  },
-  offer_received: {
-    label: "Offer Received",
-    color: "bg-green-50 text-green-700",
-  },
+  active: { label: "Active", color: "bg-blue-50 text-blue-700" },
   selected: { label: "Selected", color: "bg-green-50 text-green-700" },
   rejected: { label: "Rejected", color: "bg-red-50 text-red-700" },
-  withdrawn: { label: "Withdrawn", color: "bg-gray-100 text-gray-500" },
+};
+
+const roundStateLabel = {
+  upcoming: "Upcoming",
+  ongoing: "Ongoing",
+  ended_awaiting: "Ended — Results Awaited",
+  processed: "Results Processed",
 };
 
 // ─── Logo Avatar ──────────────────────────────────────────────
@@ -177,7 +158,7 @@ const DriveRow = ({ drive }) => {
 
 // ─── Application row ──────────────────────────────────────────
 const AppRow = ({ app }) => {
-  const cfg = statusConfig[app.status] ?? statusConfig.registered;
+  const cfg = statusConfig[app.status] ?? statusConfig.active;
   const deadline = timeLeft(app.drive.registrationDeadline);
 
   return (
@@ -205,36 +186,31 @@ const AppRow = ({ app }) => {
 };
 
 // ─── Activity row ─────────────────────────────────────────────
-const ActivityRow = ({ app }) => {
-  const cfg = statusConfig[app.status] ?? statusConfig.registered;
-  const date =
-    app.status === "oa_scheduled" ? app.drive.oaDate : app.drive.interviewDate;
-
-  return (
-    <div className="flex items-center gap-3 p-2.5 rounded-xl bg-amber-50/60 border border-amber-100">
-      <CompanyAvatar
-        logo={app.drive.companyLogo}
-        name={app.drive.companyName}
-        size="w-8 h-8"
-      />
-      <div className="flex-1 min-w-0">
-        <p className="text-xs font-semibold text-gray-900 truncate">
-          {app.drive.companyName}
-        </p>
-        <span
-          className={`text-[10px] font-semibold px-1.5 py-px rounded-full ${cfg.color}`}
-        >
-          {cfg.label}
-        </span>
-      </div>
-      {date && (
-        <p className="text-[10px] text-amber-700 font-medium flex-shrink-0 text-right">
-          {formatDateTime(date)}
-        </p>
+// Shows the round each active application is currently at, with its
+// derived state (Upcoming/Ongoing/Ended — Results Awaited/Results
+// Processed) — never a fixed OA/interview vocabulary.
+const ActivityRow = ({ activity }) => (
+  <div className="flex items-center gap-3 p-2.5 rounded-xl bg-amber-50/60 border border-amber-100">
+    <CompanyAvatar
+      logo={activity.drive.companyLogo}
+      name={activity.drive.companyName}
+      size="w-8 h-8"
+    />
+    <div className="flex-1 min-w-0">
+      <p className="text-xs font-semibold text-gray-900 truncate">
+        {activity.drive.companyName}
+      </p>
+      {activity.round && (
+        <p className="text-[10px] text-gray-500 truncate">{activity.round.name}</p>
       )}
     </div>
-  );
-};
+    {activity.round && (
+      <p className="text-[10px] text-amber-700 font-medium flex-shrink-0 text-right">
+        {roundStateLabel[activity.round.derivedState] || "Upcoming"}
+      </p>
+    )}
+  </div>
+);
 
 // ─── Deadline countdown row ───────────────────────────────────
 const DeadlineRow = ({ drive }) => {
@@ -306,7 +282,7 @@ const CareerDashboard = () => {
   return (
     <div className="max-w-5xl mx-auto space-y-5">
       {/* ── Compact Stats Bar ── */}
-      <div className="bg-white border border-gray-100 rounded-xl divide-x divide-gray-100 grid grid-cols-2 sm:grid-cols-4">
+      <div className="bg-white border border-gray-100 rounded-xl divide-x divide-gray-100 grid grid-cols-3">
         {[
           {
             label: "Open for you",
@@ -321,16 +297,10 @@ const CareerDashboard = () => {
             color: "text-green-600",
           },
           {
-            label: "Upcoming OA",
-            value: stats.upcomingOA,
+            label: "Active",
+            value: stats.activeApplications,
             icon: TrendingUp,
             color: "text-amber-600",
-          },
-          {
-            label: "Interviews",
-            value: stats.upcomingInterviews,
-            icon: Calendar,
-            color: "text-purple-600",
           },
         ].map(({ label, value, icon: Icon, color }) => (
           <div key={label} className="flex items-center gap-3 px-5 py-3.5">
@@ -381,12 +351,12 @@ const CareerDashboard = () => {
             </Section>
           )}
 
-          {/* Upcoming Activities (OA / Interviews) */}
+          {/* Active applications and the round each is currently at */}
           {myActivities.length > 0 && (
-            <Section icon={Clock} title="Upcoming Activities">
+            <Section icon={Clock} title="Active Applications">
               <div className="space-y-2">
                 {myActivities.map((a) => (
-                  <ActivityRow key={a._id} app={a} />
+                  <ActivityRow key={a._id} activity={a} />
                 ))}
               </div>
             </Section>
