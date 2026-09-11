@@ -4,6 +4,7 @@ import asyncHandler from "../utils/asyncHandler.js";
 import sendResponse from "../utils/sendResponse.js";
 import ApiError from "../utils/apiError.js";
 import deriveRoundStates from "../utils/roundState.js";
+import { checkDriveEligibility } from "../services/eligibility.service.js";
 
 // Attaches a computed (never persisted) derivedState to each round of a
 // populated drive, so the frontend never has to re-implement the same
@@ -34,30 +35,10 @@ export const applyToDrive = asyncHandler(async (req, res) => {
     throw new ApiError(400, "The registration deadline for this drive has passed.");
   }
 
-  const reasons = [];
-
-  if (drive.minCGPA > 0 && user.cgpa < drive.minCGPA) {
-    reasons.push(`Min CGPA ${drive.minCGPA} required (yours: ${user.cgpa})`);
-  }
-  if (
-    drive.eligibleBranches?.length > 0 &&
-    !drive.eligibleBranches.includes(user.branch)
-  ) {
-    reasons.push(`Open to ${drive.eligibleBranches.join(", ")} only`);
-  }
-  if (drive.minYear && user.year < drive.minYear) {
-    reasons.push(`Min year ${drive.minYear} required`);
-  }
-  if (drive.maxYear && user.year > drive.maxYear) {
-    reasons.push(`Open to year ${drive.maxYear} and below`);
-  }
-  if (drive.maxBacklogs !== undefined && user.backlogs > drive.maxBacklogs) {
-    reasons.push(
-      `Maximum of ${drive.maxBacklogs} backlogs allowed (yours: ${user.backlogs})`,
-    );
-  }
-
-  if (reasons.length > 0) {
+  // Same service the dashboard's Eligible Drives list uses, so a drive can never
+  // be advertised as eligible and then rejected here.
+  const { eligible, reasons } = checkDriveEligibility(drive, user);
+  if (!eligible) {
     throw new ApiError(403, reasons.join(". "));
   }
 

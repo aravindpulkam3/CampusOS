@@ -144,6 +144,10 @@ const EditProfileModal = ({ user, onClose, onSave }) => {
     portfolio: user?.portfolio || "",
     resumeUrl: user?.resumeUrl || "",
     bio: user?.bio || "",
+    // `?? ""` not `|| ""` — a real 0 must survive into the form, and an empty
+    // string round-trips back to null ("not provided"), never to 0.
+    cgpa: user?.cgpa ?? "",
+    backlogs: user?.backlogs ?? "",
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -169,6 +173,11 @@ const EditProfileModal = ({ user, onClose, onSave }) => {
         portfolio: form.portfolio.trim(),
         resumeUrl: form.resumeUrl.trim(),
         bio: form.bio.trim(),
+
+        // Blank clears the field back to null ("not provided"); the backend
+        // treats that as "can't evaluate", not as zero.
+        cgpa: form.cgpa === "" ? null : Number(form.cgpa),
+        backlogs: form.backlogs === "" ? null : Number(form.backlogs),
       });
       onSave(res.data.data);
       onClose();
@@ -264,6 +273,55 @@ const EditProfileModal = ({ user, onClose, onSave }) => {
               placeholder="Tell us a bit about yourself..."
               rows={2}
             />
+          </div>
+
+          {/* Placement profile — drives drive eligibility on the dashboard */}
+          <div className="space-y-3 pt-2 border-t border-gray-50">
+            <div>
+              <h4 className="text-xs font-semibold text-gray-900">
+                Placement Profile
+              </h4>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Used to work out which drives you're eligible for. Leave blank if
+                you'd rather not say.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1.5">
+                  CGPA
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="10"
+                  value={form.cgpa}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, cgpa: e.target.value }))
+                  }
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400"
+                  placeholder="e.g. 8.4"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1.5">
+                  Active Backlogs
+                </label>
+                <input
+                  type="number"
+                  step="1"
+                  min="0"
+                  value={form.backlogs}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, backlogs: e.target.value }))
+                  }
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400"
+                  placeholder="e.g. 0"
+                />
+              </div>
+            </div>
           </div>
 
           <div className="space-y-3 pt-2 border-t border-gray-50">
@@ -600,12 +658,17 @@ const Profile = () => {
   } = profile;
 
   const fullName = `${user.firstName} ${user.lastName}`;
-  const cgpaColor =
-    user.cgpa >= 8
+  // A missing CGPA is "not provided", not "bad" — it must stay neutral grey,
+  // never the red that a genuinely low score gets.
+  const hasCgpa = user.cgpa != null;
+  const cgpaColor = !hasCgpa
+    ? "text-gray-400"
+    : user.cgpa >= 8
       ? "text-green-600"
       : user.cgpa >= 6
         ? "text-amber-600"
         : "text-red-500";
+  const cgpaLabel = hasCgpa ? user.cgpa.toFixed(2) : "Not set";
   const visibleClubs = showAllClubs ? followedClubs : followedClubs.slice(0, 6);
 
   return (
@@ -661,9 +724,14 @@ const Profile = () => {
               {/* CGPA pill */}
               <div className="mt-3 flex items-center gap-2">
                 <span className={`text-sm font-bold ${cgpaColor}`}>
-                  {user.cgpa?.toFixed(2)}
+                  {cgpaLabel}
                 </span>
                 <span className="text-xs text-gray-400">CGPA</span>
+                {user.backlogs != null && user.backlogs > 0 && (
+                  <span className="text-xs text-gray-400">
+                    · {user.backlogs} backlog{user.backlogs > 1 ? "s" : ""}
+                  </span>
+                )}
               </div>
 
               {/* Actions */}
@@ -756,7 +824,20 @@ const Profile = () => {
                 <span className="text-xs text-gray-500">CGPA</span>
               </div>
               <span className={`text-xs font-bold ${cgpaColor}`}>
-                {user.cgpa?.toFixed(2)}
+                {cgpaLabel}
+              </span>
+            </div>
+            <div className="flex items-center justify-between py-2.5">
+              <div className="flex items-center gap-2">
+                <BookOpen size={13} className="text-gray-400" />
+                <span className="text-xs text-gray-500">Active Backlogs</span>
+              </div>
+              <span
+                className={`text-xs font-bold ${
+                  user.backlogs == null ? "text-gray-400" : "text-gray-800"
+                }`}
+              >
+                {user.backlogs ?? "Not set"}
               </span>
             </div>
             {classroom && (

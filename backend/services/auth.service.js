@@ -38,7 +38,10 @@ export const registerUser = async (userData) => {
   const user = await User.create({
     firstName, lastName, email, password,
     branch, year, section, rollNumber, batch,
-    cgpa: cgpa || 0,
+    // `?? null`, not `|| 0` — a blank CGPA at signup means "not provided yet",
+    // not "zero". Storing 0 here is what made eligibility silently unfilterable.
+    // Backlogs is placement-profile data and is collected from Profile, not signup.
+    cgpa: cgpa ?? null,
   });
 
   // Read-only lookup — a Classroom must already exist (admin-created) for
@@ -125,7 +128,7 @@ export const getProfileData = async (userId) => {
   // Fetch user first (needed for classroom & populated arrays)
   const user = await User.findById(userId)
     .select(
-      "firstName lastName email rollNumber branch year section cgpa role profilePicture createdAt classroom followedClubs registeredEvents"
+      "firstName lastName email rollNumber branch year section cgpa backlogs batch role profilePicture createdAt classroom followedClubs registeredEvents"
     )
     .populate("followedClubs", "clubName logo")
     .populate("registeredEvents", "eventName venue startDateTime")
@@ -168,7 +171,9 @@ export const getProfileData = async (userId) => {
       branch: user.branch,
       year: user.year,
       section: user.section,
+      batch: user.batch,
       cgpa: user.cgpa,
+      backlogs: user.backlogs,
       role: user.role,
       profilePicture: user.profilePicture,
       createdAt: user.createdAt,

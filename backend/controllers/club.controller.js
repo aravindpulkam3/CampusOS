@@ -15,6 +15,7 @@ const POPULAR_CLUBS_TTL = 60 * 60; // 1h
 export const getAllClubs = asyncHandler(async (req, res) => {
   const cached = await getJSON(ALL_CLUBS_CACHE_KEY);
   if (cached) {
+    console.log("Serving clubs from cache");
     return sendResponse(res, 200, "Clubs fetched successfully", cached);
   }
 

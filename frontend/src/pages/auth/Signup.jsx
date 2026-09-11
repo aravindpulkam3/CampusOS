@@ -107,7 +107,9 @@ export default function Signup() {
         ...payload,
         year: Number(payload.year),
         batch: Number(payload.batch),
-        cgpa: payload.cgpa ? Number(payload.cgpa) : 0,
+        // null, not 0 — a blank CGPA means "not provided yet", and storing 0
+        // here is what made drive eligibility silently unfilterable.
+        cgpa: payload.cgpa ? Number(payload.cgpa) : null,
       });
       navigate("/login", { state: { registered: true } });
     } catch (err) {

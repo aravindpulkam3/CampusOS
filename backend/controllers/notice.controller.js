@@ -7,6 +7,11 @@ import sendResponse from "../utils/sendResponse.js";
 import mongoose from "mongoose";
 import Drive from "../models/Drive.js";
 import Application from "../models/Application.js";
+import ApiError from "../utils/apiError.js";
+import {
+  buildEligibilityFilter,
+  getPlacementProfile,
+} from "../services/eligibility.service.js";
 import {
   notifyClubFollowers,
   notifyEventRegistrants,
@@ -145,75 +150,18 @@ export const getNotices = asyncHandler(async (req, res) => {
   // Base persistent query layer
   const query = { isArchived: false };
 
-  if (targetType === "dashboard") {
-    if (!user) {
-      throw new ApiError(401, "Authentication required for dashboard feed.");
-    }
-
-    // Step A: Aggregate Career Drive boundaries
-    const studentApplications = await Application.find({ student: user._id })
-      .select("drive")
-      .lean();
-    const appliedDriveIds = studentApplications.map((app) => app.drive);
-
-    const eligibleDrives = await Drive.find({
-      status: "active",
-      $or: [
-        { _id: { $in: appliedDriveIds } },
-        {
-          $or: [
-            { eligibleBranches: { $size: 0 } },
-            { eligibleBranches: user.branch }
-          ],
-          minCGPA: { $lte: user.cgpa || 0 },
-          minYear: { $lte: user.year || 1 },
-          maxYear: { $gte: user.year || 4 },
-        },
-      ],
-    })
-      .select("_id")
-      .lean();
-
-    const driveIds = eligibleDrives.map((d) => d._id);
-    const clubIds = [
-      ...(user.followedClubs || []),
-      ...(user.joinedClubs || []),
-    ];
-    const registeredEventIds = user.registeredEvents || [];
-
-    // Resolve the classroom's current semester so classroom notices can be
-    // scoped correctly (general OR tied to the current semester number).
-    let classroomCurrentSemesterNumber = null;
-    if (user.classroom) {
-      const classroomDoc = await Classroom.findById(user.classroom).select(
-        "currentSemesterNumber",
-      );
-      classroomCurrentSemesterNumber = classroomDoc?.currentSemesterNumber ?? null;
-    }
-
-    // Step B: Match across all authorized student lifecycles
-    query.$or = [
-      { targetType: "platform" },
-      {
-        targetType: "classroom",
-        targetId: user.classroom,
-        $or: [{ semesterNumber: null }, { semesterNumber: classroomCurrentSemesterNumber }],
-      },
-      { targetType: "drive", targetId: { $in: driveIds } },
-      { targetType: "clubs", targetId: { $in: clubIds } },
-      { targetType: "events", targetId: { $in: registeredEventIds } },
-    ];
-
-    // ─── 2. DYNAMIC COMMUNITY FEED INTERCEPTION ───────────────────
-  } else if (targetType === "community") {
+  // NOTE: the old `targetType === "dashboard"` branch lived here. The dashboard
+  // now gets its personalized notices directly from GET /api/dashboard (see
+  // services/dashboard.service.js), so the page makes one request instead of two
+  // and this duplicate query is gone.
+  if (targetType === "community") {
     if (!user) {
       throw new ApiError(401, "Authentication required for community feed.");
     }
 
-    const clubIds = [
-      ...(user.followedClubs || []),
-      ...(user.joinedClubs || []),
-    ];
+    // `joinedClubs` used to be spread in here — User has no such field, so it
+    // was always undefined.
+    const clubIds = user.followedClubs || [];
     const registeredEventIds = user.registeredEvents || [];
 
     query.$or = [
@@ -232,19 +180,15 @@ export const getNotices = asyncHandler(async (req, res) => {
       .lean();
     const appliedDriveIds = studentApplications.map((app) => app.drive);
 
+    // Shared eligibility service — the old inline copy used `user.cgpa || 0`,
+    // which matched only minCGPA-0 drives for anyone without a CGPA on file.
     const eligibleDrives = await Drive.find({
       status: "active",
       $or: [
         { _id: { $in: appliedDriveIds } },
-        {
-          $or: [
-            { eligibleBranches: { $size: 0 } },
-            { eligibleBranches: user.branch }
-          ],
-          minCGPA: { $lte: user.cgpa || 0 },
-          minYear: { $lte: user.year || 1 },
-          maxYear: { $gte: user.year || 4 },
-        },
+        ...(getPlacementProfile(user).canEvaluateEligibility
+          ? [buildEligibilityFilter(user)]
+          : []),
       ],
     })
       .select("_id")

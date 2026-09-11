@@ -15,24 +15,13 @@ import {
   applyShortlist,
   finishDrive as finishDriveService,
 } from "../services/shortlist.service.js";
+import {
+  buildEligibilityFilter,
+  checkDriveEligibility as checkEligibility,
+  getPlacementProfile,
+} from "../services/eligibility.service.js";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
-
-const checkEligibility = (drive, user) => {
-  const reasons = [];
-  if (drive.minCGPA > 0 && user.cgpa < drive.minCGPA)
-    reasons.push(`Min CGPA ${drive.minCGPA} required (yours: ${user.cgpa})`);
-  if (
-    drive.eligibleBranches?.length > 0 &&
-    !drive.eligibleBranches.includes(user.branch)
-  )
-    reasons.push(`Open to ${drive.eligibleBranches.join(", ")} only`);
-  if (drive.minYear && user.year < drive.minYear)
-    reasons.push(`Min year ${drive.minYear} required`);
-  if (drive.maxYear && user.year > drive.maxYear)
-    reasons.push(`Open to year ${drive.maxYear} and below`);
-  return { eligible: reasons.length === 0, reasons };
-};
 
 // Fields a coordinator may change via the generic edit form. Deliberately
 // excludes status/rounds/currentRoundId/applicationCount/postedBy — those
@@ -105,13 +94,16 @@ export const getDrives = asyncHandler(async (req, res) => {
   if (jobType) query.jobType = jobType;
   if (search) query.$text = { $search: search };
 
+  // Same filter as the dashboard and applyToDrive. `if (req.user.cgpa)` used to
+  // skip the CGPA clause entirely for a 0/unset CGPA, so "eligible only" quietly
+  // listed drives the student didn't qualify for.
   if (eligibleOnly === "true" && req.user) {
-    if (req.user.cgpa) query.minCGPA = { $lte: req.user.cgpa };
-    if (req.user.branch)
-      query.$or = [
-        { eligibleBranches: { $size: 0 } },
-        { eligibleBranches: req.user.branch },
-      ];
+    if (getPlacementProfile(req.user).canEvaluateEligibility) {
+      Object.assign(query, buildEligibilityFilter(req.user));
+    } else {
+      // Can't evaluate — return nothing rather than implying everything qualifies.
+      query._id = null;
+    }
   }
 
   const skip = (Number(page) - 1) * Number(limit);
@@ -272,21 +264,13 @@ export const getCareerDashboard = asyncHandler(async (req, res) => {
   const user = req.user;
   const now = new Date();
 
-  const eligibilityFilter = {
-    registrationDeadline: { $gt: now },
-    $and: [
-      {
-        $or: [
-          { eligibleBranches: { $size: 0 } },
-          { eligibleBranches: user.branch },
-        ],
-      },
-      { minCGPA: { $lte: user.cgpa ?? 10 } },
-      { maxBacklogs: { $gte: user.backlogs ?? 0 } },
-      { minYear: { $lte: user.year ?? 1 } },
-      { maxYear: { $gte: user.year ?? 4 } },
-    ],
-  };
+  // Shared with the dashboard's Eligible Drives and with applyToDrive — the old
+  // local copy used `user.cgpa ?? 10`, which made a student with no CGPA look
+  // maximally eligible for drives they'd then be rejected from.
+  const placementProfile = getPlacementProfile(user);
+  const eligibilityFilter = placementProfile.canEvaluateEligibility
+    ? { registrationDeadline: { $gt: now }, ...buildEligibilityFilter(user) }
+    : null;
 
   const myApplications = await Application.find({ student: userId })
     .populate({
@@ -300,21 +284,24 @@ export const getCareerDashboard = asyncHandler(async (req, res) => {
   const validApplications = myApplications.filter((a) => a.drive !== null);
   const appliedDriveIds = validApplications.map((a) => a.drive._id);
 
-  const eligibleDrives = await Drive.find({
-    ...eligibilityFilter,
-    _id: { $nin: appliedDriveIds },
-  })
-    .select(
-      "companyName companyLogo role jobType ctc stipend registrationDeadline location",
-    )
-    .sort({ registrationDeadline: 1 })
-    .limit(6)
-    .lean();
-
-  const allEligibleIds = await Drive.find(eligibilityFilter)
-    .select("_id")
-    .lean()
-    .then((docs) => docs.map((d) => d._id));
+  // With no CGPA on file we cannot evaluate eligibility at all. Return nothing
+  // and let the UI ask for a profile completion — never fall through to an
+  // unfiltered find(), which would advertise every drive on campus as eligible.
+  const [eligibleDrives, allEligibleIds] = eligibilityFilter
+    ? await Promise.all([
+        Drive.find({ ...eligibilityFilter, _id: { $nin: appliedDriveIds } })
+          .select(
+            "companyName companyLogo role jobType ctc stipend registrationDeadline location",
+          )
+          .sort({ registrationDeadline: 1 })
+          .limit(6)
+          .lean(),
+        Drive.find(eligibilityFilter)
+          .select("_id")
+          .lean()
+          .then((docs) => docs.map((d) => d._id)),
+      ])
+    : [[], []];
 
   const driveIdsForNotices = [
     ...new Set([...appliedDriveIds.map(String), ...allEligibleIds.map(String)]),
@@ -355,10 +342,11 @@ export const getCareerDashboard = asyncHandler(async (req, res) => {
       };
     });
 
-  const totalEligible = await Drive.countDocuments(eligibilityFilter);
+  const totalEligible = allEligibleIds.length;
 
   return sendResponse(res, 200, "Dashboard data compiled successfully.", {
     eligibleDrives,
+    placementProfile,
     myApplications: validApplications.map((a) => ({
       _id: a._id,
       status: a.status,

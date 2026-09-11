@@ -126,6 +126,8 @@ export const updateProfile = asyncHandler(async (req, res) => {
     linkedin,
     portfolio,
     resumeUrl,
+    cgpa,
+    backlogs,
   } = req.body;
 
   // 3. Mandatory field validation
@@ -154,6 +156,32 @@ export const updateProfile = asyncHandler(async (req, res) => {
   if (linkedin !== undefined) updateData.linkedin = linkedin ? linkedin.trim() : "";
   if (portfolio !== undefined) updateData.portfolio = portfolio ? portfolio.trim() : "";
   if (resumeUrl !== undefined) updateData.resumeUrl = resumeUrl ? resumeUrl.trim() : "";
+
+  // ─── Placement profile ───────────────────────────────────────
+  // Self-reported and re-editable: CGPA and backlogs change over a degree, and a
+  // signup typo must not permanently lock a student out of eligible drives.
+  // `null`/"" clears the value back to "not provided" — which is NOT the same as
+  // 0, and is what the dashboard uses to decide it cannot evaluate eligibility
+  // rather than claiming the student is ineligible.
+  if (cgpa !== undefined) {
+    if (cgpa === null || cgpa === "") {
+      updateData.cgpa = null;
+    } else if (isNaN(cgpa) || Number(cgpa) < 0 || Number(cgpa) > 10) {
+      return sendResponse(res, 400, "CGPA must be a number between 0 and 10");
+    } else {
+      updateData.cgpa = Number(cgpa);
+    }
+  }
+
+  if (backlogs !== undefined) {
+    if (backlogs === null || backlogs === "") {
+      updateData.backlogs = null;
+    } else if (!Number.isInteger(Number(backlogs)) || Number(backlogs) < 0) {
+      return sendResponse(res, 400, "Backlogs must be a whole number of 0 or more");
+    } else {
+      updateData.backlogs = Number(backlogs);
+    }
+  }
 
   // 6. Execute update query against database
   const updatedUser = await User.findByIdAndUpdate(

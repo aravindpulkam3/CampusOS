@@ -59,11 +59,20 @@ const userSchema = new mongoose.Schema(
       trim: true,
       uppercase: true,
     },
+    // Placement profile. `null` means "not provided", which is deliberately
+    // distinct from a genuine 0 — eligibility must never claim a student is
+    // ineligible just because they haven't filled this in. Self-reported and
+    // editable from Profile; coordinators verify at shortlist time.
     cgpa: {
       type: Number,
       min: 0,
       max: 10,
-      default: 0,
+      default: null,
+    },
+    backlogs: {
+      type: Number,
+      min: 0,
+      default: null,
     },
     skills: {
       type: [String],

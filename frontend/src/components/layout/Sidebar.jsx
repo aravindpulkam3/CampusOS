@@ -234,7 +234,7 @@ const Sidebar = ({ isOpen, onClose }) => {
       {/* ── Bottom nav ── */}
       <div className="py-4 flex flex-col gap-0.5 px-2 border-t border-gray-100 flex-shrink-0">
         {bottomNav.map(({ label, path, icon: Icon, adminOnly }) => {
-          if (adminOnly && !["superadmin", "placementCoordinator"].includes(user?.role)) return null
+          if (adminOnly && user?.role !== "superadmin") return null
           return (
             <NavLink
               key={label}

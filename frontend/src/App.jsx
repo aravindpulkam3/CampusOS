@@ -150,9 +150,7 @@ function App() {
           <Route
             path="/admin"
             element={
-              <ProtectedRoute
-                allowedRoles={["superadmin", "placementCoordinator"]}
-              >
+              <ProtectedRoute allowedRoles={["superadmin"]}>
                 <WorkspaceLayout tabs={adminTabs} />
               </ProtectedRoute>
             }
