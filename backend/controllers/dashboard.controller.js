@@ -4,10 +4,9 @@ import Deadline from "../models/Deadline.js";
 import Notice from "../models/Notice.js";
 import Event from "../models/Event.js";
 import Drive from "../models/Drive.js";
-import Discussion from "../models/Discussion.js";
 import Application from "../models/Application.js";
 import Classroom from "../models/Classroom.js";
-import { searchAll } from "../services/dashboard.service.js";
+import { searchAll, getRecentDiscussionsCached } from "../services/dashboard.service.js";
 
 export const getDashboard = asyncHandler(async (req, res) => {
   const user = req.user;
@@ -77,12 +76,8 @@ export const getDashboard = asyncHandler(async (req, res) => {
         .limit(5)
         .lean(),
 
-      // 5. Recent discussions
-      Discussion.find({ isDeleted: false })
-        .populate("author", "firstName lastName")
-        .sort({ lastActivityAt: -1 })
-        .limit(3)
-        .lean(),
+      // 5. Recent discussions (shared across users — cached separately)
+      getRecentDiscussionsCached(),
 
       // 6. Stats — all in parallel
       Promise.all([

@@ -4,6 +4,9 @@ import Reply from "../models/Reply.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import sendResponse from "../utils/sendResponse.js";
 import { createNotification } from "../services/notification.service.js";
+import { del } from "../utils/cache.js";
+
+const RECENT_DISCUSSIONS_CACHE_KEY = "cache:dashboard:recent_discussions";
 
 // ─────────────────────────────────────────────
 // DISCUSSIONS
@@ -120,6 +123,7 @@ export const createDiscussion = asyncHandler(async (req, res) => {
   });
 
   await discussion.populate("author", "firstName lastName branch year");
+  await del(RECENT_DISCUSSIONS_CACHE_KEY);
   sendResponse(res, 201, "Discussion created.", discussion);
 });
 
@@ -135,6 +139,7 @@ export const deleteDiscussion = asyncHandler(async (req, res) => {
 
   discussion.isDeleted = true;
   await discussion.save();
+  await del(RECENT_DISCUSSIONS_CACHE_KEY);
   sendResponse(res, 200, "Discussion deleted.");
 });
 
@@ -197,6 +202,8 @@ export const addComment = asyncHandler(async (req, res) => {
     $inc: { commentCount: 1 },
     lastActivityAt: new Date(),
   });
+
+  await del(RECENT_DISCUSSIONS_CACHE_KEY);
 
   if (discussion.author.toString() !== req.user._id.toString()) {
     createNotification({
@@ -305,6 +312,8 @@ export const addReply = asyncHandler(async (req, res) => {
 
   await Comment.findByIdAndUpdate(req.params.commentId, { $inc: { replyCount: 1 } });
   await Discussion.findByIdAndUpdate(req.params.id, { lastActivityAt: new Date() });
+
+  await del(RECENT_DISCUSSIONS_CACHE_KEY);
 
   const replyRecipient = replyingTo || comment.author;
   if (replyRecipient.toString() !== req.user._id.toString()) {

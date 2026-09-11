@@ -1,6 +1,7 @@
 import api from "./axios.js";
 
 export const getAllClubs=()=>api.get("/clubs");
+export const createClub=(data)=>api.post("/clubs",data);
 export const getClubDetails=(clubId)=>api.get(`/clubs/${clubId}`);
 export const followClub=(clubId)=>api.put(`/clubs/${clubId}/follow`);
 export const toggleMuteClub=(clubId)=>api.put(`/clubs/${clubId}/mute`);

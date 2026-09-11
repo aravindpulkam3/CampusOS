@@ -5,12 +5,19 @@ import asyncHandler from "../utils/asyncHandler.js";
 import sendResponse from "../utils/sendResponse.js";
 import ApiError from "../utils/apiError.js";
 import { notifyClubFollowers, notifyEventRegistrants } from "../services/notification.service.js";
+import { getJSON, setJSON, del } from "../utils/cache.js";
+
+const UPCOMING_EVENTS_CACHE_KEY = "cache:events:upcoming";
+const UPCOMING_EVENTS_TTL = 60 * 15; // 15m
+
 // TODO: implement controller function
 export const createEvent = asyncHandler(async (req, res) => {
   const event = await Event.create({
     ...req.body,
     createdBy: req.user._id,
   });
+
+  await del(UPCOMING_EVENTS_CACHE_KEY);
 
   notifyClubFollowers(event.organizerClub, req.user._id, {
     type: "club_event",
@@ -174,6 +181,11 @@ export const registerForEvent = asyncHandler(async (req, res) => {
 });
 
 export const getUpcomingEvents = asyncHandler(async (req, res) => {
+  const cached = await getJSON(UPCOMING_EVENTS_CACHE_KEY);
+  if (cached) {
+    return sendResponse(res, 200, "Upcoming and ongoing events fetched", cached);
+  }
+
   const now = new Date();
 
   const events = await Event.find({
@@ -184,6 +196,7 @@ export const getUpcomingEvents = asyncHandler(async (req, res) => {
     .sort({ startDateTime: 1 }) // Keeps the closest events at the top
     .limit(5);
 
+  await setJSON(UPCOMING_EVENTS_CACHE_KEY, events, UPCOMING_EVENTS_TTL);
   sendResponse(res, 200, "Upcoming and ongoing events fetched", events);
 });
 
@@ -220,6 +233,8 @@ export const updateEvent = asyncHandler(async (req, res) => {
   if (!updatedEvent) {
     return sendResponse(res, 404, "Target event configuration does not exist");
   }
+
+  await del(UPCOMING_EVENTS_CACHE_KEY);
 
   notifyEventRegistrants(updatedEvent._id, req.user._id, {
     type: "event_update",

@@ -2,8 +2,33 @@ import Club       from "../models/Club.js";
 import Event      from "../models/Event.js";
 import Drive      from "../models/Drive.js";
 import Discussion from "../models/Discussion.js";
+import { getJSON, setJSON } from "../utils/cache.js";
+
+const RECENT_DISCUSSIONS_CACHE_KEY = "cache:dashboard:recent_discussions";
+const RECENT_DISCUSSIONS_TTL = 60 * 5; // 5m
+const SEARCH_CACHE_TTL = 60 * 10; // 10m
+
+export const getRecentDiscussionsCached = async () => {
+  const cached = await getJSON(RECENT_DISCUSSIONS_CACHE_KEY);
+  if (cached) return cached;
+
+  const discussions = await Discussion.find({ isDeleted: false })
+    .populate("author", "firstName lastName")
+    .sort({ lastActivityAt: -1 })
+    .limit(3)
+    .lean();
+
+  await setJSON(RECENT_DISCUSSIONS_CACHE_KEY, discussions, RECENT_DISCUSSIONS_TTL);
+  return discussions;
+};
 
 export const searchAll = async (q) => {
+  const normalizedQuery = q.trim().toLowerCase().replace(/\s+/g, " ");
+  const cacheKey = `cache:search:${normalizedQuery}`;
+
+  const cached = await getJSON(cacheKey);
+  if (cached) return cached;
+
   const regex = new RegExp(q.trim(), "i"); // to  make it case sensitive
 
   const [clubs, events, drives, discussions] = await Promise.all([ // Promiseall starts all 4 together
@@ -36,7 +61,7 @@ export const searchAll = async (q) => {
       .lean(),
   ]);
 
-  return [  //creating just one plain array of objects
+  const results = [  //creating just one plain array of objects
     ...clubs.map((c) => ({
       _id:      c._id,
       type:     "club",
@@ -76,4 +101,7 @@ export const searchAll = async (q) => {
       url:      `/discussions/${d._id}`,
     })),
   ];
+
+  await setJSON(cacheKey, results, SEARCH_CACHE_TTL);
+  return results;
 };

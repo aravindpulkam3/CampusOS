@@ -6,6 +6,7 @@ import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import connectDB from './config/db.js'
+import redisClient, { connectRedis } from './config/redis.js'
 import errorMiddleware from './middleware/errorMiddleware.js'
 import authRouter from './routes/auth.routes.js';
 import clubRouter from './routes/club.routes.js';
@@ -23,6 +24,7 @@ import notificationRouter from './routes/notification.routes.js';
 import { initSocket } from './sockets/socketHandler.js';
 dotenv.config();
 connectDB();
+connectRedis();
 
 const app = express();
 const httpServer = http.createServer(app);
@@ -57,3 +59,8 @@ app.use(errorMiddleware);
 
 const PORT = process.env.PORT || 5000;
 httpServer.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+process.on("SIGTERM", async () => {
+  await redisClient.quit().catch(() => {});
+  process.exit(0);
+});

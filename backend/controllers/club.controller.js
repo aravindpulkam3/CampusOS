@@ -5,20 +5,55 @@ import asyncHandler from "../utils/asyncHandler.js";
 import sendResponse from "../utils/sendResponse.js";
 import { Announcement } from "../models/Announcement.js";
 import User from "../models/User.js";
+import { getJSON, setJSON, del } from "../utils/cache.js";
+
+const ALL_CLUBS_CACHE_KEY = "cache:clubs:all";
+const ALL_CLUBS_TTL = 60 * 60 * 24; // 24h
+const POPULAR_CLUBS_CACHE_KEY = "cache:clubs:popular";
+const POPULAR_CLUBS_TTL = 60 * 60; // 1h
 
 export const getAllClubs = asyncHandler(async (req, res) => {
-  const data = await Club.find();
+  const cached = await getJSON(ALL_CLUBS_CACHE_KEY);
+  if (cached) {
+    return sendResponse(res, 200, "Clubs fetched successfully", cached);
+  }
+
+  const data = await Club.find().lean();
+  await setJSON(ALL_CLUBS_CACHE_KEY, data, ALL_CLUBS_TTL);
   sendResponse(res, 200, "Clubs fetched successfully", data);
+});
+
+export const createClub = asyncHandler(async (req, res) => {
+  const { clubName, description, category, logo, banner } = req.body;
+
+  if (!clubName?.trim() || !description?.trim() || !category) {
+    throw new ApiError(400, "Club name, description, and category are required.");
+  }
+
+  const club = await Club.create({
+    clubName: clubName.trim(),
+    description: description.trim(),
+    category,
+    logo: logo || null,
+    banner: banner || null,
+    isActive: true,
+  });
+
+  await del(ALL_CLUBS_CACHE_KEY);
+  await del(POPULAR_CLUBS_CACHE_KEY);
+
+  sendResponse(res, 201, "Club created successfully.", club);
 });
 
 export const getClubDetails = asyncHandler(async (req, res) => {
   const clubId = req.params.clubId;
-  const club = await Club.findById(clubId);
+  const club = await Club.findById(clubId).lean();
   if (!club) {
     return sendResponse(res, 404, "Club not found");
   }
   const isAdmin =
-    club.clubAdmins.includes(req.user._id) || req.user.role === "superadmin";
+    club.clubAdmins.some((adminId) => adminId.toString() === req.user._id.toString()) ||
+    req.user.role === "superadmin";
 
   const events = await Event.find({
     organizerClub: clubId,
@@ -108,14 +143,21 @@ export const toggleMuteClub = asyncHandler(async (req, res) => {
 });
 
 export const getPopularClubs = asyncHandler(async (req, res) => {
+  const cached = await getJSON(POPULAR_CLUBS_CACHE_KEY);
+  if (cached) {
+    return sendResponse(res, 200, "Popular clubs fetched", cached);
+  }
+
   const clubs = await Club.find()
     .sort({ followerCount: -1 })
-    .limit(5);
+    .limit(5)
+    .lean();
 
+  await setJSON(POPULAR_CLUBS_CACHE_KEY, clubs, POPULAR_CLUBS_TTL);
   sendResponse(res, 200, "Popular clubs fetched", clubs);
 });
 
-export const updateClub = async (req, res) => {
+export const updateClub = asyncHandler(async (req, res) => {
   const { clubId } = req.params;
   const { clubName, description, category, logo, banner, isActive, adminIds } =
     req.body;
@@ -176,10 +218,13 @@ export const updateClub = async (req, res) => {
     },
   );
 
+  await del(ALL_CLUBS_CACHE_KEY);
+  await del(POPULAR_CLUBS_CACHE_KEY);
+
   sendResponse(
     res,
     200,
     "Club properties committed and synchronized successfully.",
     updatedClub,
   );
-};
+});
