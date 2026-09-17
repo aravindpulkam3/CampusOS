@@ -160,7 +160,7 @@ export default function EventDetail() {
 
         if (
           user &&
-          data?.registeredStudents?.some((s) => (s._id ?? s) === user._id)
+          user?.registeredEvents?.some((eventId) => (eventId._id ?? eventId) === data._id)
         ) {
           setRegistered(true);
         }

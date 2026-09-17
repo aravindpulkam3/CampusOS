@@ -1,17 +1,11 @@
 import { useState } from "react";
 import {
   Pin,
-  Paperclip,
   ChevronDown,
   ChevronUp,
   Archive,
   Trash2,
   Megaphone,
-  AlertTriangle,
-  Clock,
-  Award,
-  Bell,
-  RefreshCw,
 } from "lucide-react";
 
 const relativeTime = (d) => {
@@ -24,44 +18,22 @@ const relativeTime = (d) => {
   return `${Math.floor(hrs / 24)}d`;
 };
 
-const typeConf = {
-  announcement: {
-    icon: Megaphone,
-    label: "Announcement",
-    iconBg: "bg-slate-100",
-    iconColor: "text-slate-600",
-  },
-  update: {
-    icon: RefreshCw,
-    label: "Update",
-    iconBg: "bg-blue-50 border border-blue-100",
-    iconColor: "text-blue-600",
-  },
-  deadline: {
-    icon: Clock,
-    label: "Deadline",
-    iconBg: "bg-rose-50 border border-rose-100",
-    iconColor: "text-rose-600",
-  },
-  schedule_change: {
-    icon: AlertTriangle,
-    label: "Schedule Change",
-    iconBg: "bg-amber-50 border border-amber-100",
-    iconColor: "text-amber-600",
-  },
-  result: {
-    icon: Award,
-    label: "Result",
-    iconBg: "bg-emerald-50 border border-emerald-100",
-    iconColor: "text-emerald-600",
-  },
-  reminder: {
-    icon: Bell,
-    label: "Reminder",
-    iconBg: "bg-purple-50 border border-purple-100",
-    iconColor: "text-purple-600",
-  },
-};
+const formatDate = (d) =>
+  new Date(d).toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+
+// "By X · Expires <date>" — expiry stays secondary, in the muted footer line.
+const footerText = (notice, byLabel) =>
+  [
+    notice.createdBy &&
+      `${byLabel} ${notice.createdBy.firstName} ${notice.createdBy.lastName}`,
+    notice.expiresAt && `Expires ${formatDate(notice.expiresAt)}`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
 const priorityConf = {
   urgent: {
@@ -106,9 +78,7 @@ const NoticeCard = ({
   const [isPinned, setIsPinned] = useState(notice.isPinned);
   const [busy, setBusy] = useState(false);
 
-  const tc = typeConf[notice.noticeType] ?? typeConf.announcement;
   const pc = priorityConf[notice.priority] ?? priorityConf.normal;
-  const Icon = tc.icon;
   const isAlert = notice.priority === "urgent" || notice.priority === "high";
 
   const act = async (fn) => {
@@ -153,24 +123,19 @@ const NoticeCard = ({
               </p>
             </div>
 
-            {/* Row 2: Type Label AND Populated Source Name stacked neatly underneath */}
-            <div className="flex items-center gap-2 mt-1 flex-wrap text-[10px] text-slate-400 font-medium">
-              <span>{tc.label}</span>
-
-              {notice.targetId && typeof notice.targetId === "object" && (
-                <>
-                  <span className="text-slate-300">•</span>
-                  <span className="font-semibold text-blue-600 bg-blue-50/60 border border-blue-100/40 px-1.5 py-0.5 rounded">
-                    {notice.targetType === "clubs" && notice.targetId.clubName}
-                    {notice.targetType === "events" &&
-                      notice.targetId.eventName}
-                    {(notice.targetType === "drive" ||
-                      notice.targetType === "drives") &&
-                      notice.targetId.companyName}
-                  </span>
-                </>
-              )}
-            </div>
+            {/* Row 2: Populated Source Name */}
+            {notice.targetId && typeof notice.targetId === "object" && (
+              <div className="flex items-center gap-2 mt-1 flex-wrap text-[10px] text-slate-400 font-medium">
+                <span className="font-semibold text-blue-600 bg-blue-50/60 border border-blue-100/40 px-1.5 py-0.5 rounded">
+                  {notice.targetType === "clubs" && notice.targetId.clubName}
+                  {notice.targetType === "events" &&
+                    notice.targetId.eventName}
+                  {(notice.targetType === "drive" ||
+                    notice.targetType === "drives") &&
+                    notice.targetId.companyName}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Right Edge Action Alignments */}
@@ -193,43 +158,9 @@ const NoticeCard = ({
               </p>
             )}
 
-            {notice.metadata && Object.keys(notice.metadata).length > 0 && (
-              <div className="bg-slate-50 border border-slate-100 rounded-xl px-3 py-2.5 space-y-1">
-                {Object.entries(notice.metadata).map(([k, v]) => (
-                  <div key={k} className="flex gap-2 text-xs">
-                    <span className="text-slate-400 font-medium capitalize min-w-[75px] text-[11px]">
-                      {k.replace(/([A-Z])/g, " $1")}
-                    </span>
-                    <span className="text-slate-700 font-semibold text-[11px]">
-                      {String(v)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {notice.attachments?.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {notice.attachments.map((f, i) => (
-                  <a
-                    key={i}
-                    href={f.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 text-xs text-slate-500 bg-white border border-slate-200 px-2.5 py-1 rounded-lg hover:border-slate-400 hover:text-slate-800 transition-colors shadow-3xs"
-                  >
-                    <Paperclip size={10} className="text-slate-400" />{" "}
-                    <span className="max-w-[120px] truncate">{f.name}</span>
-                  </a>
-                ))}
-              </div>
-            )}
-
             <div className="flex items-center justify-between pt-2 border-t border-slate-100">
               <span className="text-[10px] text-slate-400 font-medium">
-                {notice.createdBy
-                  ? `By ${notice.createdBy.firstName} ${notice.createdBy.lastName}`
-                  : ""}
+                {footerText(notice, "By")}
               </span>
               {canManage && (
                 <div className="flex items-center gap-3">
@@ -282,17 +213,12 @@ const NoticeCard = ({
       <div className={`absolute left-0 top-0 bottom-0 w-1 ${pc.bar}`} />
 
       <div className="pl-5 pr-5 py-4">
-        {/* Top Header Row: Icon, Type, Badges, and Time cleanly separated */}
+        {/* Top Header Row: Icon, Badges, and Time cleanly separated */}
         <div className="flex items-center justify-between gap-4 mb-3">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div
-              className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 shadow-3xs bg-white ${tc.iconBg}`}
-            >
-              <Icon size={13} className={tc.iconColor} />
+            <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 shadow-3xs bg-slate-100">
+              <Megaphone size={13} className="text-slate-600" />
             </div>
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider truncate">
-              {tc.label}
-            </span>
             {isPinned && (
               <Pin
                 size={10}
@@ -330,9 +256,7 @@ const NoticeCard = ({
         </div>
 
         {/* Action Toggle Button */}
-        {(notice.content?.length > 120 ||
-          notice.attachments?.length > 0 ||
-          canManage) && (
+        {(notice.content?.length > 120 || canManage) && (
           <button
             onClick={() => setOpen((o) => !o)}
             className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 hover:text-slate-700 mt-3 px-2.5 py-1 bg-white border border-slate-200 shadow-3xs rounded-md transition-all"
@@ -353,46 +277,9 @@ const NoticeCard = ({
       {/* Accordion Expansion Drawer Section */}
       {open && (
         <div className="mx-5 mb-4 space-y-3 pt-3.5 border-t border-slate-200/60 animate-in fade-in duration-200">
-          {notice.metadata && Object.keys(notice.metadata).length > 0 && (
-            <div className="bg-white/90 border border-slate-200/80 shadow-3xs rounded-xl px-4 py-3 space-y-1.5 max-w-2xl">
-              {Object.entries(notice.metadata).map(([k, v]) => (
-                <div
-                  key={k}
-                  className="flex gap-4 text-xs border-b border-slate-50 last:border-0 pb-1 last:pb-0"
-                >
-                  <span className="text-slate-400 font-medium capitalize min-w-[90px]">
-                    {k.replace(/([A-Z])/g, " $1")}
-                  </span>
-                  <span className="text-slate-800 font-semibold">
-                    {String(v)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {notice.attachments?.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {notice.attachments.map((f, i) => (
-                <a
-                  key={i}
-                  href={f.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 text-xs font-medium text-slate-600 bg-white border border-slate-200 px-3 py-1.5 rounded-xl hover:border-slate-400 hover:text-slate-900 transition-all shadow-3xs"
-                >
-                  <Paperclip size={11} className="text-slate-400" />{" "}
-                  <span className="max-w-[180px] truncate">{f.name}</span>
-                </a>
-              ))}
-            </div>
-          )}
-
           <div className="flex items-center justify-between pt-2 border-t border-slate-200/60">
             <span className="text-[10px] font-medium text-slate-400">
-              {notice.createdBy
-                ? `Posted by ${notice.createdBy.firstName} ${notice.createdBy.lastName}`
-                : ""}
+              {footerText(notice, "Posted by")}
             </span>
             {canManage && (
               <div className="flex items-center gap-3">

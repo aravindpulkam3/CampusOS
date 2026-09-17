@@ -53,6 +53,12 @@ const canPost = async (user, targetType, targetId) => {
   }
 };
 
+// Owner or superadmin. Shared by every management action (pin/archive/delete)
+// so their permissions can't drift apart.
+const canManage = (user, notice) =>
+  notice.createdBy.toString() === user._id.toString() ||
+  user.role === "superadmin";
+
 // ─── POST /api/notices ────────────────────────────────────────────────────────
 export const createNotice = asyncHandler(async (req, res) => {
   const {
@@ -60,11 +66,8 @@ export const createNotice = asyncHandler(async (req, res) => {
     content,
     targetType,
     targetId,
-    noticeType,
     priority,
-    metadata,
     expiresAt,
-    attachments,
     scopeToCurrentSemester,
   } = req.body;
 
@@ -105,11 +108,8 @@ export const createNotice = asyncHandler(async (req, res) => {
     targetType,
     targetId: targetType === "platform" ? null : targetId,
     semesterNumber,
-    noticeType: noticeType || "announcement",
     priority: priority || "normal",
-    metadata: metadata || {},
     expiresAt: expiresAt || null,
-    attachments: attachments || [],
     createdBy: req.user._id,
   });
 
@@ -287,11 +287,10 @@ export const getNotices = asyncHandler(async (req, res) => {
 });
 // ─── GET /api/notices/:id ─────────────────────────────────────────────────────
 export const getNoticeById = asyncHandler(async (req, res) => {
-  const notice = await Notice.findByIdAndUpdate(
-    req.params.id,
-    { $inc: { viewCount: 1 } },
-    { new: true },
-  ).populate("createdBy", "firstName lastName role");
+  const notice = await Notice.findById(req.params.id).populate(
+    "createdBy",
+    "firstName lastName role",
+  );
 
   if (!notice) {
     return res
@@ -308,8 +307,7 @@ export const deleteNotice = asyncHandler(async (req, res) => {
   if (!notice)
     return res.status(404).json({ success: false, message: "Not found." });
 
-  const isOwner = notice.createdBy.toString() === req.user._id.toString();
-  if (!isOwner && req.user.role !== "superadmin") {
+  if (!canManage(req.user, notice)) {
     return res.status(403).json({ success: false, message: "Not authorised." });
   }
 
@@ -322,6 +320,10 @@ export const togglePin = asyncHandler(async (req, res) => {
   const notice = await Notice.findById(req.params.id);
   if (!notice)
     return res.status(404).json({ success: false, message: "Not found." });
+
+  if (!canManage(req.user, notice)) {
+    return res.status(403).json({ success: false, message: "Not authorised." });
+  }
 
   notice.isPinned = !notice.isPinned;
   await notice.save();
@@ -341,8 +343,7 @@ export const archiveNotice = asyncHandler(async (req, res) => {
   if (!notice)
     return res.status(404).json({ success: false, message: "Not found." });
 
-  const isOwner = notice.createdBy.toString() === req.user._id.toString();
-  if (!isOwner && req.user.role !== "superadmin") {
+  if (!canManage(req.user, notice)) {
     return res.status(403).json({ success: false, message: "Not authorised." });
   }
 

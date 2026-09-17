@@ -57,18 +57,7 @@ const formatTime = (event, status) => {
 const formatDate = (d) =>
   new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
 
-const handleRegister = async (e, eventId) => {
-  e.stopPropagation();
-  try {
-    const payload = await registerForEvent(eventId);
-    setFeedItems((prev) =>
-      prev.map((ev) => (ev._id === eventId ? payload.data.data.event : ev)),
-    );
-    setUser(payload.data.data.user);
-  } catch (err) {
-    console.error(err);
-  }
-};
+
 
 const CardSkeleton = () => (
   <div className="border border-slate-100 rounded-2xl overflow-hidden animate-pulse bg-white space-y-4 p-4 shadow-3xs">
@@ -94,6 +83,19 @@ export default function Events() {
   const [hasMore, setHasMore] = useState(false);
   const [feedLoading, setFeedLoading] = useState(true);
   const [loadMoreLoading, setLoadMoreLoading] = useState(false);
+
+  const handleRegister = async (e, eventId) => {
+    e.stopPropagation();
+    try {
+      const payload = await registerForEvent(eventId);
+      setFeedItems((prev) =>
+        prev.map((ev) => (ev._id === eventId ? payload.data.data.event : ev)),
+      );
+      setUser(payload.data.data.user);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   useEffect(() => {
     const handler = setTimeout(() => setSearch(search), 300);
@@ -218,8 +220,8 @@ export default function Events() {
         <div className="space-y-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {feedItems.map((event) => {
-              const isRegistered = event.registeredStudents?.some(
-                (id) => (id._id ?? id) === user?._id,
+              const isRegistered = user?.registeredEvents?.some(
+                (eventId) => (eventId._id ?? eventId) === event._id,
               );
               const status = getStatus(event);
               const statusCfg = statusConfig[status] || statusConfig.Upcoming;

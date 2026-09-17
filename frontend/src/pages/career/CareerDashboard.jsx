@@ -272,9 +272,6 @@ const CareerDashboard = () => {
     stats = {},
   } = data || {};
 
-  const isCoordinator = ["placementCoordinator", "superadmin"].includes(
-    user?.role,
-  );
 
   // Top 3 upcoming deadlines (eligibleDrives already sorted by deadline asc)
   const upcomingDeadlines = eligibleDrives.slice(0, 3);
@@ -386,14 +383,6 @@ const CareerDashboard = () => {
                   </span>
                 )}
               </div>
-              {isCoordinator && (
-                <Link
-                  to="/platform/notices/create"
-                  className="text-[10px] font-medium text-gray-400 hover:text-gray-700 transition-colors"
-                >
-                  + Post
-                </Link>
-              )}
             </div>
 
             <div className="p-3">

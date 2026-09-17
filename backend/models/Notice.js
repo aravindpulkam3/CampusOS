@@ -47,19 +47,6 @@ const noticeSchema = new mongoose.Schema(
       required: true,
     },
 
-    noticeType: {
-      type: String,
-      enum: [
-        "announcement",
-        "update",
-        "deadline",
-        "schedule_change",
-        "result",
-        "reminder",
-      ],
-      default: "announcement",
-    },
-
     priority: {
       type: String,
       enum: ["low", "normal", "high", "urgent"],
@@ -71,32 +58,15 @@ const noticeSchema = new mongoose.Schema(
       default: false,
     },
 
-    attachments: [
-      {
-        name: String,
-        url: String,
-      },
-    ],
-
-    metadata: {
-      type: mongoose.Schema.Types.Mixed,
-      default: {},
-    },
-
+    // Optional — null means the notice stays visible indefinitely.
     expiresAt: {
       type: Date,
       default: null,
-      
     },
 
     isArchived: {
       type: Boolean,
       default: false,
-    },
-
-    viewCount: {
-      type: Number,
-      default: 0,
     },
   },
   {

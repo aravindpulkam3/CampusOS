@@ -428,7 +428,6 @@ export const listClassroomsAdmin = asyncHandler(async (req, res) => {
   const classrooms = await Classroom.find(query)
     .populate("classRepresentative", "firstName lastName email")
     .sort({ branch: 1, batch: 1, section: 1 });
-  console.log(classrooms);
   sendResponse(res, 200, "Classrooms fetched.", classrooms);
 });
 

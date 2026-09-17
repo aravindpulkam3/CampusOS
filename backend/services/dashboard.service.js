@@ -295,7 +295,6 @@ const toNoticeDTO = (notice) => {
     message: notice.content,
     sourceType: SOURCE_TYPE[notice.targetType] || "platform",
     sourceName,
-    noticeType: notice.noticeType,
     priority: notice.priority,
     isPinned: notice.isPinned,
     createdAt: notice.createdAt,

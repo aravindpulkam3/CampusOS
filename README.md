@@ -5,14 +5,16 @@
 **One platform for academics, clubs, events, discussions, and placements.**
 
 A full-stack MERN application that centralizes everything a college student
-needs — classroom logistics, campus community, and career/placement
-management — behind a single login.
+needs — classroom logistics, campus community, and the entire placement
+pipeline — behind a single login, with a dashboard that answers one
+question: *what needs my attention today?*
 
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white&labelColor=20232a)](https://react.dev/)
 [![Node.js](https://img.shields.io/badge/Node.js-Express-339933?logo=node.js&logoColor=white&labelColor=20232a)](https://expressjs.com/)
 [![MongoDB](https://img.shields.io/badge/MongoDB-Mongoose-47A248?logo=mongodb&logoColor=white&labelColor=20232a)](https://mongoosejs.com/)
+[![Redis](https://img.shields.io/badge/Redis-cache-DC382D?logo=redis&logoColor=white&labelColor=20232a)](https://redis.io/)
 [![Socket.IO](https://img.shields.io/badge/Socket.IO-realtime-black?logo=socket.io&logoColor=white&labelColor=20232a)](https://socket.io/)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind-CSS-06B6D4?logo=tailwindcss&logoColor=white&labelColor=20232a)](https://tailwindcss.com/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind-CSS_4-06B6D4?logo=tailwindcss&logoColor=white&labelColor=20232a)](https://tailwindcss.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](#license)
 
 </div>
@@ -23,6 +25,7 @@ management — behind a single login.
 
 - [Overview](#overview)
 - [Feature Highlights](#feature-highlights)
+- [Engineering Highlights](#engineering-highlights)
 - [Tech Stack](#tech-stack)
 - [Architecture](#architecture)
 - [Project Structure](#project-structure)
@@ -40,74 +43,115 @@ management — behind a single login.
 ## Overview
 
 CampusOS replaces the usual scatter of WhatsApp groups, notice boards, and
-spreadsheets with one coherent system. Students get a single dashboard for
-class deadlines, club activity, and placement drives; class representatives,
-club admins, and placement coordinators get purpose-built tools to manage
-their part of campus life; and everything is tied together by a unified
-notice and real-time notification layer.
+spreadsheets with one coherent system:
+
+- **Students** get a personalized dashboard that merges today's classes,
+  registered events, and placement rounds into one timeline, and surfaces
+  anything due today or tomorrow.
+- **Class representatives** run their section's timetable, deadlines, and
+  semester progression.
+- **Club admins and event organizers** manage their clubs, events,
+  announcements, and notices.
+- **Placement coordinators** run drives end-to-end — from eligibility-gated
+  applications through multi-round CSV shortlisting to final selection.
+
+Everything is tied together by a unified notice system and real-time,
+persisted notifications.
 
 The repository is a monorepo of two independent apps:
 
 | App | Path | Stack |
 |---|---|---|
-| **API** | [`backend/`](backend) | Express, Mongoose/MongoDB, Socket.IO |
-| **Client** | [`frontend/`](frontend) | React 18, Vite, Tailwind CSS |
+| **API** | [`backend/`](backend) | Express, Mongoose/MongoDB, Redis, Socket.IO |
+| **Client** | [`frontend/`](frontend) | React 18, Vite, Tailwind CSS 4 |
 
 ---
 
 ## Feature Highlights
 
-### 🔐 Authentication & Authorization
-- Cookie-based JWT auth — short-lived **access token** + rotating **refresh token**, both `httpOnly`
-- Password hashing with bcrypt
-- Role-based access control (`student`, `placementCoordinator`, `superadmin`)
-- Contextual, resource-scoped permissions layered on top of roles — **club admins** (per club), **event organizers** (per event), and a **class representative** (per classroom)
-- Protected frontend routes with automatic session hydration
+### 🏠 Personalized Student Dashboard
+Every section answers *"why should **this** student see this?"*. The server
+returns render-ready data, so the frontend never works out business rules
+from raw domain objects.
 
-### 🏠 Personalized Dashboard
-- One glance summary of what matters *today*
-- Upcoming deadlines, events, and placement drives
-- Latest notices scoped to the signed-in user
-- Parallelized, `.lean()` aggregate queries for fast loads
+- **Action Required** — registration deadlines for eligible drives you haven't applied to, assignment deadlines, placement rounds, registered events, and urgent notices, all within a today/tomorrow window and ranked `critical` (today) or `warning` (tomorrow)
+- **Today's Schedule** — classroom periods, registered events (including multi-day events already in progress), and your placement rounds, merged into one sorted timeline
+- **Upcoming Deadlines** — scoped to your classroom's *current* semester
+- **Eligible Drives** — open drives you qualify for and haven't applied to yet
+- **Relevant Notices** — from your classroom, followed clubs, registered events, and relevant drives; a notice already shown under Action Required isn't repeated here
+- Built from parallel `.lean()` queries (dependent queries run in a few rounds, independent ones in parallel), with a loading skeleton on the frontend
 
 ### 📚 Classroom & Curriculum
-- Section-based classrooms (branch + batch + section) with a weekly period timetable
-- Curriculum & subject management per semester
-- Study resources tied to subjects
-- Deadline tracking for assignments/submissions
-- Class representative designation per classroom
-- Competitive-exam preparation resource hub
+- Section-based classrooms (`branch + batch + section`, unique) linked to a per-branch, per-semester **curriculum** of subjects
+- Weekly **period timetable** (day, subject, faculty, room, time slot), managed by the class representative
+- **Deadlines** tied to the semester they were created in; once the classroom moves on to the next semester, they can no longer be edited
+- **Semester lifecycle** — the class rep advances to the next semester in one step. The server always works out the next number itself and refuses if no curriculum exists for it; only a superadmin can override the number
+- Admin tools to create classrooms, assign class reps, and manage curricula
 
 ### 🧑‍🤝‍🧑 Community
-- **Clubs** — discovery, follow/unfollow, mute, per-club admin management, logo/banner branding
-- **Events** — creation, registration, organizer management, event-scoped notices
-- **Discussions** — threaded discussions with comments and replies, soft-deletion, moderation queue for admins
+- **Clubs** — discovery, popular clubs, follow/unfollow, **mute** (stops a club's notifications without unfollowing), per-club admins, logo/banner branding
+- **Events** — creation and editing, registration, organizer management, event-scoped announcements and notices
+- **Discussions** — upvotes, bookmarks, threaded comments and replies, **accepted answers**, locking, and soft deletion
+- A community announcement feed with "load more" pagination
 
 ### 💼 Placement Portal
-- Placement drive listings with company, role, CTC/stipend, and eligibility criteria (branch, CGPA, year, backlog limits)
-- Automatic eligibility checks against a student's academic profile
-- One-click applications with resume attachment and a unique per-student-per-drive constraint
-- **Multi-round recruitment pipeline** — coordinators define an ordered sequence of rounds, advance the active cohort round by round, and shortlist/reject/select candidates at each stage
-- Full application timeline per candidate (status changes, notes, who changed what, when)
-- Placement coordinator dashboard for managing drives end-to-end
+- Drive listings with company, role, job/drive type, CTC/stipend, bond, and eligibility criteria (branches, batch, CGPA, year range, backlog limit)
+- **One eligibility engine** shared by the drive listings, career dashboard, student dashboard, and apply endpoint — a drive shown as eligible is never rejected on apply
+- One application per student per drive (enforced by a unique index), with resume attachment
+- **Multi-round recruitment pipeline** — coordinators define an ordered list of rounds, then schedule, end, and advance them round by round
+- **CSV shortlisting** — upload a `rollNumber` list and get a preview that sorts rows into *valid*, *duplicate*, *unknown roll number*, *never applied*, and *already decided*. Confirming re-checks everything against the live database; students who aren't shortlisted are rejected
+- Drive lifecycle: `active → completed | cancelled`, with the final survivors marked `selected` when a drive is finished
+- A full per-candidate **timeline** (status changes, notes, which round, who changed it, when)
+- Students are notified when they're shortlisted, rejected, or selected, and only see round schedules for rounds they've actually reached
 
-### 🔔 Notice & Notification System
-- A single polymorphic **Notice** model drives platform, classroom, club, event, and placement notices — one feed component, every context
-- Priority levels, expiry dates, and rich metadata per notice
-- **Real-time notifications** over Socket.IO — authenticated per-user rooms, `notification:new` push events, persisted in MongoDB so nothing is missed while offline
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> upcoming: addRound
+    upcoming --> ongoing: startDate reached
+    ongoing --> ended_awaiting: endRound
+    ended_awaiting --> processed: confirm CSV shortlist
+    processed --> upcoming: advanceRound (next round)
+    processed --> [*]: finishDrive (last round)
+```
+
+### 🔔 Notices & Real-Time Notifications
+- A single polymorphic **Notice** model (`targetType` + `targetId`) serves platform, classroom, club, event, and drive notices — one feed component works everywhere
+- Priority levels (`low → urgent`), pinning, archiving, and optional expiry; classroom notices can be limited to the current semester
+- Pin, archive, and delete use one shared permission check, so they can't get out of sync
+- **Real-time notifications** over Socket.IO — the socket handshake checks the same JWT cookie as HTTP requests, each user gets a private `user:<id>` room, and a `notification:new` event is pushed on every new notification
+- Notifications are saved in MongoDB (unread count, mark read / mark all read), so nothing is lost while a user is offline
+- Automatic notifications go to club followers (skipping users who muted the club), event registrants, eligible students (new drives), drive applicants, classroom students, and everyone (platform notices)
 
 ### 🔎 Global Search
-- Cross-domain search across clubs, events, drives, and discussions from one search bar
+- One search bar across clubs, events, drives, and discussions (debounced on the client, cached on the server)
 
 ### 🖼️ File Uploads
-- Cloudinary-backed image pipeline via a generic upload endpoint
-- Local temp storage (Multer) with guaranteed cleanup on success or failure
-- Powers profile pictures, club logos/banners, and event posters
+- Images are saved to a local temp folder (Multer), uploaded to Cloudinary, and the temp file is always deleted, whether the upload succeeds or fails
+- Used for profile pictures, club logos/banners, and event posters
+- Shortlist CSVs take a separate path: held in memory only, 2 MB limit, CSV files only, and never uploaded to Cloudinary
 
-### 🛠️ Admin Panel
-- Manage clubs, placement drives, classrooms, and curricula
-- Discussion moderation queue
-- Platform-wide notice authoring
+### 👤 Profiles
+- Academic profile (branch, year, batch, section, roll number, CGPA, backlogs), used for eligibility and classroom membership
+- Skills, bio, resume, and GitHub/LinkedIn/portfolio links
+
+---
+
+## Engineering Highlights
+
+Design decisions worth calling out:
+
+| Concern | Approach |
+|---|---|
+| **Consistency of rules** | Drive eligibility lives in one service (`services/eligibility.service.js`). It has a Mongo filter and an in-memory check that apply the same criteria in the same order. It replaced five separate copies that disagreed with each other. |
+| **Derived, not stored, state** | Round states (`upcoming / ongoing / ended_awaiting / processed`) are calculated from timestamps and the drive's current round (`utils/roundState.js`), never saved as a label, so they can't go stale. |
+| **Safe concurrent writes** | Shortlisting marks the round as processed with a check-and-set update, so a double-submit fails with `409` instead of running twice. Writes run inside a MongoDB transaction when the database supports it (replica set / Atlas), and fall back cleanly on a standalone `mongod`. |
+| **Graceful degradation** | Every Redis call is wrapped: if Redis is down or unset, the app skips the cache and reads from MongoDB. |
+| **Deliberate caching** | Redis caches data that is the same for everyone (all clubs 24h, popular clubs 1h, upcoming events 15m, search results 10m), and clears it when clubs or events are written. The personalized dashboard is **intentionally not cached**: it depends on the current time, so an item cached at 23:50 as "closes today" would be wrong at 00:01. |
+| **Resource-scoped authorization** | Class reps, club admins, and event organizers get their powers from their link to a specific classroom, club, or event, not from an app-wide role. |
+| **Consistent API contract** | `asyncHandler` passes errors to one global error handler, which turns Mongoose/JWT errors into proper HTTP responses. Every success response has the same `{ success, message, data }` shape. |
+| **Session UX** | Access and refresh tokens are `httpOnly` cookies. When a request gets a `401`, the Axios interceptor refreshes the session once and retries the request, excluding the auth routes to avoid a refresh loop. |
+| **Migrations** | `scripts/migrateDriveRounds.js` is a one-off migration from the old `selectionProcess` / 9-status model to rounds and `active / rejected / selected`. It uses the native driver so it can read fields the current schemas no longer define. |
 
 ---
 
@@ -118,7 +162,7 @@ The repository is a monorepo of two independent apps:
 <td valign="top" width="50%">
 
 **Frontend**
-- React 18 + Vite
+- React 18 + Vite 5
 - React Router 6
 - Tailwind CSS 4
 - Axios (with auto refresh-token retry interceptor)
@@ -130,12 +174,13 @@ The repository is a monorepo of two independent apps:
 <td valign="top" width="50%">
 
 **Backend**
-- Node.js + Express
+- Node.js + Express (ES modules)
 - MongoDB + Mongoose
+- Redis (`node-redis` v5) — read-through caching
 - Socket.IO (real-time notifications)
-- Redis client (caching layer, in progress)
-- JSON Web Tokens (access + refresh)
+- JSON Web Tokens (access + refresh, cookie-based)
 - Multer + Cloudinary (media pipeline)
+- csv-parse (shortlist ingestion)
 - bcryptjs (password hashing)
 
 </td>
@@ -146,28 +191,31 @@ The repository is a monorepo of two independent apps:
 
 ## Architecture
 
-The backend follows a layered request pipeline, with cross-cutting concerns
-(auth, RBAC, error handling, async error propagation) implemented as
-reusable middleware rather than duplicated per-route.
+The backend runs each request through the same layers. Cross-cutting concerns
+(auth, role checks, resource-scoped checks, error handling, async error
+propagation) live in reusable middleware instead of being repeated in every
+route.
 
 ```mermaid
 flowchart LR
     A[React Client] -- REST / Axios --> B[Express Routes]
     A -- WebSocket --> S[Socket.IO]
-    B --> C[Middleware<br/><i>auth · roles · club-admin</i>]
+    B --> C[Middleware<br/><i>auth · roles · club-admin · classroom-rep</i>]
     C --> D[Controllers]
     D -.->|domains with a service layer| E[Services]
     D --> F[(MongoDB via Mongoose)]
     E --> F
+    D <-->|read-through cache| R[(Redis)]
+    E <--> R
     E -- notification:new --> S
     S -- user:&lt;id&gt; room --> A
     D --> G[Cloudinary]
 ```
 
-> Not every domain has a service layer — auth, dashboard/search, drive
-> eligibility & shortlisting, and notifications go through `services/`;
-> most CRUD controllers (events, clubs, notices, announcements,
-> discussions, classroom) query models directly.
+> Not every domain has a service layer. Auth, dashboard/search, eligibility,
+> shortlisting, classroom, and notifications go through `services/`; simpler
+> CRUD controllers (events, clubs, notices, announcements, discussions) query
+> models directly.
 
 ---
 
@@ -176,26 +224,29 @@ flowchart LR
 ```text
 CampusOS
 ├── backend
-│   ├── config          # DB (MongoDB) and Redis client setup
-│   ├── constants        # Shared enums (event categories, resource categories)
-│   ├── controllers      # Request handling + most domain logic
-│   ├── middleware       # auth, roles, club-admin guards, error/async handling
-│   ├── models            # Mongoose schemas (User, Club, Event, Drive, Notice, …)
-│   ├── routes           # Route definitions per resource
-│   ├── scripts           # One-off maintenance/migration scripts
-│   ├── services         # auth, dashboard/search, eligibility, shortlisting, notifications
-│   ├── sockets           # Socket.IO auth + connection handling
-│   ├── utils              # ApiError, asyncHandler, sendResponse, cloudinary, cache
+│   ├── config           # MongoDB connection, Redis client
+│   ├── constants        # Event & resource categories
+│   ├── controllers      # Request handling (+ domain logic for simpler CRUD)
+│   ├── middleware       # auth, roles, club-admin, classroom-rep, multer, CSV upload, errors
+│   ├── models           # User, Classroom, Curriculum, Deadline, Club, Event, Drive,
+│   │                    # Application, Notice, Notification, Discussion, Comment, Reply, …
+│   ├── routes           # One router per resource
+│   ├── scripts          # One-off migrations (migrateDriveRounds.js)
+│   ├── services         # auth, dashboard/search, eligibility, shortlist, notifications, …
+│   ├── sockets          # Socket.IO cookie-JWT auth + per-user rooms
+│   ├── utils            # ApiError, asyncHandler, sendResponse, cache, cloudinary, roundState
 │   └── server.js
 │
 ├── frontend
 │   ├── src
-│   │   ├── api            # One thin wrapper per backend resource, built on axios.js
-│   │   ├── components     # cards, common, forms, layout
-│   │   ├── constants       # Roles, branches, categories, years
-│   │   ├── context         # AuthContext, NotificationContext
-│   │   ├── hooks           # useAuth, useSocket, …
-│   │   └── pages           # Route groups: dashboard, academics, community, career, admin…
+│   │   ├── api          # One thin wrapper per backend resource, built on axios.js
+│   │   ├── components   # cards, common, dashboard, forms, layout
+│   │   ├── constants    # Branches, categories, years
+│   │   ├── context      # AuthContext, NotificationContext
+│   │   ├── hooks        # useAuth, useSocket, useNotifications, useIsClassRep, useDebounce, …
+│   │   ├── pages        # dashboard, academics, community (clubs/events), discussions,
+│   │   │                # career, admin, profile, auth
+│   │   └── utils        # Client-side eligibility, formatting, validators
 │   └── vite.config.js
 │
 └── README.md
@@ -207,9 +258,9 @@ CampusOS
 
 ### Prerequisites
 - Node.js 18+
-- A MongoDB connection string (local or Atlas)
+- MongoDB — local or Atlas (Atlas or any replica set enables transactional shortlisting; a standalone server also works)
 - A Cloudinary account (for image uploads)
-- (Optional) A Redis instance — the app runs fine without one
+- *(Optional)* Redis — the app runs without it, just without caching
 
 ### Clone
 
@@ -225,7 +276,7 @@ cd backend
 npm install
 ```
 
-Create `backend/.env` (see [Environment Variables](#environment-variables) below), then:
+Create `backend/.env` (see [Environment Variables](#environment-variables)), then:
 
 ```bash
 npm run dev     # nodemon server.js
@@ -241,8 +292,25 @@ npm install
 npm run dev     # Vite dev server, proxies /api/* to localhost:5000
 ```
 
-Both servers need to be running concurrently — there is no root-level script
-that starts both for you.
+Both servers need to run at the same time; there is no root-level script
+that starts both.
+
+### Optional: local Redis
+
+```bash
+docker run -d --name campusos-redis -p 6379:6379 redis:7
+# then set REDIS_URL=redis://localhost:6379 in backend/.env
+```
+
+### Migrating older data
+
+If your database has drives from before the rounds pipeline was introduced,
+run this once:
+
+```bash
+cd backend
+node scripts/migrateDriveRounds.js
+```
 
 ---
 
@@ -252,7 +320,7 @@ that starts both for you.
 
 | Variable | Description |
 |---|---|
-| `PORT` | Port the Express/Socket.IO server listens on (default `5000`) |
+| `PORT` | Port the Express + Socket.IO server listens on (default `5000`) |
 | `MONGO_URI` | MongoDB connection string |
 | `CLIENT_URL` | Frontend origin, used for CORS (HTTP + Socket.IO) |
 | `JWT_ACCESS_SECRET` / `JWT_ACCESS_EXPIRY` | Access token signing secret & TTL (e.g. `15m`) |
@@ -260,8 +328,9 @@ that starts both for you.
 | `CLOUDINARY_CLOUD_NAME` | Cloudinary cloud name |
 | `CLOUDINARY_API_KEY` | Cloudinary API key |
 | `CLOUDINARY_API_SECRET` | Cloudinary API secret |
-| `REDIS_URL` | Redis connection string (optional — failures are caught and logged, not fatal) |
+| `REDIS_URL` | Redis connection string (optional; Redis errors are logged, not fatal) |
 | `NODE_ENV` | `production` enables the `secure` flag on auth cookies |
+| `TZ` | Recommended: `Asia/Kolkata`. "Today" calculations use server-local time, so a UTC host would roll the dashboard over at 05:30 IST |
 
 ### `frontend/.env`
 
@@ -273,42 +342,44 @@ that starts both for you.
 
 ## Roles & Permissions
 
-| Role | Scope |
+| Global role | Scope |
 |---|---|
 | `student` | Default role — dashboard, classroom, community, and placement access |
-| `placementCoordinator` | Manages placement drives, applications, and shortlisting |
-| `superadmin` | Full platform administration |
+| `placementCoordinator` | Creates and runs placement drives: rounds, shortlisting, finish/cancel, drive notices |
+| `superadmin` | Full platform administration: clubs, classrooms, curricula, platform notices, semester overrides |
 
-On top of these global roles, three **contextual** permissions apply per
-resource rather than per user:
+On top of these, three **contextual** permissions attach to a specific
+resource rather than to a user role:
 
 | Relationship | Grants |
 |---|---|
-| Club `clubAdmins` | Manage a specific club's profile, roster, and announcements |
-| Event `eventOrganizers` | Manage a specific event and post event notices |
-| Classroom `classRepresentative` | Represent a specific classroom (one student per classroom) |
+| Club `clubAdmins` | Manage that club's profile, events, announcements, and notices |
+| Event `eventOrganizers` | Manage that event and post its announcements and notices |
+| Classroom `classRepresentative` | Manage that classroom's timetable and deadlines, post classroom notices, and advance its semester |
 
 ---
 
 ## API Surface
 
-All routes are mounted under `/api` and return a consistent envelope —
+All routes are mounted under `/api`. Success responses have the shape
 `{ success, message, data }`.
 
 | Base path | Responsibility |
 |---|---|
-| `/api/auth` | Signup, login, logout, token refresh, current user |
-| `/api/dashboard` | Aggregated dashboard + global search |
-| `/api/clubs` | Club CRUD, follow/mute, admin management |
-| `/api/events` | Event CRUD, registration, organizers |
-| `/api/classroom`, `/api/admin/classroom` | Timetables, deadlines, resources |
-| `/api/curriculum` | Curriculum & subject management |
-| `/api/discussions` | Discussions, comments, replies, moderation |
-| `/api/notices` | Polymorphic notices across all contexts |
-| `/api/announcements` | Club/event announcements |
-| `/api/drives`, `/api/applications` | Placement drives, applications, rounds, shortlisting |
-| `/api/notifications` | Persisted notifications, read/unread state |
-| `/api/v1/upload` | Generic Cloudinary image upload |
+| `/api/auth` | Signup, login, logout, token refresh, current user, profile |
+| `/api/dashboard` | Personalized student dashboard · `GET /search` global search |
+| `/api/clubs` | Club CRUD, popular clubs, follow, mute |
+| `/api/events` | Event CRUD, upcoming events, registration |
+| `/api/classroom` | My classroom, deadlines, timetable periods, `POST /:classroomId/semester/next` |
+| `/api/admin/classroom` | *(superadmin)* Create/list/update classrooms, semester override |
+| `/api/curriculum` | *(superadmin)* Curricula and their subjects |
+| `/api/discussions` | Discussions, comments, replies, upvotes, bookmarks, accepted answers |
+| `/api/notices` | Polymorphic notices — create, list, pin, archive, delete |
+| `/api/announcements` | Club/event announcements, community feed |
+| `/api/drives` | Drives, career dashboard, applicants, rounds (`/end`, `/advance`), shortlist (`/preview`, `/confirm`), `/finish`, `/cancel` |
+| `/api/applications` | Apply to a drive, my applications, application detail & notes |
+| `/api/notifications` | List, unread count, mark read, mark all read |
+| `/api/v1/upload` | Generic Cloudinary image upload (`?folder=<name>`, field `file`) |
 
 ---
 
@@ -316,8 +387,15 @@ All routes are mounted under `/api` and return a consistent envelope —
 
 - [x] Real-time notifications over Socket.IO
 - [x] Cross-domain global search
-- [ ] Active Redis caching for hot read paths
-- [ ] Background job queue (BullMQ)
+- [x] Redis caching for shared data like clubs, events, and search
+- [x] Personalized, time-aware student dashboard
+- [x] Multi-round placement pipeline with CSV shortlisting
+- [x] Semester-aware classrooms and curricula
+- [ ] Backend API for the competitive-prep hub and study resources (the `Resource` model and frontend page exist; routes are not wired yet)
+- [ ] Backend endpoints for the discussion moderation queue
+- [ ] Socket.IO Redis adapter for horizontal scaling
+- [ ] Request validation middleware (schema-based)
+- [ ] Background job queue (BullMQ) for notification fan-out
 - [ ] AI-assisted resume analysis
 - [ ] Drive/event recommendation engine
 - [ ] Browser push notifications
