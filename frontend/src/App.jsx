@@ -39,7 +39,7 @@ import CreateDrive from "./pages/career/CreateDrive.jsx";
 
 // Admin workspace
 import AdminPanel from "./pages/admin/AdminPanel";
-import ManageClubs from "./pages/admin/ManageClubs";
+import ManageNotices from "./pages/admin/ManageNotices";
 import ManageDrives from "./pages/admin/ManageDrives";
 import ModerationQueue from "./pages/admin/ModerationQueue";
 import ClassroomManagement from "./pages/admin/ClassroomManagement.jsx";
@@ -158,10 +158,16 @@ function App() {
             <Route index element={<AdminPanel />} />
             <Route path="drives" element={<ManageDrives />} />
             <Route path="moderation" element={<ModerationQueue />} />
-            <Route path="notices" element={<ManageClubs />} />
+            <Route path="notices" element={<ManageNotices />} />
             <Route path="classrooms" element={<ClassroomManagement />} />
             <Route path="curricula" element={<CurriculumManagement />} />
           </Route>
+          
+          <Route path="/admin/notices/create" element={
+            <ProtectedRoute allowedRoles={["superadmin"]}>
+              <NoticeForm />
+            </ProtectedRoute>
+          } />
 
           {/* Profile — no tabs */}
           <Route path="/profile" element={<Profile />} />

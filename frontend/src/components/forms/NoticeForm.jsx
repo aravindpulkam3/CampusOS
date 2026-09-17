@@ -267,7 +267,7 @@ const CreateNotice = () => {
         clubs: `/community/clubs/${targetId}`,
         events: `/community/events/${targetId}`,
         drive: `/career/drives/${targetId}`,
-        platform: "/",
+        platform: "/admin/notices",
       };
 
       navigate(backRoutes[resolvedType] || "/", {
