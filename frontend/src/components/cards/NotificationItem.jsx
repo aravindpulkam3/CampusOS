@@ -1,11 +1,14 @@
 import { formatRelativeTime } from "../../utils/formatDate";
 
-const NotificationItem = ({ notification, onRead }) => {
+const NotificationItem = ({ notification, onRead, onNavigate }) => {
   const { _id, title, message, isRead, createdAt } = notification;
 
   return (
     <button
-      onClick={() => !isRead && onRead(_id)}
+      onClick={() => {
+        if (!isRead) onRead(_id);
+        onNavigate(notification);
+      }}
       className={`w-full flex items-start gap-3 px-4 py-2.5 text-left transition-colors duration-100
         ${isRead ? "hover:bg-gray-50/70" : "bg-blue-50/40 hover:bg-blue-50/60"}`}
     >

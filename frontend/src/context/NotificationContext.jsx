@@ -1,4 +1,4 @@
-import { createContext, useState, useEffect, useCallback } from "react";
+import { createContext, useState, useEffect, useCallback, useRef } from "react";
 import useAuth from "../hooks/useAuth.js";
 import useSocket from "../hooks/useSocket.js";
 import {
@@ -15,9 +15,11 @@ export const NotificationProvider = ({ children }) => {
   const socket = useSocket(!!user);
 
   const [notifications, setNotifications] = useState([]);
+  const [toasts, setToasts] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const seenNotificationIds = useRef(new Set());
 
   const fetchNotifications = useCallback(async () => {
     setLoading(true);
@@ -27,7 +29,19 @@ export const NotificationProvider = ({ children }) => {
         getNotifications(),
         getUnreadNotificationCount(),
       ]);
-      setNotifications(listRes.data.data.notifications);
+      const fetchedNotifications = listRes.data.data.notifications;
+      fetchedNotifications.forEach((notification) =>
+        seenNotificationIds.current.add(notification._id),
+      );
+      setNotifications((current) => {
+        const fetchedIds = new Set(
+          fetchedNotifications.map((notification) => notification._id),
+        );
+        const receivedDuringFetch = current.filter(
+          (notification) => !fetchedIds.has(notification._id),
+        );
+        return [...receivedDuringFetch, ...fetchedNotifications];
+      });
       setUnreadCount(countRes.data.data.count);
     } catch {
       setError("Failed to load notifications.");
@@ -41,9 +55,11 @@ export const NotificationProvider = ({ children }) => {
       fetchNotifications();
     } else {
       setNotifications([]);
+      setToasts([]);
       setUnreadCount(0);
       setError("");
       setLoading(false);
+      seenNotificationIds.current.clear();
     }
   }, [user, fetchNotifications]);
 
@@ -51,13 +67,26 @@ export const NotificationProvider = ({ children }) => {
     if (!socket) return;
 
     const handleNew = (notification) => {
+      if (
+        !notification?._id ||
+        seenNotificationIds.current.has(notification._id)
+      ) {
+        return;
+      }
+
+      seenNotificationIds.current.add(notification._id);
       setNotifications((prev) => [notification, ...prev]);
-      setUnreadCount((prev) => prev + 1);
+      if (!notification.isRead) setUnreadCount((prev) => prev + 1);
+      setToasts((prev) => [...prev, notification].slice(-3));
     };
 
     socket.on("notification:new", handleNew);
     return () => socket.off("notification:new", handleNew);
   }, [socket]);
+
+  const dismissToast = useCallback((id) => {
+    setToasts((prev) => prev.filter((notification) => notification._id !== id));
+  }, []);
 
   const markRead = async (id) => {
     setNotifications((prev) =>
@@ -83,7 +112,16 @@ export const NotificationProvider = ({ children }) => {
 
   return (
     <NotificationContext.Provider
-      value={{ notifications, unreadCount, loading, error, markRead, markAllRead }}
+      value={{
+        notifications,
+        toasts,
+        unreadCount,
+        loading,
+        error,
+        markRead,
+        markAllRead,
+        dismissToast,
+      }}
     >
       {children}
     </NotificationContext.Provider>

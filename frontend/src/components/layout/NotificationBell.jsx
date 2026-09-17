@@ -1,9 +1,12 @@
 import { useState, useEffect, useRef } from "react";
 import { Bell, Check } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import useNotifications from "../../hooks/useNotifications";
 import NotificationItem from "../cards/NotificationItem";
+import { getNotificationPath } from "../../utils/notificationNavigation";
 
 const NotificationBell = () => {
+  const navigate = useNavigate();
   const { notifications, unreadCount, loading, error, markRead, markAllRead } =
     useNotifications();
   const [isOpen, setIsOpen] = useState(false);
@@ -17,6 +20,11 @@ const NotificationBell = () => {
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
+
+  const handleNavigate = (notification) => {
+    setIsOpen(false);
+    navigate(getNotificationPath(notification));
+  };
 
   return (
     <div ref={containerRef} className="relative">
@@ -70,7 +78,12 @@ const NotificationBell = () => {
               </div>
             ) : (
               notifications.map((n) => (
-                <NotificationItem key={n._id} notification={n} onRead={markRead} />
+                <NotificationItem
+                  key={n._id}
+                  notification={n}
+                  onRead={markRead}
+                  onNavigate={handleNavigate}
+                />
               ))
             )}
           </div>
