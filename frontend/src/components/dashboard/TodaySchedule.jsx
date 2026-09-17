@@ -13,6 +13,10 @@ const typeStyle = {
     accent: "border-l-emerald-400",
     badge: { label: "Placement", className: "text-emerald-700 bg-emerald-50" },
   },
+  deadline: {
+    accent: "border-l-amber-400",
+    badge: { label: "Deadline", className: "text-amber-700 bg-amber-50" },
+  },
 };
 
 const ScheduleRow = ({ item }) => {
@@ -29,6 +33,8 @@ const ScheduleRow = ({ item }) => {
           // An event that began before today must not advertise yesterday's
           // clock time as if it were today's start.
           <p className="text-xs font-bold text-emerald-600">Ongoing</p>
+        ) : !item.hasTime ? (
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Time TBA</p>
         ) : (
           <>
             <p className="text-xs font-bold text-gray-900 tabular-nums">

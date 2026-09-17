@@ -43,6 +43,46 @@ const formatDate = (d) =>
       })
     : "—";
 
+const formatDateTimeWithFallback = (d) => {
+  if (!d) return "—";
+  const dateObj = new Date(d);
+  const isMidnight = dateObj.getHours() === 0 && dateObj.getMinutes() === 0;
+  const dateStr = dateObj.toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+  if (isMidnight) {
+    return `${dateStr}, 11:59 PM`;
+  }
+  const timeStr = dateObj.toLocaleTimeString("en-IN", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+  return `${dateStr}, ${timeStr}`;
+};
+
+const formatRoundDate = (d) => {
+  if (!d) return "Date TBA";
+  const dateObj = new Date(d);
+  const isMidnight = dateObj.getHours() === 0 && dateObj.getMinutes() === 0;
+  const dateStr = dateObj.toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+  if (isMidnight) {
+    return `${dateStr}, Time TBA`;
+  }
+  const timeStr = dateObj.toLocaleTimeString("en-IN", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+  return `${dateStr}, ${timeStr}`;
+};
+
 const formatDeadline = (d) => {
   if (!d) return null;
   const diff = new Date(d) - new Date();
@@ -591,7 +631,7 @@ const RoundsTab = ({ drive, application, isCoordinator, onRefresh }) => {
                   <div>
                     <p className="text-sm font-medium text-gray-800">{round.name}</p>
                     <p className="text-xs text-gray-400">
-                      {round.startDate ? formatDate(round.startDate) : "Date TBA"}
+                      {round.startDate ? formatRoundDate(round.startDate) : "Date TBA"}
                     </p>
                   </div>
                 </div>
@@ -1041,7 +1081,7 @@ const DriveDetail = () => {
               </p>
               <div className="flex items-center gap-2 mt-0.5">
                 <p className="text-sm font-semibold text-gray-800">
-                  {formatDate(drive.registrationDeadline)}
+                  {formatDateTimeWithFallback(drive.registrationDeadline)}
                 </p>
                 {deadline && (
                   <span className={`flex items-center gap-1 text-xs font-medium ${deadline.color}`}>

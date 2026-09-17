@@ -126,12 +126,8 @@ export const searchAll = async (q) => {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Student dashboard — a personalized aggregation.
-//
-// Every query below answers "why should THIS user see this?". The frontend
-// receives render-ready DTOs and only lays them out; it never reconstructs
-// business meaning from raw domain objects.
-//
+// Student dashboard 
+
 // Nothing here is cached per-user: every section is a function of (user, now),
 // and the `now` dependency alone is disqualifying — a "closes today" item
 // cached at 23:50 is wrong at 00:01. The dashboard has no dashboard-specific
@@ -166,8 +162,24 @@ const isSameDay = (a, b) =>
 // Classroom periods store minutes-since-midnight (0–1439), not Date or "HH:mm".
 // Converting to an absolute timestamp is what lets classes, events and rounds
 // share one sorted timeline.
-const atMinutesToday = (startOfToday, minutes) =>
-  new Date(startOfToday.getTime() + minutes * 60000);
+const atMinutesToday = (startOfToday, totalMinutes) => {
+  const d = new Date(startOfToday);
+  d.setMinutes(d.getMinutes() + totalMinutes);
+  return d;
+};
+
+// Returns false if the date's local time is exactly 00:00:00 (midnight).
+// Often indicates the user picked a date but not a specific time.
+const hasTime = (d) => {
+  if (!d) return false;
+  const date = new Date(d);
+  return !(
+    date.getHours() === 0 &&
+    date.getMinutes() === 0 &&
+    date.getSeconds() === 0 &&
+    date.getMilliseconds() === 0
+  );
+};
 
 // ─── section builders ──────────────────────────────────────────────────────
 
@@ -187,6 +199,7 @@ const buildScheduleFromPeriods = (classroom, subjectNameById, startOfToday) => {
       startAt: atMinutesToday(startOfToday, p.startTime),
       endAt: atMinutesToday(startOfToday, p.endTime),
       isOngoing: false,
+      hasTime: true,
       url: `/academics/classroom/${classroom._id}`,
     }));
 };
@@ -212,6 +225,7 @@ const buildScheduleFromEvents = (events, startOfToday, endOfToday) =>
         startAt,
         endAt: new Date(e.endDateTime),
         isOngoing: startAt < startOfToday,
+        hasTime: !(startAt < startOfToday),
         url: `/community/events/${e._id}`,
       };
     });
@@ -242,6 +256,7 @@ const collectRelevantRounds = (activeDrives) => {
         startAt: new Date(round.startDate),
         endAt: null, // rounds have no end time in the data model
         isOngoing: false,
+        hasTime: hasTime(round.startDate),
         url: `/career/drives/${drive._id}`,
       });
     }
@@ -569,7 +584,7 @@ export const buildStudentDashboard = async (user) => {
         ? Deadline.find({
             classroom: classroom._id,
             semesterNumber: currentSemesterNumber, // older semesters excluded
-            dueDate: { $gte: now },
+            dueDate: { $gte: startOfToday },
           })
             .sort({ dueDate: 1 })
             .lean()
@@ -616,7 +631,7 @@ export const buildStudentDashboard = async (user) => {
     ]);
 
   const actionDeadlines = deadlineRows
-    .filter((d) => new Date(d.dueDate) <= actionWindowEnd)
+    .filter((d) => new Date(d.dueDate) >= now && new Date(d.dueDate) <= actionWindowEnd)
     .map((d) => ({
       ...d,
       subjectName: subjectNameById.get(String(d.subject)) || null,
@@ -660,6 +675,24 @@ export const buildStudentDashboard = async (user) => {
   );
   const roundItems = collectRelevantRounds(activeDrives);
 
+  const deadlineItems = deadlineRows
+    .filter((d) => {
+      const dueAt = new Date(d.dueDate);
+      return dueAt >= startOfToday && dueAt <= endOfToday;
+    })
+    .map((d) => ({
+      id: `deadline-${d._id}`,
+      type: "deadline",
+      title: d.title,
+      subtitle: subjectNameById.get(String(d.subject)) || d.type,
+      location: null,
+      startAt: new Date(d.dueDate),
+      endAt: null,
+      isOngoing: false,
+      hasTime: true,
+      url: `/academics/classroom/${classroom?._id}`,
+    }));
+
   // The schedule renders whenever ANY source has an item. No classroom means no
   // class periods — it must never mean "no schedule", since a student without a
   // classroom can still have a registered event or an OA today.
@@ -669,7 +702,12 @@ export const buildStudentDashboard = async (user) => {
     ...roundItems.filter(
       (r) => r.startAt >= startOfToday && r.startAt <= endOfToday,
     ),
+    ...deadlineItems,
   ].sort((a, b) => {
+    if (a.hasTime !== b.hasTime) {
+      return a.hasTime ? -1 : 1;
+    }
+
     // Clamp ongoing items to the start of today so an event that began
     // yesterday sorts to the top of today rather than by yesterday's timestamp.
     const aKey = Math.max(new Date(a.startAt).getTime(), startOfToday.getTime());

@@ -106,23 +106,15 @@ export const getDrives = asyncHandler(async (req, res) => {
     }
   }
 
-  const skip = (Number(page) - 1) * Number(limit);
-
-  const [drives, total] = await Promise.all([
-    Drive.find(query)
-      .select("-rounds")
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(Number(limit))
-      .lean(),
-    Drive.countDocuments(query),
-  ]);
+  const allDrives = await Drive.find(query)
+    .select("-rounds")
+    .lean();
 
   let appliedDriveIdsSet = new Set();
   if (req.user) {
     const studentApplications = await Application.find({
       student: req.user._id,
-      drive: { $in: drives.map((d) => d._id) },
+      drive: { $in: allDrives.map((d) => d._id) },
     })
       .select("drive")
       .lean();
@@ -131,15 +123,15 @@ export const getDrives = asyncHandler(async (req, res) => {
     );
   }
 
-  const processedDrives = drives.map((d) => {
+  const processedDrives = allDrives.map((d) => {
     const hasApplied = appliedDriveIdsSet.has(d._id.toString());
     const isOpen = d.registrationDeadline
       ? new Date(d.registrationDeadline) >= now
       : false;
 
     let sortWeight = 0;
-    if (hasApplied && isOpen) sortWeight = 4;
-    else if (!hasApplied && isOpen) sortWeight = 3;
+    if (!hasApplied && isOpen) sortWeight = 4;
+    else if (hasApplied && isOpen) sortWeight = 3;
     else if (hasApplied && !isOpen) sortWeight = 2;
     else sortWeight = 1;
 
@@ -151,8 +143,20 @@ export const getDrives = asyncHandler(async (req, res) => {
     };
   });
 
+  // Sort them according to rules, then fallback to most recently created
+  processedDrives.sort((a, b) => {
+    if (a.sortWeight !== b.sortWeight) {
+      return b.sortWeight - a.sortWeight;
+    }
+    return new Date(b.createdAt) - new Date(a.createdAt);
+  });
+
+  const total = processedDrives.length;
+  const skip = (Number(page) - 1) * Number(limit);
+  const paginatedDrives = processedDrives.slice(skip, skip + Number(limit));
+
   sendResponse(res, 200, "Drives fetched.", {
-    drives: processedDrives,
+    drives: paginatedDrives,
     pagination: {
       total,
       page: Number(page),

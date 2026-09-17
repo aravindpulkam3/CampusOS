@@ -9,14 +9,35 @@ import { getAllDrives } from "../../api/career.api";
 const isOpenNow = (deadline) =>
   deadline ? new Date(deadline) >= new Date() : false;
 
+const formatDateTimeWithFallback = (d) => {
+  if (!d) return "—";
+  const dateObj = new Date(d);
+  const isMidnight = dateObj.getHours() === 0 && dateObj.getMinutes() === 0;
+  const dateStr = dateObj.toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+  });
+  if (isMidnight) {
+    return `${dateStr}, 11:59 PM`;
+  }
+  const timeStr = dateObj.toLocaleTimeString("en-IN", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+  return `${dateStr}, ${timeStr}`;
+};
+
 const formatDeadline = (d) => {
   if (!d) return null;
   const diff = new Date(d) - new Date();
   const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-  if (diff < 0) return null;
-  if (days === 0) return { label: "Closes today", color: "text-red-500" };
-  if (days === 1) return { label: "1 day left", color: "text-amber-500" };
-  return { label: `${days}d left`, color: "text-gray-400" };
+  const timeText = formatDateTimeWithFallback(d);
+  
+  if (diff < 0) return { label: `Closed (${timeText})`, color: "text-gray-400" };
+  if (days === 0) return { label: `Closes today, ${timeText.split(", ")[1]}`, color: "text-red-500" };
+  if (days === 1) return { label: `1 day left (${timeText})`, color: "text-amber-500" };
+  return { label: `${days}d left (${timeText})`, color: "text-gray-400" };
 };
 
 const jobTypeConfig = {
