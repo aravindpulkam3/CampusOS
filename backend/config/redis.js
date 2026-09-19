@@ -1,5 +1,5 @@
-import "dotenv/config";
 import { createClient } from "redis";
+import { env } from "./env.js";
 
 // Redis is a cache only, never a hard dependency. Every failure mode below
 // (URL unset, URL malformed, server down at boot, outage mid-run) leaves the
@@ -7,14 +7,14 @@ import { createClient } from "redis";
 const RECONNECT_MAX_DELAY_MS = 5000;
 
 const createRedisClient = () => {
-  if (!process.env.REDIS_URL) {
+  if (!env.redisUrl) {
     console.warn("[REDIS] REDIS_URL not set: caching disabled");
     return null;
   }
 
   try {
     return createClient({
-      url: process.env.REDIS_URL,
+      url: env.redisUrl,
       // Reject commands immediately while disconnected instead of queueing
       // them until a reconnect that may never come — a queued command
       // would hang the request that issued it.

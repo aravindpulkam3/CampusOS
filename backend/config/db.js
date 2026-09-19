@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { env } from "./env.js";
 
 // Post-startup connection state changes. The driver reconnects on its own;
 // these make an outage visible in the logs. The "error" listener also keeps a
@@ -9,7 +10,7 @@ mongoose.connection.on("error", (err) => console.error("[MONGO] connection error
 
 const connectDB = async () => {
   try {
-    const conn = await mongoose.connect(process.env.MONGO_URI);
+    const conn = await mongoose.connect(env.mongoUri);
     console.log(`MongoDB connected: ${conn.connection.host}`);
   } catch (error) {
     console.error(`[MONGO] initial connection failed: ${error.message}`);
