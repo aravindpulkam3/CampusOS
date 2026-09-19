@@ -2,6 +2,7 @@
 
 import asyncHandler from "../utils/asyncHandler.js";
 import sendResponse from "../utils/sendResponse.js";
+import ApiError from "../utils/apiError.js";
 import {
   registerUser,
   loginUser,
@@ -113,7 +114,7 @@ export const updateProfile = asyncHandler(async (req, res) => {
   const userId = req.user?._id; 
   
   if (!userId) {
-    return sendResponse(res, 401, "Unauthorized: User session not found");
+    throw new ApiError(401, "Unauthorized: User session not found");
   }
 
   // 2. Extract allowed fields from body to prevent malicious parameter injection
@@ -130,17 +131,30 @@ export const updateProfile = asyncHandler(async (req, res) => {
     backlogs,
   } = req.body;
 
+  // Type checks before any .trim(): a non-string here used to throw a TypeError (500).
+  // Link fields keep accepting null/"" to mean "clear this value".
+  for (const [field, value] of Object.entries({ firstName, lastName, bio, profilePicture })) {
+    if (value !== undefined && typeof value !== "string") {
+      throw new ApiError(400, `Invalid value for ${field}`);
+    }
+  }
+  for (const [field, value] of Object.entries({ github, linkedin, portfolio, resumeUrl })) {
+    if (value && typeof value !== "string") {
+      throw new ApiError(400, `Invalid value for ${field}`);
+    }
+  }
+
   // 3. Mandatory field validation
   if (firstName !== undefined && !firstName.trim()) {
-    return sendResponse(res, 400, "First name cannot be empty");
+    throw new ApiError(400, "First name cannot be empty");
   }
 
   // 4. URL format validation checks for assets and social configurations
-  if (github && !isValidUrl(github)) return sendResponse(res, 400, "Invalid GitHub URL format");
-  if (linkedin && !isValidUrl(linkedin)) return sendResponse(res, 400, "Invalid LinkedIn URL format");
-  if (portfolio && !isValidUrl(portfolio)) return sendResponse(res, 400, "Invalid Portfolio URL format");
-  if (resumeUrl && !isValidUrl(resumeUrl)) return sendResponse(res, 400, "Invalid Resume asset URL format");
-   if (profilePicture && !isValidUrl(profilePicture)) return sendResponse(res, 400, "Invalid rpofile picture URL format");
+  if (github && !isValidUrl(github)) throw new ApiError(400, "Invalid GitHub URL format");
+  if (linkedin && !isValidUrl(linkedin)) throw new ApiError(400, "Invalid LinkedIn URL format");
+  if (portfolio && !isValidUrl(portfolio)) throw new ApiError(400, "Invalid Portfolio URL format");
+  if (resumeUrl && !isValidUrl(resumeUrl)) throw new ApiError(400, "Invalid Resume asset URL format");
+   if (profilePicture && !isValidUrl(profilePicture)) throw new ApiError(400, "Invalid rpofile picture URL format");
 
   // 5. Construct update object dynamically based on what was passed
  // ─── Safely Construct Update Object ──────────────────────────
@@ -167,7 +181,7 @@ export const updateProfile = asyncHandler(async (req, res) => {
     if (cgpa === null || cgpa === "") {
       updateData.cgpa = null;
     } else if (isNaN(cgpa) || Number(cgpa) < 0 || Number(cgpa) > 10) {
-      return sendResponse(res, 400, "CGPA must be a number between 0 and 10");
+      throw new ApiError(400, "CGPA must be a number between 0 and 10");
     } else {
       updateData.cgpa = Number(cgpa);
     }
@@ -177,7 +191,7 @@ export const updateProfile = asyncHandler(async (req, res) => {
     if (backlogs === null || backlogs === "") {
       updateData.backlogs = null;
     } else if (!Number.isInteger(Number(backlogs)) || Number(backlogs) < 0) {
-      return sendResponse(res, 400, "Backlogs must be a whole number of 0 or more");
+      throw new ApiError(400, "Backlogs must be a whole number of 0 or more");
     } else {
       updateData.backlogs = Number(backlogs);
     }
@@ -195,7 +209,7 @@ export const updateProfile = asyncHandler(async (req, res) => {
   );
 
   if (!updatedUser) {
-    return sendResponse(res, 404, "User profile record does not exist");
+    throw new ApiError(404, "User profile record does not exist");
   }
 
   // 7. Success: Send fresh payload back up to frontend profile state

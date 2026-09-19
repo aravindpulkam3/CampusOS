@@ -250,13 +250,13 @@ export const deleteAnnouncement = asyncHandler(async (req, res) => {
   const user = req.user; // Populated by your authentication middleware
 
   if (!id || id === "undefined") {
-    return sendResponse(res, 400, "Invalid or missing ID parameter");
+    throw new ApiError(400, "Invalid or missing ID parameter");
   }
 
   // 1. Fetch the announcement to check context properties
   const announcement = await Announcement.findById(id);
   if (!announcement) {
-    return sendResponse(res, 404, "Announcement does not exist");
+    throw new ApiError(404, "Announcement does not exist");
   }
 
   // 2. Base Authorization Checks (Superadmin or Creator)
@@ -287,11 +287,7 @@ export const deleteAnnouncement = asyncHandler(async (req, res) => {
 
   // 5. Enforce final gatekeeping block
   if (!isSuperAdmin && !isAuthor && !isAuthorizedManager) {
-    return sendResponse(
-      res,
-      403,
-      "Forbidden: You are not authorized to delete this announcement",
-    );
+    throw new ApiError(403, "Forbidden: You are not authorized to delete this announcement");
   }
 
   // 6. Execution Block

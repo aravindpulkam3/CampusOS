@@ -4,6 +4,7 @@ import User from "../models/User.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import sendResponse from "../utils/sendResponse.js";
 import ApiError from "../utils/apiError.js";
+import escapeRegex from "../utils/escapeRegex.js";
 import { notifyClubFollowers, notifyEventRegistrants } from "../services/notification.service.js";
 import { getJSON, setJSON, del } from "../utils/cache.js";
 
@@ -44,8 +45,8 @@ export const getAllEvents = asyncHandler(async (req, res) => {
     matchConditions.category = category;
   }
 
-  if (search && search.trim() !== "") {
-    const searchRegex = new RegExp(search.trim(), "i");
+  if (typeof search === "string" && search.trim() !== "") {
+    const searchRegex = new RegExp(escapeRegex(search.trim()), "i");
     matchConditions.$or = [
       { eventName: searchRegex },
       { venue: searchRegex },
@@ -139,6 +140,9 @@ export const getEventById = asyncHandler(async (req, res) => {
   const event = await Event.findById(req.params.id)
     .populate("organizerClub", "clubName logo")
     .populate("createdBy", "firstName secondName");
+  if (!event) {
+    throw new ApiError(404, "Event not found.");
+  }
     const isOrganizer=event.eventOrganizers.some(organizer=> organizer.equals(req.user._id));
   sendResponse(res, 200, "Events fetched Successfully",{
     event,
@@ -170,7 +174,7 @@ export const registerForEvent = asyncHandler(async (req, res) => {
   );
 
   if (alreadyRegistered) {
-    throw new ApiError(400, "Already registered");
+    throw new ApiError(409, "Already registered");
   }
   
   user.registeredEvents.push(req.params.id);
@@ -214,12 +218,12 @@ export const updateEvent = asyncHandler(async (req, res) => {
   
 
   if (!id || id === "undefined") {
-    return sendResponse(res, 400, "Invalid or missing Event ID parameter");
+    throw new ApiError(400, "Invalid or missing Event ID parameter");
   }
 
   if (updates.startDateTime && updates.endDateTime) {
     if (new Date(updates.endDateTime) <= new Date(updates.startDateTime)) {
-      return sendResponse(res, 400, "End date and time must be after the start timeline");
+      throw new ApiError(400, "End date and time must be after the start timeline");
     }
   }
 
@@ -231,7 +235,7 @@ export const updateEvent = asyncHandler(async (req, res) => {
   
 
   if (!updatedEvent) {
-    return sendResponse(res, 404, "Target event configuration does not exist");
+    throw new ApiError(404, "Target event configuration does not exist");
   }
 
   await del(UPCOMING_EVENTS_CACHE_KEY);

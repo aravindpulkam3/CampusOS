@@ -11,11 +11,15 @@ import { createNotification } from "../services/notification.service.js";
 
 // GET /api/discussions?category=&search=&sort=newest|popular|unanswered|active&page=1&limit=20
 export const getDiscussions = asyncHandler(async (req, res) => {
-  const { category, search, sort = "newest", page = 1, limit = 5 } = req.query;
+  const { category, search, sort = "newest" } = req.query;
+  // Malformed paging falls back to defaults instead of reaching Mongo as NaN
+  // (a 500); limit is capped so one request can't pull the whole collection.
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 5));
 
   const query = { isDeleted: false };
   if (category && category !== "all") query.category = category;
-  if (search) query.$text = { $search: search };
+  if (typeof search === "string" && search) query.$text = { $search: search };
 
   const sortMap = {
     newest:     { isPinned: -1, createdAt: -1 },
@@ -24,21 +28,21 @@ export const getDiscussions = asyncHandler(async (req, res) => {
     active:     { isPinned: -1, lastActivityAt: -1 },
   };
 
-  const skip = (Number(page) - 1) * Number(limit);
+  const skip = (page - 1) * limit;
 
   const [discussions, total] = await Promise.all([
     Discussion.find(query)
       .populate("author", "firstName lastName branch year")
       .sort(sortMap[sort] || sortMap.newest)
       .skip(skip)
-      .limit(Number(limit))
+      .limit(limit)
       .lean(),
     Discussion.countDocuments(query),
   ]);
 
   sendResponse(res, 200, "Discussions fetched.", {
     discussions,
-    pagination: { total, page: Number(page), pages: Math.ceil(total / Number(limit)) },
+    pagination: { total, page, pages: Math.ceil(total / limit) },
   });
 });
 

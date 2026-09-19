@@ -16,7 +16,7 @@ export const getDashboard = asyncHandler(async (req, res) => {
 // ─── GET /api/dashboard/search ────────────────────────────────────────────────
 export const globalSearch = asyncHandler(async (req, res) => {
   const { q } = req.query;
-  if (!q || q.trim().length < 2)
+  if (typeof q !== "string" || q.trim().length < 2)
     return sendResponse(res, 200, "Search results", []);
   const results = await searchAll(q);
   return sendResponse(res, 200, "Search results", results);

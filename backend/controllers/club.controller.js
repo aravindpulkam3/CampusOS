@@ -49,7 +49,7 @@ export const getClubDetails = asyncHandler(async (req, res) => {
   const clubId = req.params.clubId;
   const club = await Club.findById(clubId).lean();
   if (!club) {
-    return sendResponse(res, 404, "Club not found");
+    throw new ApiError(404, "Club not found");
   }
   const isAdmin =
     club.clubAdmins.some((adminId) => adminId.toString() === req.user._id.toString()) ||
@@ -83,7 +83,7 @@ export const followClub = asyncHandler(async (req, res) => {
   const club = await Club.findById(clubId);
   const user = await User.findById(req.user._id);
 
-  if (!club) throw new ApiError(400, "Club not found");
+  if (!club) throw new ApiError(404, "Club not found");
 
   const alreadyFollowing = user.followedClubs.some(
     (followedClub) => followedClub.toString() === clubId.toString(),
@@ -181,6 +181,19 @@ export const updateClub = asyncHandler(async (req, res) => {
       403,
       "Access Denied: You do not have permissions to modify this club.",
     );
+  }
+
+  // Type checks before any .trim(): a non-string here used to throw a TypeError (500).
+  // logo/banner keep accepting null/"" to mean "remove".
+  for (const [field, value] of Object.entries({ clubName, description })) {
+    if (value !== undefined && typeof value !== "string") {
+      throw new ApiError(400, `Invalid value for ${field}`);
+    }
+  }
+  for (const [field, value] of Object.entries({ logo, banner })) {
+    if (value && typeof value !== "string") {
+      throw new ApiError(400, `Invalid value for ${field}`);
+    }
   }
 
   // 3. Build Safe Modification Updates Sandbox Object

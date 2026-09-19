@@ -11,6 +11,7 @@ import "../models/Curriculum.js";
 import Deadline    from "../models/Deadline.js";
 import Notice      from "../models/Notice.js";
 import { getJSON, setJSON } from "../utils/cache.js";
+import escapeRegex from "../utils/escapeRegex.js";
 import { getReachableRoundIndexes } from "../utils/roundState.js";
 import {
   buildEligibilityFilter,
@@ -40,7 +41,7 @@ export const searchAll = async (q) => {
   const cached = await getJSON(cacheKey);
   if (cached) return cached;
 
-  const regex = new RegExp(q.trim(), "i"); // to  make it case sensitive
+  const regex = new RegExp(escapeRegex(q.trim()), "i"); // to  make it case sensitive
 
   const [clubs, events, drives, discussions] = await Promise.all([ // Promiseall starts all 4 together
     Club.find({
