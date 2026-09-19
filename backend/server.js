@@ -60,8 +60,6 @@ app.use(errorMiddleware);
 const PORT = process.env.PORT || 5000;
 httpServer.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
-console.log("Redis URL:", process.env.REDIS_URL);
-
 process.on("SIGTERM", async () => {
   await redisClient.quit().catch(() => {});
   process.exit(0);

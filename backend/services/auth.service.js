@@ -27,13 +27,10 @@ export const registerUser = async (userData) => {
     branch, year, section, rollNumber, cgpa, batch,
   } = userData;
 
-  console.log("Registering user with data:", userData);
-
   const existingUser = await User.findOne({ $or: [{ email }, { rollNumber }] });
   if (existingUser) {
     const field = existingUser.email === email ? "Email" : "Roll number";
     const error = new Error(`${field} already registered.`);
-    console.log("Error in registerUser:", error.message);
     error.statusCode = 409;
     throw error;
   }
