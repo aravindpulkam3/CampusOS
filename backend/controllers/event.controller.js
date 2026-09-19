@@ -7,14 +7,48 @@ import ApiError from "../utils/apiError.js";
 import escapeRegex from "../utils/escapeRegex.js";
 import { notifyClubFollowers, notifyEventRegistrants } from "../services/notification.service.js";
 import { getJSON, setJSON, del } from "../utils/cache.js";
+import { assertClubAdmin } from "../middleware/clubAdminMiddleware.js";
 
 const UPCOMING_EVENTS_CACHE_KEY = "cache:events:upcoming";
 const UPCOMING_EVENTS_TTL = 60 * 15; // 15m
 
+// The only fields a client may set on create/update — exactly what EventForm
+// sends. Anything else (createdBy, registrationCount, eventOrganizers, status,
+// or a field added to the schema later) is ignored until deliberately listed.
+// eventOrganizers and status are intentionally absent: no UI manages them, and
+// changing them should be a dedicated, separately-authorized action.
+const EVENT_WRITABLE_FIELDS = [
+  "eventName",
+  "description",
+  "startDateTime",
+  "endDateTime",
+  "registrationDeadline",
+  "venue",
+  "banner",
+  "category",
+  "tags",
+  "organizerClub",
+  "eligibleBranches",
+  "eligibleYears",
+];
+
+const pickEventFields = (body) => {
+  const fields = {};
+  for (const key of EVENT_WRITABLE_FIELDS) {
+    if (body[key] !== undefined) fields[key] = body[key];
+  }
+  return fields;
+};
+
 // TODO: implement controller function
 export const createEvent = asyncHandler(async (req, res) => {
+  const fields = pickEventFields(req.body);
+
+  // Authorize against the exact club the event is being created for.
+  await assertClubAdmin(req.user, fields.organizerClub);
+
   const event = await Event.create({
-    ...req.body,
+    ...fields,
     createdBy: req.user._id,
   });
 
@@ -212,19 +246,28 @@ export const registeredEvents = asyncHandler(async (req, res) => {
   sendResponse(res, 200, "Registered events fetched", user.registeredEvents);
 });
 
+// eventManagerMiddleware has already loaded req.event and authorized the user.
 export const updateEvent = asyncHandler(async (req, res) => {
-  const { id } = req.params; 
-  const updates = req.body;
-  
+  const { id } = req.params;
+  const updates = pickEventFields(req.body);
 
-  if (!id || id === "undefined") {
-    throw new ApiError(400, "Invalid or missing Event ID parameter");
+  if (Object.keys(updates).length === 0) {
+    throw new ApiError(400, "No updatable fields provided.");
   }
 
-  if (updates.startDateTime && updates.endDateTime) {
-    if (new Date(updates.endDateTime) <= new Date(updates.startDateTime)) {
-      throw new ApiError(400, "End date and time must be after the start timeline");
-    }
+  // Compare against the stored value when only one side is being changed.
+  const start = updates.startDateTime ?? req.event.startDateTime;
+  const end = updates.endDateTime ?? req.event.endDateTime;
+  if (start && end && new Date(end) <= new Date(start)) {
+    throw new ApiError(400, "End date and time must be after the start timeline");
+  }
+
+  // Moving an event to another club requires admin rights over that club too.
+  if (
+    updates.organizerClub !== undefined &&
+    String(updates.organizerClub) !== String(req.event.organizerClub)
+  ) {
+    await assertClubAdmin(req.user, updates.organizerClub);
   }
 
   const updatedEvent = await Event.findByIdAndUpdate(

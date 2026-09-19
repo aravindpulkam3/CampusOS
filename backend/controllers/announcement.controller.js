@@ -7,6 +7,7 @@ import { Announcement } from "../models/Announcement.js";
 import sendResponse from "../utils/sendResponse.js";
 import ApiError from "../utils/apiError.js";
 import { notifyClubFollowers, notifyEventRegistrants } from "../services/notification.service.js";
+import { isClubAdmin } from "../middleware/clubAdminMiddleware.js";
 // TODO: implement controller functions
 export const createAnnouncement = asyncHandler(async (req, res) => {
   const { targetType, targetId } = req.params;
@@ -268,10 +269,8 @@ export const deleteAnnouncement = asyncHandler(async (req, res) => {
   // 3. Contextual Authority Check (Club Admin array check)
   if (announcement.targetType === "club" && announcement.club) {
     const club = await Club.findById(announcement.club);
-    if (club && club.clubAdmin) {
-      isAuthorizedManager = club.clubAdmin.some(
-        (adminId) => adminId.toString() === user._id.toString(),
-      );
+    if (club) {
+      isAuthorizedManager = isClubAdmin(club, user);
     }
   }
 
