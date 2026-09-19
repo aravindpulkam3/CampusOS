@@ -60,8 +60,8 @@ export const createAnnouncement = asyncHandler(async (req, res) => {
 
 export const getAnnouncements = asyncHandler(async (req, res) => {
   const { targetType, targetId } = req.params;
-  const offset = Number(req.query.offset) || 0;
-  const limitCount = 10; 
+  const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
+  const limitCount = 10;
   let queryFilter = { targetType };
 
   if (targetType === "club") {
@@ -96,9 +96,10 @@ export const getCommunityFeed = asyncHandler(async (req, res) => {
   const userId = req.user._id;
 
   // 1. Parse individual category page cursors/offsets
-  const eventOffset = Number(req.query.eventOffset) || 0;
-  const clubOffset = Number(req.query.clubOffset) || 0;
-  const generalOffset = Number(req.query.generalOffset) || 0;
+  const offsetParam = (value) => Math.max(0, parseInt(value, 10) || 0);
+  const eventOffset = offsetParam(req.query.eventOffset);
+  const clubOffset = offsetParam(req.query.clubOffset);
+  const generalOffset = offsetParam(req.query.generalOffset);
 
   // 2. Resolve Targeted Entity Relationship Lists
   const followedClubIds = req.user.followedClubs || [];

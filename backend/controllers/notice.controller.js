@@ -53,6 +53,14 @@ const canPost = async (user, targetType, targetId) => {
   }
 };
 
+// Classroom notices are for that classroom: its students, its CR, superadmin.
+const canReadClassroom = async (user, classroomId) => {
+  if (user.role === "superadmin") return true;
+  if (user.classroom && String(user.classroom) === String(classroomId)) return true;
+  const classroom = await Classroom.findById(classroomId).select("classRepresentative").lean();
+  return !!classroom && String(classroom.classRepresentative) === String(user._id);
+};
+
 // Owner or superadmin. Shared by every management action (pin/archive/delete)
 // so their permissions can't drift apart.
 const canManage = (user, notice) =>
@@ -71,15 +79,20 @@ export const createNotice = asyncHandler(async (req, res) => {
     scopeToCurrentSemester,
   } = req.body;
 
-  if (!title?.trim() || !content?.trim() || !targetType) {
+  if (
+    typeof title !== "string" || !title.trim() ||
+    typeof content !== "string" || !content.trim() ||
+    typeof targetType !== "string" || !targetType
+  ) {
     return res.status(400).json({
       success: false,
       message: "Title, content, and targetType are required.",
     });
   }
 
-  // platform notices don't need a targetId
-  if (targetType !== "platform" && !targetId) {
+  // platform notices don't need a targetId; everything else needs a real id
+  // (a string — an operator object must never reach the permission lookup).
+  if (targetType !== "platform" && (typeof targetId !== "string" || !mongoose.isValidObjectId(targetId))) {
     return res.status(400).json({
       success: false,
       message: "targetId is required for non-platform notices.",
@@ -144,7 +157,14 @@ export const createNotice = asyncHandler(async (req, res) => {
 });
 
 export const getNotices = asyncHandler(async (req, res) => {
-  const { targetType, targetId } = req.query;
+  // Express 4 parses `?targetType[$ne]=x` into an operator object; only plain
+  // strings may reach the query.
+  const targetType = typeof req.query.targetType === "string" ? req.query.targetType : undefined;
+  const targetId = typeof req.query.targetId === "string" ? req.query.targetId : undefined;
+  if ((req.query.targetType !== undefined && targetType === undefined) ||
+      (req.query.targetId !== undefined && targetId === undefined)) {
+    throw new ApiError(400, "Invalid notice filter.");
+  }
   const user = req.user;
 
   // Base persistent query layer
@@ -200,6 +220,9 @@ export const getNotices = asyncHandler(async (req, res) => {
 
     // ─── 4. DIRECT TARGET SPECIFIC LOOKUPS ────────────────────────
   } else if (targetType === "classroom" && targetId) {
+    if (!mongoose.isValidObjectId(targetId) || !(await canReadClassroom(user, targetId))) {
+      throw new ApiError(403, "You can only view notices for your own classroom.");
+    }
     const classroomDoc = mongoose.Types.ObjectId.isValid(targetId)
       ? await Classroom.findById(targetId).select("currentSemesterNumber")
       : null;
@@ -213,6 +236,10 @@ export const getNotices = asyncHandler(async (req, res) => {
       { semesterNumber: classroomDoc?.currentSemesterNumber ?? null },
     ];
   } else {
+    // A classroom listing without a specific id would span every classroom.
+    if (targetType === "classroom" && user.role !== "superadmin") {
+      throw new ApiError(403, "You can only view notices for your own classroom.");
+    }
     if (targetType) query.targetType = targetType;
 
     if (targetId && targetId !== "null" && targetId !== "undefined") {
@@ -293,6 +320,12 @@ export const getNoticeById = asyncHandler(async (req, res) => {
   );
 
   if (!notice) {
+    return res
+      .status(404)
+      .json({ success: false, message: "Notice not found." });
+  }
+  // 404 rather than 403, so ids of other classrooms' notices aren't confirmed.
+  if (notice.targetType === "classroom" && !(await canReadClassroom(req.user, notice.targetId))) {
     return res
       .status(404)
       .json({ success: false, message: "Notice not found." });

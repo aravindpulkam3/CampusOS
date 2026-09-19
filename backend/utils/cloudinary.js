@@ -1,14 +1,14 @@
 import { v2 as cloudinary } from "cloudinary";
 import fs from "fs";
-import dotenv from "dotenv"
 import ApiError from "./apiError.js";
+import { env } from "../config/env.js";
 
-dotenv.config();
-// Configure credentials
+// Configure credentials. env.cloudinary is null only outside production (it is
+// required there); uploads then fail at Cloudinary and return null below.
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
+  cloud_name: env.cloudinary?.cloudName,
+  api_key: env.cloudinary?.apiKey,
+  api_secret: env.cloudinary?.apiSecret,
 });
 
 // Content validation happens here, not in multer (whose mimetype is

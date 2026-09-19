@@ -8,7 +8,14 @@ import sendResponse from "../utils/sendResponse.js";
 import { notifyClassroomStudents } from "../services/notification.service.js";
 
 const MAX_SEMESTERS = 8;
-const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const DAYS = [
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+];
 
 const unassignedResponse = (res) =>
   sendResponse(res, 200, "Classroom fetched successfully", {
@@ -92,7 +99,11 @@ export const getDeadlines = asyncHandler(async (req, res) => {
 
 // Shared by the normal flow (derived number) and the admin override
 // (explicit number) — the actual field mutation is identical either way.
-const applySemesterTransition = async (classroom, semesterNumber, curriculum) => {
+const applySemesterTransition = async (
+  classroom,
+  semesterNumber,
+  curriculum,
+) => {
   classroom.currentSemesterNumber = semesterNumber;
   classroom.curriculum = curriculum._id;
   classroom.periods = [];
@@ -146,7 +157,8 @@ export const startNextSemester = asyncHandler(async (req, res) => {
 
 const validatePeriodInput = ({ day, subject, startTime, endTime }) => {
   if (!DAYS.includes(day)) return "Invalid day.";
-  if (!subject || !mongoose.Types.ObjectId.isValid(subject)) return "Invalid subject.";
+  if (!subject || !mongoose.Types.ObjectId.isValid(subject))
+    return "Invalid subject.";
   if (typeof startTime !== "number" || typeof endTime !== "number") {
     return "startTime/endTime must be numbers (minutes since midnight).";
   }
@@ -159,7 +171,8 @@ const validatePeriodInput = ({ day, subject, startTime, endTime }) => {
 
 const findOverlap = (periods, { day, startTime, endTime }, excludePeriodId) =>
   periods.find((p) => {
-    if (excludePeriodId && p._id.toString() === excludePeriodId.toString()) return false;
+    if (excludePeriodId && p._id.toString() === excludePeriodId.toString())
+      return false;
     if (p.day !== day) return false;
     return startTime < p.endTime && p.startTime < endTime;
   });
@@ -175,17 +188,25 @@ export const addPeriod = asyncHandler(async (req, res) => {
   }
 
   const { day, subject, faculty, room, startTime, endTime } = req.body;
-  const validationError = validatePeriodInput({ day, subject, startTime, endTime });
+  const validationError = validatePeriodInput({
+    day,
+    subject,
+    startTime,
+    endTime,
+  });
   if (validationError) {
     return res.status(400).json({ success: false, message: validationError });
   }
 
   await classroom.populate("curriculum");
-  const subjectExists = classroom.curriculum.subjects.some((s) => s._id.toString() === subject);
+  const subjectExists = classroom.curriculum.subjects.some(
+    (s) => s._id.toString() === subject,
+  );
   if (!subjectExists) {
     return res.status(400).json({
       success: false,
-      message: "Subject does not belong to this classroom's current curriculum.",
+      message:
+        "Subject does not belong to this classroom's current curriculum.",
     });
   }
 
@@ -201,7 +222,12 @@ export const addPeriod = asyncHandler(async (req, res) => {
   classroom.periods.push({ day, subject, faculty, room, startTime, endTime });
   await classroom.save();
 
-  sendResponse(res, 201, "Period added.", classroom.periods[classroom.periods.length - 1]);
+  sendResponse(
+    res,
+    201,
+    "Period added.",
+    classroom.periods[classroom.periods.length - 1],
+  );
 });
 
 export const updatePeriod = asyncHandler(async (req, res) => {
@@ -209,7 +235,9 @@ export const updatePeriod = asyncHandler(async (req, res) => {
 
   const period = classroom.periods.id(req.params.periodId);
   if (!period) {
-    return res.status(404).json({ success: false, message: "Period not found." });
+    return res
+      .status(404)
+      .json({ success: false, message: "Period not found." });
   }
 
   const day = req.body.day ?? period.day;
@@ -217,21 +245,33 @@ export const updatePeriod = asyncHandler(async (req, res) => {
   const startTime = req.body.startTime ?? period.startTime;
   const endTime = req.body.endTime ?? period.endTime;
 
-  const validationError = validatePeriodInput({ day, subject, startTime, endTime });
+  const validationError = validatePeriodInput({
+    day,
+    subject,
+    startTime,
+    endTime,
+  });
   if (validationError) {
     return res.status(400).json({ success: false, message: validationError });
   }
 
   await classroom.populate("curriculum");
-  const subjectExists = classroom.curriculum.subjects.some((s) => s._id.toString() === subject);
+  const subjectExists = classroom.curriculum.subjects.some(
+    (s) => s._id.toString() === subject,
+  );
   if (!subjectExists) {
     return res.status(400).json({
       success: false,
-      message: "Subject does not belong to this classroom's current curriculum.",
+      message:
+        "Subject does not belong to this classroom's current curriculum.",
     });
   }
 
-  const conflict = findOverlap(classroom.periods, { day, startTime, endTime }, period._id);
+  const conflict = findOverlap(
+    classroom.periods,
+    { day, startTime, endTime },
+    period._id,
+  );
   if (conflict) {
     return res.status(409).json({
       success: false,
@@ -256,7 +296,9 @@ export const deletePeriod = asyncHandler(async (req, res) => {
 
   const period = classroom.periods.id(req.params.periodId);
   if (!period) {
-    return res.status(404).json({ success: false, message: "Period not found." });
+    return res
+      .status(404)
+      .json({ success: false, message: "Period not found." });
   }
 
   period.deleteOne();
@@ -288,11 +330,14 @@ export const createDeadline = asyncHandler(async (req, res) => {
 
   if (subject) {
     await classroom.populate("curriculum");
-    const subjectExists = classroom.curriculum.subjects.some((s) => s._id.toString() === subject);
+    const subjectExists = classroom.curriculum.subjects.some(
+      (s) => s._id.toString() === subject,
+    );
     if (!subjectExists) {
       return res.status(400).json({
         success: false,
-        message: "Subject does not belong to the current semester's curriculum.",
+        message:
+          "Subject does not belong to the current semester's curriculum.",
       });
     }
   }
@@ -330,13 +375,16 @@ export const updateDeadline = asyncHandler(async (req, res) => {
     classroom: classroom._id,
   });
   if (!deadline) {
-    return res.status(404).json({ success: false, message: "Deadline not found." });
+    return res
+      .status(404)
+      .json({ success: false, message: "Deadline not found." });
   }
 
   if (deadline.semesterNumber !== classroom.currentSemesterNumber) {
     return res.status(409).json({
       success: false,
-      message: "This deadline belongs to a previous semester and can no longer be edited.",
+      message:
+        "This deadline belongs to a previous semester and can no longer be edited.",
     });
   }
 
@@ -344,11 +392,14 @@ export const updateDeadline = asyncHandler(async (req, res) => {
 
   if (subject) {
     await classroom.populate("curriculum");
-    const subjectExists = classroom.curriculum.subjects.some((s) => s._id.toString() === subject);
+    const subjectExists = classroom.curriculum.subjects.some(
+      (s) => s._id.toString() === subject,
+    );
     if (!subjectExists) {
       return res.status(400).json({
         success: false,
-        message: "Subject does not belong to this classroom's current curriculum.",
+        message:
+          "Subject does not belong to this classroom's current curriculum.",
       });
     }
   }
@@ -371,13 +422,16 @@ export const deleteDeadline = asyncHandler(async (req, res) => {
     classroom: classroom._id,
   });
   if (!deadline) {
-    return res.status(404).json({ success: false, message: "Deadline not found." });
+    return res
+      .status(404)
+      .json({ success: false, message: "Deadline not found." });
   }
 
   if (deadline.semesterNumber !== classroom.currentSemesterNumber) {
     return res.status(409).json({
       success: false,
-      message: "This deadline belongs to a previous semester and can no longer be deleted.",
+      message:
+        "This deadline belongs to a previous semester and can no longer be deleted.",
     });
   }
 
@@ -419,7 +473,11 @@ export const createClassroomAdmin = asyncHandler(async (req, res) => {
 });
 
 export const listClassroomsAdmin = asyncHandler(async (req, res) => {
-  const { branch, batch, section } = req.query;
+  // Strings only: Express 4 turns `?branch[$ne]=x` into an operator object.
+  const str = (v) => (typeof v === "string" ? v : undefined);
+  const branch = str(req.query.branch);
+  const batch = str(req.query.batch);
+  const section = str(req.query.section);
   const query = {};
   if (branch) query.branch = branch;
   if (batch) query.batch = Number(batch);
@@ -434,16 +492,27 @@ export const listClassroomsAdmin = asyncHandler(async (req, res) => {
 export const updateClassroomAdmin = asyncHandler(async (req, res) => {
   const classroom = await Classroom.findById(req.params.classroomId);
   if (!classroom) {
-    return res.status(404).json({ success: false, message: "Classroom not found." });
+    return res
+      .status(404)
+      .json({ success: false, message: "Classroom not found." });
   }
 
-  const { classRepresentative, classRepresentativeRollNumber, branch, batch, section } = req.body;
+  const {
+    classRepresentative,
+    classRepresentativeRollNumber,
+    branch,
+    batch,
+    section,
+  } = req.body;
 
   // CR assignment is a relationship, not a role — this never touches
   // User.role, and is unrestricted by who the target user currently is.
   // Accept either a raw id or a roll number lookup (nicer admin UX; no
   // separate user-search endpoint needed for this small a feature).
   if (classRepresentativeRollNumber !== undefined) {
+    if (classRepresentativeRollNumber && typeof classRepresentativeRollNumber !== "string") {
+      return res.status(400).json({ success: false, message: "Invalid roll number." });
+    }
     if (!classRepresentativeRollNumber) {
       classroom.classRepresentative = null;
     } else {
@@ -491,11 +560,17 @@ export const updateClassroomAdmin = asyncHandler(async (req, res) => {
 export const overrideSemesterAdmin = asyncHandler(async (req, res) => {
   const classroom = await Classroom.findById(req.params.classroomId);
   if (!classroom) {
-    return res.status(404).json({ success: false, message: "Classroom not found." });
+    return res
+      .status(404)
+      .json({ success: false, message: "Classroom not found." });
   }
 
   const { semesterNumber } = req.body;
-  if (!Number.isInteger(semesterNumber) || semesterNumber < 1 || semesterNumber > MAX_SEMESTERS) {
+  if (
+    !Number.isInteger(semesterNumber) ||
+    semesterNumber < 1 ||
+    semesterNumber > MAX_SEMESTERS
+  ) {
     return res.status(400).json({
       success: false,
       message: `semesterNumber must be an integer between 1 and ${MAX_SEMESTERS}.`,

@@ -9,7 +9,7 @@ import {
 
 // ─── GET /api/notifications ────────────────────────────────────────────────────
 export const getNotifications = asyncHandler(async (req, res) => {
-  const offset = Number(req.query.offset) || 0;
+  const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
   const { notifications, hasMore, nextOffset } = await getUserNotifications(
     req.user._id,
     offset

@@ -41,5 +41,12 @@ const fileFilter = (req, file, cb) => {
 export const upload = multer({
   storage: storage,
   fileFilter,
-  limits: { fileSize: 5 * 1024 * 1024 }, // matches ImageUploadZone's 5MB client check
+  limits: {
+    fileSize: 5 * 1024 * 1024, // matches ImageUploadZone's 5MB client check
+    // One file per request; cap the non-file parts too (multer's defaults
+    // for fields/parts are unlimited).
+    files: 1,
+    fields: 5,
+    parts: 10,
+  },
 });

@@ -3,6 +3,7 @@ import { upload } from "../middleware/multerMiddleware.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import authMiddleware from "../middleware/authMiddleware.js";
+import { uploadLimiter } from "../middleware/rateLimitMiddleware.js";
 import ApiError from "../utils/apiError.js";
 
 const uploadRouter = Router();
@@ -31,7 +32,7 @@ const validateFolder = (req, res, next) => {
 };
 
 // POST /api/v1/upload?folder=<name>
-uploadRouter.post("/", authMiddleware, validateFolder, upload.single("file"), asyncHandler(async (req, res) => {
+uploadRouter.post("/", authMiddleware, uploadLimiter, validateFolder, upload.single("file"), asyncHandler(async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ success: false, message: "No file uploaded." });
   }
