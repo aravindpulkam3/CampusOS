@@ -24,7 +24,7 @@ import notificationRouter from './routes/notification.routes.js';
 import { initSocket } from './sockets/socketHandler.js';
 dotenv.config();
 connectDB();
-connectRedis();
+void connectRedis(); // non-blocking and never rejects — Redis is optional
 
 const app = express();
 const httpServer = http.createServer(app);
@@ -61,6 +61,6 @@ const PORT = process.env.PORT || 5000;
 httpServer.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
 process.on("SIGTERM", async () => {
-  await redisClient.quit().catch(() => {});
+  await redisClient?.quit().catch(() => {});
   process.exit(0);
 });
