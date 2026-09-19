@@ -28,6 +28,36 @@ await connectDB(); // required dependency: exits the process on failure, so we n
 void connectRedis(); // non-blocking and never rejects — Redis is optional
 
 const app = express();
+
+// Express 'trust proxy' from TRUST_PROXY, set explicitly per deployment so
+// rate limiting sees the real client IP. Unset/"false" (local dev): disabled,
+// req.ip is the socket peer. A number is a proxy hop count (Nginx only: 1,
+// CloudFront -> Nginx: 2); anything else is Express's subnet/alias list.
+// "true" is refused: it trusts every hop, making X-Forwarded-For spoofable.
+const configureTrustProxy = () => {
+  const raw = process.env.TRUST_PROXY?.trim();
+  if (!raw || raw.toLowerCase() === "false") {
+    console.log("[CONFIG] trust proxy: disabled");
+    return;
+  }
+  if (raw.toLowerCase() === "true") {
+    console.error(
+      "[CONFIG] TRUST_PROXY=true is not allowed: it trusts every proxy hop, so X-Forwarded-For " +
+        "can be spoofed to bypass rate limiting. Use a hop count (e.g. 1) or a subnet list."
+    );
+    process.exit(1);
+  }
+  const value = /^\d+$/.test(raw) ? Number(raw) : raw;
+  try {
+    app.set("trust proxy", value);
+  } catch (err) {
+    console.error(`[CONFIG] invalid TRUST_PROXY "${raw}": ${err.message}`);
+    process.exit(1);
+  }
+  console.log(`[CONFIG] trust proxy: ${value}`);
+};
+configureTrustProxy();
+
 const httpServer = http.createServer(app);
 const io = new Server(httpServer, {
   cors: { origin: process.env.CLIENT_URL, credentials: true },
