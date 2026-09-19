@@ -31,8 +31,13 @@ export const initSocket = (io) => {
 
       socket.userId = user._id.toString();
       next();
-    } catch {
-      next(new Error("Unauthorized"));
+    } catch (err) {
+      // Bad/expired token (TokenExpiredError extends JsonWebTokenError) is an
+      // auth failure — the client refreshes and reconnects on "Unauthorized".
+      // Anything else (e.g. the DB lookup failing) is ours, not the client's.
+      if (err instanceof jwt.JsonWebTokenError) return next(new Error("Unauthorized"));
+      console.error("[SOCKET] handshake failed:", err.message);
+      next(new Error("Service unavailable"));
     }
   });
 
