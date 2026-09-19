@@ -1,6 +1,7 @@
 import http from "http";
 import multer from "multer";
 import ApiError from "../utils/apiError.js";
+import { env } from "../config/env.js";
 
 // Only messages we wrote ever reach the client: ApiError messages, plus the
 // fixed messages below for errors we recognise. A third-party err.message is
@@ -106,12 +107,12 @@ const errorMiddleware = (err, req, res, next) => {
 
   // Unexpected: a bug or a dependency failure.
   console.error("[ERROR]", req.method, req.originalUrl, `user=${req.user?._id ?? "-"}`, err.stack ?? err);
+  // Fail closed: internal details only in explicit development mode.
   return res.status(500).json({
     success: false,
-    message:
-      process.env.NODE_ENV === "production"
-        ? "Internal server error."
-        : err.message || "Internal server error.",
+    message: env.isDevelopment
+      ? err.message || "Internal server error."
+      : "Internal server error.",
   });
 };
 

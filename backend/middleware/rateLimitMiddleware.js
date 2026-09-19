@@ -1,6 +1,6 @@
-import "dotenv/config";
 import { rateLimit, ipKeyGenerator } from "express-rate-limit";
-import jwt from "jsonwebtoken";
+import { env } from "../config/env.js";
+import { verifyRefreshToken } from "../utils/generateToken.js";
 
 // In-memory store (the library default): correct ONLY while CampusOS runs as a
 // single Node process. Under PM2 cluster mode or multiple backend instances each
@@ -9,18 +9,11 @@ import jwt from "jsonwebtoken";
 //
 // Keys are chosen for students who share one campus/NAT IP: login is keyed by
 // IP + account and refresh by user, so one person's failures can't lock out a
-// whole lab. Limits and windows are configurable via RATE_LIMIT_* env vars.
+// whole lab. Limits and windows are configurable via RATE_LIMIT_* env vars
+// (parsed in config/env.js).
 
 const MINUTE_MS = 60 * 1000;
-
-const envInt = (name, fallback) => {
-  const raw = process.env[name];
-  if (raw === undefined || raw === "") return fallback;
-  const n = Number(raw);
-  if (Number.isInteger(n) && n > 0) return n;
-  console.warn(`[CONFIG] ${name}="${raw}" is not a positive integer; using default ${fallback}`);
-  return fallback;
-};
+const limits = env.rateLimits;
 
 const shared = {
   standardHeaders: "draft-7",
@@ -32,8 +25,8 @@ const shared = {
 // account without charging classmates on the same network.
 export const loginLimiter = rateLimit({
   ...shared,
-  windowMs: envInt("RATE_LIMIT_LOGIN_WINDOW_MINUTES", 15) * MINUTE_MS,
-  limit: envInt("RATE_LIMIT_LOGIN_MAX", 10),
+  windowMs: limits.loginWindowMinutes * MINUTE_MS,
+  limit: limits.loginMax,
   skipSuccessfulRequests: true,
   keyGenerator: (req) => {
     const ip = ipKeyGenerator(req.ip);
@@ -46,21 +39,52 @@ export const loginLimiter = rateLimit({
 // Per IP, generous enough for a lab signing up together at semester start.
 export const signupLimiter = rateLimit({
   ...shared,
-  windowMs: envInt("RATE_LIMIT_SIGNUP_WINDOW_MINUTES", 60) * MINUTE_MS,
-  limit: envInt("RATE_LIMIT_SIGNUP_MAX", 100),
+  windowMs: limits.signupWindowMinutes * MINUTE_MS,
+  limit: limits.signupMax,
 });
 
-// Per user. A safety ceiling only: with the frontend's single-flight refresh,
-// normal use is ~1 refresh per access-token lifetime per tab.
+// Per session. A safety ceiling only: with the frontend's cross-tab refresh
+// lock, normal use is ~1 refresh per access-token lifetime per tab.
 export const refreshLimiter = rateLimit({
   ...shared,
-  windowMs: envInt("RATE_LIMIT_REFRESH_WINDOW_MINUTES", 15) * MINUTE_MS,
-  limit: envInt("RATE_LIMIT_REFRESH_MAX", 30),
+  windowMs: limits.refreshWindowMinutes * MINUTE_MS,
+  limit: limits.refreshMax,
   keyGenerator: (req) => {
-    // Unverified decode, used only to choose a bucket — the refresh handler
-    // still fully verifies the token. A forged id just gets its own bucket
-    // and fails jwt.verify before any DB query.
-    const userId = jwt.decode(req.cookies?.refreshToken ?? "")?.id;
-    return userId ? `user:${userId}` : `ip:${ipKeyGenerator(req.ip)}`;
+    // Keyed on the VERIFIED session id (one HMAC, no DB). An unverified decode
+    // would let anyone forge a victim's id and burn the victim's bucket. Not
+    // keyed on a hash of the raw token either: each token is single-use, so a
+    // per-token bucket would never cap a session, and garbage tokens would each
+    // get a fresh bucket. Missing/invalid tokens share the caller's IP bucket.
+    try {
+      const { sid } = verifyRefreshToken(req.cookies?.refreshToken ?? "");
+      if (typeof sid === "string" && sid) return `sid:${sid}`;
+    } catch {
+      // fall through to the IP bucket
+    }
+    return `ip:${ipKeyGenerator(req.ip)}`;
   },
+});
+
+// ─── authenticated write limits (mount AFTER authMiddleware) ──────────────────
+// Per user, not per IP, so a lab behind one NAT isn't throttled together.
+// Ceilings for abuse (comment floods, Cloudinary quota exhaustion), far above
+// normal use.
+const perUser = (req) => `user:${req.user._id}`;
+
+// New discussions, comments and replies combined.
+export const contentLimiter = rateLimit({
+  ...shared,
+  windowMs: 10 * MINUTE_MS,
+  limit: 30,
+  keyGenerator: perUser,
+  message: { success: false, message: "You're posting too fast. Please wait a few minutes." },
+});
+
+// POST /api/v1/upload
+export const uploadLimiter = rateLimit({
+  ...shared,
+  windowMs: 60 * MINUTE_MS,
+  limit: 20,
+  keyGenerator: perUser,
+  message: { success: false, message: "Upload limit reached. Please try again later." },
 });
