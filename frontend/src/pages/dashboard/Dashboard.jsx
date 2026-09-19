@@ -2,9 +2,9 @@ import { useState, useEffect } from "react";
 import useAuth from "../../hooks/useAuth";
 import { getDashboard } from "../../api/dashboard.api";
 
-import ImportantToday from "../../components/dashboard/ImportantToday";
 import TodaySchedule from "../../components/dashboard/TodaySchedule";
 import RelevantNotices from "../../components/dashboard/RelevantNotices";
+import DontMiss from "../../components/dashboard/DontMiss";
 import UpcomingDeadlines from "../../components/dashboard/UpcomingDeadlines";
 import EligibleDrives from "../../components/dashboard/EligibleDrives";
 import QuickAccess from "../../components/dashboard/QuickAccess";
@@ -18,8 +18,7 @@ const getGreeting = () => {
 };
 
 // One request, one loading state. The backend decides what is relevant to this
-// student and returns render-ready DTOs — this component only lays them out,
-// and deliberately does no filtering, sorting, date maths or eligibility logic.
+// student and returns render-ready DTOs — this component only lays them out.
 const Dashboard = () => {
   const { user } = useAuth();
 
@@ -51,51 +50,42 @@ const Dashboard = () => {
 
   const {
     profile = {},
-    actionRequired = [],
     schedule = [],
     notices = [],
+    dontMiss = [],
     deadlines = [],
     eligibleDrives = [],
   } = data || {};
 
   const classroomId = profile.classroomId;
+  const dateLine = new Date().toLocaleDateString("en-IN", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
 
   return (
-    <div className="max-w-6xl mx-auto space-y-4 pb-10">
+    <div className="max-w-6xl mx-auto space-y-3 pb-10">
+      <header className="py-1">
+        <h1 className="text-xl font-semibold text-gray-900 tracking-tight">
+          {getGreeting()}, {user?.firstName}
+        </h1>
+        <p className="text-sm text-gray-500 mt-0.5">
+          {dateLine}
+          {profile.classroomLabel && (
+            <span className="text-gray-400"> · {profile.classroomLabel}</span>
+          )}
+        </p>
+      </header>
+
       {error && (
-        <div className="px-4 py-3 bg-red-50 border border-red-100 rounded-xl text-sm text-red-600">
+        <div className="px-4 py-2.5 bg-red-50 border border-red-100 rounded-xl text-sm text-red-600">
           {error}
         </div>
       )}
 
-      {/* ── Greeting ── */}
-      <div className="bg-white border border-gray-100 rounded-2xl px-6 py-5">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
-              {getGreeting()}, {user?.firstName} 👋
-            </h1>
-            <p className="text-sm text-gray-400 mt-0.5">
-              {new Date().toLocaleDateString("en-IN", {
-                weekday: "long",
-                day: "numeric",
-                month: "long",
-                year: "numeric",
-              })}
-            </p>
-          </div>
-          <div className="w-10 h-10 rounded-xl bg-gray-900 flex items-center justify-center text-white text-sm font-bold flex-shrink-0 tracking-tight">
-            {user?.firstName?.[0]}
-            {user?.lastName?.[0]}
-          </div>
-        </div>
-      </div>
-
-      {/* ── Top billing: what needs noticing today, actionable or not ── */}
-      <ImportantToday items={actionRequired} />
-
-      {/* ── What's happening / what you missed ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-3 items-start">
         <div className="lg:col-span-3">
           <TodaySchedule schedule={schedule} classroomId={classroomId} />
         </div>
@@ -104,12 +94,12 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* ── What's coming ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <DontMiss items={dontMiss} />
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
         <UpcomingDeadlines deadlines={deadlines} classroomId={classroomId} />
         <EligibleDrives drives={eligibleDrives} profile={profile} />
       </div>
-
 
       <QuickAccess classroomId={classroomId} />
     </div>

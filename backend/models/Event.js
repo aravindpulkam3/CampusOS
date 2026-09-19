@@ -21,6 +21,10 @@ const eventSchema = new mongoose.Schema(
       type: Date,
       required: true,
     },
+    registrationDeadline: {
+      type: Date,
+      default: null,
+    },
     venue: {
       type: String,
       required: [true, "Venue is required"],

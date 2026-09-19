@@ -30,15 +30,20 @@ export const describeDue = (d) => {
   const tomorrow = new Date();
   tomorrow.setDate(now.getDate() + 1);
 
-  if (date < now && !isSameDay(date, now))
-    return { label: "Overdue", color: "text-gray-400", bg: "bg-gray-50" };
-  if (isSameDay(date, now))
-    return { label: "Today", color: "text-red-600", bg: "bg-red-50" };
+  if (isSameDay(date, now)) return { label: "Today", color: "text-red-600" };
   if (isSameDay(date, tomorrow))
-    return { label: "Tomorrow", color: "text-amber-600", bg: "bg-amber-50" };
+    return { label: "Tomorrow", color: "text-amber-600" };
 
   const days = Math.ceil((date - now) / 86400000);
-  if (days <= 7)
-    return { label: `${days}d`, color: "text-gray-600", bg: "bg-gray-50" };
-  return { label: formatDate(d), color: "text-gray-400", bg: "bg-gray-50" };
+  if (days <= 7) return { label: `${days}d`, color: "text-gray-500" };
+  return { label: formatDate(d), color: "text-gray-400" };
+};
+
+// "Closes in 6h" reads better than "Closes today" when the hour count is small.
+export const closesInLabel = (closesAt, urgency) => {
+  if (urgency === "tomorrow") return "Closes tomorrow";
+  const hrs = Math.floor((new Date(closesAt) - Date.now()) / 3600000);
+  if (hrs < 1) return "Closes within the hour";
+  if (hrs <= 12) return `Closes in ${hrs}h`;
+  return "Closes today";
 };

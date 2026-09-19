@@ -18,21 +18,13 @@ import {
 } from "./eligibility.service.js";
 const SEARCH_CACHE_TTL = 60 * 10; // 10m
 
-// How far ahead Action Required looks for drives / deadlines / rounds. Events
-// are deliberately today-only (see buildActionRequired).
-const ACTION_WINDOW_DAYS = 2; // today + tomorrow
+// Don't Miss "closing soon" window: today + tomorrow.
+const DONT_MISS_WINDOW_DAYS = 2;
 
-// An urgent notice with an explicit expiresAt is honoured for its full lifetime.
-// This fallback applies ONLY to urgent notices with no expiry at all, which would
-// otherwise pin themselves to Action Required forever (there is no TTL index).
-const URGENT_NOTICE_NO_EXPIRY_MAX_AGE_DAYS = 30;
-
-// Defensive bound against a runaway query, NOT a product limit — Action Required
-// must never silently drop a real item. No realistic student reaches this.
-const URGENT_NOTICE_SAFETY_CAP = 50;
-
-const NOTICE_FEED_FETCH_LIMIT = 12;
-const NOTICE_FEED_DISPLAY_LIMIT = 6;
+// Pinned / urgent / high notices stay until they expire; routine (normal/low)
+// ones drop off after this, so the dashboard feed stays "important only".
+const NOTICE_ROUTINE_MAX_AGE_DAYS = 14;
+const NOTICE_FEED_LIMIT = 5;
 const DEADLINE_DISPLAY_LIMIT = 5;
 const ELIGIBLE_DRIVE_DISPLAY_LIMIT = 5;
 
@@ -317,117 +309,50 @@ const toNoticeDTO = (notice) => {
   };
 };
 
-// Action Required is the highest-priority section, so it is deliberately strict
-// about WHAT qualifies — and deliberately complete about HOW MANY. Nothing is
-// truncated here; folding past the 5th item is the frontend's job.
-const buildActionRequired = ({
-  eligibleUnappliedDrives,
-  actionDeadlines,
-  roundItems,
-  eventItems,
-  urgentNotices,
-  now,
-  startOfToday,
-  endOfToday,
-  actionWindowEnd,
-}) => {
-  const items = [];
-  const severityFor = (when) => (isSameDay(when, now) ? "critical" : "warning");
-  const whenLabel = (when) => (isSameDay(when, now) ? "today" : "tomorrow");
+// Opportunities the student has NOT acted on whose window closes today or
+// tomorrow. Built from the FULL eligible-unapplied list (never the display
+// slice) and not truncated — folding is the frontend's job.
+const buildDontMiss = (eligibleUnappliedDrives, unregisteredEvents, now) => {
+  const windowEnd = endOfDay(addDays(now, DONT_MISS_WINDOW_DAYS - 1));
 
-  for (const drive of eligibleUnappliedDrives) {
-    const closesAt = new Date(drive.registrationDeadline);
-    if (closesAt < now || closesAt > actionWindowEnd) continue;
-
-    items.push({
-      id: `drive_deadline-${drive._id}`,
-      kind: "drive_deadline",
-      severity: severityFor(closesAt),
-      title: `${drive.companyName} — ${drive.role} applications close ${whenLabel(closesAt)}`,
-      subtitle: drive.ctc ? `CTC ${drive.ctc}` : drive.jobType,
-      dueAt: closesAt,
-      url: `/career/drives/${drive._id}`,
-      actionLabel: "Apply",
+  const driveItems = eligibleUnappliedDrives
+    .filter((d) => {
+      const closesAt = new Date(d.registrationDeadline);
+      return closesAt >= now && closesAt <= windowEnd;
+    })
+    .map((d) => {
+      const closesAt = new Date(d.registrationDeadline);
+      return {
+        id: `drive-${d._id}`,
+        type: "drive",
+        title: [d.companyName, d.role].filter(Boolean).join(" — "),
+        subtitle: d.ctc ? `CTC ${d.ctc}` : d.jobType || null,
+        closesAt,
+        urgency: isSameDay(closesAt, now) ? "today" : "tomorrow",
+        actionLabel: "Apply",
+        url: `/career/drives/${d._id}`,
+      };
     });
-  }
 
-  for (const deadline of actionDeadlines) {
-    const dueAt = new Date(deadline.dueDate);
-    items.push({
-      id: `deadline-${deadline._id}`,
-      kind: "deadline",
-      severity: severityFor(dueAt),
-      title: `${deadline.title} due ${whenLabel(dueAt)}`,
-      subtitle: deadline.subjectName || deadline.type,
-      dueAt,
-      url: deadline.url,
-      actionLabel: "View",
-    });
-  }
+  // Events from followed clubs whose registration deadline is today and the
+  // student has not yet registered. Urgency is always "today" because we only
+  // query the current calendar day.
+  const eventItems = unregisteredEvents.map((e) => ({
+    id: `event-${e._id}`,
+    type: "event",
+    title: e.eventName,
+    subtitle: e.organizerClub?.clubName || null,
+    closesAt: new Date(e.registrationDeadline),
+    urgency: "today",
+    actionLabel: "Register",
+    url: `/community/events/${e._id}`,
+  }));
 
-  for (const round of roundItems) {
-    if (round.startAt < startOfToday || round.startAt > actionWindowEnd) continue;
-
-    items.push({
-      id: `action-${round.id}`,
-      kind: "round",
-      severity: severityFor(round.startAt),
-      title: `${round.title} ${whenLabel(round.startAt)}`,
-      subtitle: round.subtitle,
-      dueAt: round.startAt,
-      url: round.url,
-      actionLabel: "View drive",
-    });
-  }
-
-  // Events are TODAY-only here, on purpose. A registered event tomorrow is
-  // information, not an action item — letting "anything upcoming" in is what
-  // turns an action list back into a digest.
-  for (const event of eventItems) {
-    if (event.startAt > endOfToday || event.endAt < startOfToday) continue;
-
-    items.push({
-      id: `action-${event.id}`,
-      kind: "event",
-      severity: "critical",
-      title: event.isOngoing
-        ? `${event.title} is happening now`
-        : `${event.title} starts today`,
-      subtitle: event.location,
-      dueAt: event.isOngoing ? startOfToday : event.startAt,
-      url: event.url,
-      actionLabel: "View event",
-    });
-  }
-
-  for (const notice of urgentNotices) {
-    items.push({
-      id: `action-notice-${notice.id}`,
-      kind: "notice",
-      severity: "critical",
-      title: notice.title,
-      subtitle: `${notice.sourceName} · urgent`,
-      dueAt: notice.createdAt,
-      url: notice.url,
-      actionLabel: notice.url ? "View" : null,
-    });
-  }
-
-  const severityRank = { critical: 0, warning: 1 };
-  return items.sort(
-    (a, b) =>
-      severityRank[a.severity] - severityRank[b.severity] ||
-      new Date(a.dueAt) - new Date(b.dueAt),
-  );
+  return [...driveItems, ...eventItems].sort((a, b) => a.closesAt - b.closesAt);
 };
 
-// Personalized notices from five sources, plus the urgent subset for Action
-// Required — as TWO independent outputs of one $match.
-//
-// They cannot share a limit. Ranking pinned-first then slicing would let 13
-// pinned "normal" notices push a single unpinned "urgent" one out of the feed,
-// and if Action Required were derived from that slice the urgent notice would
-// vanish entirely — the exact opposite of what "urgent" should guarantee.
+// Personalized notices from five sources, ranked and capped in Mongo so the
+// $limit lands after ordering.
 const fetchNotices = async ({
   classroomId,
   currentSemesterNumber,
@@ -461,15 +386,22 @@ const fetchNotices = async ({
     sources.push({ targetType: "drive", targetId: { $in: noticeDriveIds } });
   }
 
+  const routineCutoff = addDays(now, -NOTICE_ROUTINE_MAX_AGE_DAYS);
+
   const match = {
     isArchived: false,
     $and: [
       { $or: [{ expiresAt: null }, { expiresAt: { $gt: now } }] },
       { $or: sources },
+      {
+        $or: [
+          { isPinned: true },
+          { priority: { $in: ["urgent", "high"] } },
+          { createdAt: { $gte: routineCutoff } },
+        ],
+      },
     ],
   };
-
-  const urgentCutoff = addDays(now, -URGENT_NOTICE_NO_EXPIRY_MAX_AGE_DAYS);
 
   const priorityWeight = {
     $switch: {
@@ -482,53 +414,24 @@ const fetchNotices = async ({
     },
   };
 
-  const [result] = await Notice.aggregate([
+  // pinned → urgent → high → normal → low → newest
+  const notices = await Notice.aggregate([
     { $match: match },
-    {
-      $facet: {
-        // pinned → urgent → high → normal → low → newest. Ranked in Mongo, so
-        // $limit lands AFTER ordering and no JS comparator can undo pinned-first.
-        feed: [
-          { $addFields: { priorityWeight } },
-          { $sort: { isPinned: -1, priorityWeight: -1, createdAt: -1 } },
-          { $limit: NOTICE_FEED_FETCH_LIMIT },
-        ],
-        // Urgent only, ranked on its own terms and NOT truncated as product
-        // behaviour — the cap is runaway-query protection.
-        urgent: [
-          {
-            $match: {
-              priority: "urgent",
-              // An explicit expiry is honoured in full, however far out. The age
-              // fallback applies only to urgent notices with no expiry at all.
-              $or: [
-                { expiresAt: { $ne: null } },
-                { createdAt: { $gte: urgentCutoff } },
-              ],
-            },
-          },
-          { $sort: { isPinned: -1, createdAt: -1 } },
-          { $limit: URGENT_NOTICE_SAFETY_CAP },
-        ],
-      },
-    },
+    { $addFields: { priorityWeight } },
+    { $sort: { isPinned: -1, priorityWeight: -1, createdAt: -1 } },
+    { $limit: NOTICE_FEED_LIMIT },
   ]);
 
-  const feed = result?.feed ?? [];
-  const urgent = result?.urgent ?? [];
-
-  // Resolve source names with at most 3 grouped populates (Club/Event/Drive) —
-  // never one per notice.
-  const all = [...feed, ...urgent];
-  const byType = (types) => all.filter((n) => types.includes(n.targetType));
+  // At most 3 grouped populates (Club/Event/Drive) — never one per notice.
+  const byType = (type) => notices.filter((n) => n.targetType === type);
 
   await Promise.all([
-    populateTargets(byType(["clubs"]), "Club", "clubName logo"),
-    populateTargets(byType(["events"]), "Event", "eventName"),
-    populateTargets(byType(["drive"]), "Drive", "companyName role"),
+    populateTargets(byType("clubs"), "Club", "clubName logo"),
+    populateTargets(byType("events"), "Event", "eventName"),
+    populateTargets(byType("drive"), "Drive", "companyName role"),
   ]);
 
-  return { feed, urgent };
+  return notices;
 };
 
 const populateTargets = (notices, model, select) =>
@@ -541,7 +444,6 @@ export const buildStudentDashboard = async (user) => {
   const now = new Date();
   const startOfToday = startOfDay(now);
   const endOfToday = endOfDay(now);
-  const actionWindowEnd = endOfDay(addDays(now, ACTION_WINDOW_DAYS - 1));
 
   // ── WAVE 1 ── everything else depends on these id sets.
   // req.user is already a fresh DB document (authMiddleware re-reads the User on
@@ -575,24 +477,22 @@ export const buildStudentDashboard = async (user) => {
   const placementProfile = getPlacementProfile(user);
 
   // ── WAVE 2 ── independent of each other, dependent on wave 1.
-  const [deadlineRows, registeredEvents, activeDrives, eligibleRows] =
+  const [deadlineRows, registeredEvents, activeDrives, eligibleRows, followedClubEvents] =
     await Promise.all([
-      // No limit here: the display slice happens below, and Action Required must
-      // see EVERY deadline in its window (a limit(5) would silently drop the 6th
-      // assignment due today).
       classroom && currentSemesterNumber
         ? Deadline.find({
             classroom: classroom._id,
             semesterNumber: currentSemesterNumber, // older semesters excluded
-            dueDate: { $gte: startOfToday },
+            dueDate: { $gte: now },
           })
+            .select("title type subject dueDate")
             .sort({ dueDate: 1 })
+            .limit(DEADLINE_DISPLAY_LIMIT)
             .lean()
         : [],
 
-      // Plain overlaps-today test — events are today-only in both consumers.
-      // Admits: starts today, runs entirely today, started earlier and still
-      // running, multi-day spanning today. Excludes tomorrow-only.
+      // Overlaps-today test: starts today, started earlier and still running,
+      // or multi-day spanning today. Excludes tomorrow-only.
       registeredEventIds.length
         ? Event.find({
             _id: { $in: registeredEventIds },
@@ -609,16 +509,16 @@ export const buildStudentDashboard = async (user) => {
       // does not cascade, so a cancelled drive's applicants stay "active".
       activeAppliedDriveIds.length
         ? Drive.find({ _id: { $in: activeAppliedDriveIds }, status: "active" })
-            .select("companyName companyLogo role rounds currentRoundId")
+            .select("companyName role rounds currentRoundId")
             .lean()
         : [],
 
-      // One query serves two consumers: the section's list (minus applied) and
-      // the broader notice-targeting set (including applied), so the $nin is
-      // applied in JS rather than Mongo.
+      // One query serves two consumers: the eligible-unapplied list (Eligible
+      // Drives + Don't Miss) and the broader notice-targeting set (including
+      // applied), so the applied exclusion is done in JS rather than $nin.
       placementProfile.canEvaluateEligibility
         ? Drive.find({
-            status: "active", // lifecycle gate the old query lacked entirely
+            status: "active",
             registrationDeadline: { $gte: now },
             ...buildEligibilityFilter(user),
           })
@@ -628,18 +528,31 @@ export const buildStudentDashboard = async (user) => {
             .sort({ registrationDeadline: 1 })
             .lean()
         : [],
-    ]);
 
-  const actionDeadlines = deadlineRows
-    .filter((d) => new Date(d.dueDate) >= now && new Date(d.dueDate) <= actionWindowEnd)
-    .map((d) => ({
-      ...d,
-      subjectName: subjectNameById.get(String(d.subject)) || null,
-      url: `/academics/classroom/${classroom?._id}`,
-    }));
+      // Events from clubs the user follows whose registration deadline closes
+      // today and haven't started yet. The user-not-registered filter is done
+      // in JS below (registeredEventIds is already available).
+      followedClubIds.length
+        ? Event.find({
+            organizerClub: { $in: followedClubIds },
+            status: { $ne: "Cancelled" },
+            registrationDeadline: { $gte: startOfToday, $lte: endOfToday },
+            startDateTime: { $gt: now }, // don't prompt registration for events already underway
+          })
+            .select("eventName organizerClub registrationDeadline")
+            .populate("organizerClub", "clubName")
+            .lean()
+        : [],
+    ]);
 
   const eligibleUnappliedDrives = eligibleRows.filter(
     (d) => !appliedDriveIdSet.has(String(d._id)),
+  );
+
+  // Exclude events the user is already registered for.
+  const registeredEventIdSet = new Set(registeredEventIds.map(String));
+  const unregisteredFollowedClubEvents = followedClubEvents.filter(
+    (e) => !registeredEventIdSet.has(String(e._id)),
   );
   const eligibleDriveIds = eligibleRows.map((d) => d._id);
 
@@ -650,7 +563,7 @@ export const buildStudentDashboard = async (user) => {
     ).values(),
   ];
 
-  const { feed: noticeFeed, urgent: urgentNoticeRows } = await fetchNotices({
+  const noticeRows = await fetchNotices({
     classroomId: classroom?._id,
     currentSemesterNumber,
     followedClubIds,
@@ -659,54 +572,17 @@ export const buildStudentDashboard = async (user) => {
     now,
   });
 
-  const urgentNotices = urgentNoticeRows.map(toNoticeDTO);
-  const promotedIds = new Set(urgentNotices.map((n) => String(n.id)));
-
-  const notices = noticeFeed
-    .filter((n) => !promotedIds.has(String(n._id))) // never show the same card twice
-    .slice(0, NOTICE_FEED_DISPLAY_LIMIT)
-    .map(toNoticeDTO);
-
   // ── WAVE 4 ── in-memory assembly only.
-  const eventItems = buildScheduleFromEvents(
-    registeredEvents,
-    startOfToday,
-    endOfToday,
-  );
-  const roundItems = collectRelevantRounds(activeDrives);
-
-  const deadlineItems = deadlineRows
-    .filter((d) => {
-      const dueAt = new Date(d.dueDate);
-      return dueAt >= startOfToday && dueAt <= endOfToday;
-    })
-    .map((d) => ({
-      id: `deadline-${d._id}`,
-      type: "deadline",
-      title: d.title,
-      subtitle: subjectNameById.get(String(d.subject)) || d.type,
-      location: null,
-      startAt: new Date(d.dueDate),
-      endAt: null,
-      isOngoing: false,
-      hasTime: true,
-      url: `/academics/classroom/${classroom?._id}`,
-    }));
-
-  // The schedule renders whenever ANY source has an item. No classroom means no
-  // class periods — it must never mean "no schedule", since a student without a
-  // classroom can still have a registered event or an OA today.
+  // No classroom means no class periods — never "no schedule", since a student
+  // without a classroom can still have a registered event or an OA today.
   const schedule = [
     ...buildScheduleFromPeriods(classroom, subjectNameById, startOfToday),
-    ...eventItems,
-    ...roundItems.filter(
+    ...buildScheduleFromEvents(registeredEvents, startOfToday, endOfToday),
+    ...collectRelevantRounds(activeDrives).filter(
       (r) => r.startAt >= startOfToday && r.startAt <= endOfToday,
     ),
-    ...deadlineItems,
   ].sort((a, b) => {
-    if (a.hasTime !== b.hasTime) {
-      return a.hasTime ? -1 : 1;
-    }
+    if (a.hasTime !== b.hasTime) return a.hasTime ? -1 : 1;
 
     // Clamp ongoing items to the start of today so an event that began
     // yesterday sorts to the top of today rather than by yesterday's timestamp.
@@ -715,17 +591,7 @@ export const buildStudentDashboard = async (user) => {
     return aKey - bKey;
   });
 
-  const actionRequired = buildActionRequired({
-    eligibleUnappliedDrives,
-    actionDeadlines,
-    roundItems,
-    eventItems,
-    urgentNotices,
-    now,
-    startOfToday,
-    endOfToday,
-    actionWindowEnd,
-  });
+  const classroomUrl = classroom ? `/academics/classroom/${classroom._id}` : null;
 
   return {
     generatedAt: now,
@@ -739,17 +605,17 @@ export const buildStudentDashboard = async (user) => {
       ...placementProfile,
     },
 
-    actionRequired,
     schedule,
-    notices,
+    notices: noticeRows.map(toNoticeDTO),
+    dontMiss: buildDontMiss(eligibleUnappliedDrives, unregisteredFollowedClubEvents, now),
 
-    deadlines: deadlineRows.slice(0, DEADLINE_DISPLAY_LIMIT).map((d) => ({
+    deadlines: deadlineRows.map((d) => ({
       id: d._id,
       title: d.title,
       type: d.type,
       subject: subjectNameById.get(String(d.subject)) || null,
       dueDate: d.dueDate,
-      url: `/academics/classroom/${classroom?._id}`,
+      url: classroomUrl,
     })),
 
     eligibleDrives: eligibleUnappliedDrives

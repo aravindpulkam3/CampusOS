@@ -7,12 +7,11 @@ import api from "./axios.js";
 //   generatedAt,
 //   profile:        { classroomId, classroomLabel, currentSemesterNumber,
 //                     canEvaluateEligibility, placementProfileComplete, missingFields },
-//   actionRequired: [{ id, kind, severity, title, subtitle, dueAt, url, actionLabel }],
-//   schedule:       [{ id, type, title, subtitle, startAt, endAt, location, isOngoing, url }],
-//   notices:        [{ id, title, message, sourceType, sourceName, priority, createdAt, url }],
+//   schedule:       [{ id, type, title, subtitle, location, startAt, endAt, isOngoing, hasTime, url }],
+//   notices:        [{ id, title, message, sourceType, sourceName, priority, isPinned, createdAt, url }],
+//   dontMiss:       [{ id, type, title, subtitle, closesAt, urgency, actionLabel, url }],
 //   deadlines:      [{ id, title, type, subject, dueDate, url }],
 //   eligibleDrives: [{ id, companyName, role, registrationDeadline, url, ... }],
-//   discussions:    [{ id, title, category, commentCount, upvoteCount, url }],
 // }
 export const getDashboard = () => api.get("/dashboard");
 export const globalSearchApi = (q, signal) =>

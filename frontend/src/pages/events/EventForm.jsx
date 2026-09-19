@@ -96,6 +96,7 @@ const EventForm = ({ mode = "create" }) => {
     startTime: "",
     endDate: "",
     endTime: "",
+    registrationDeadline: "",
     venue: "",
     category: "",
     tags: [],
@@ -147,6 +148,9 @@ const EventForm = ({ mode = "create" }) => {
       startTime: start.toTimeString().split(" ")[0].slice(0, 5),
       endDate: end.toISOString().split("T")[0],
       endTime: end.toTimeString().split(" ")[0].slice(0, 5),
+      registrationDeadline: eventData.registrationDeadline
+        ? new Date(eventData.registrationDeadline).toISOString().split("T")[0]
+        : "",
       venue: eventData.venue || "",
       category: eventData.category || "",
       tags: eventData.tags || [],
@@ -230,6 +234,9 @@ const EventForm = ({ mode = "create" }) => {
       description: form.description.trim(),
       startDateTime,
       endDateTime,
+      registrationDeadline: form.registrationDeadline
+        ? new Date(form.registrationDeadline).toISOString()
+        : null,
       venue: form.venue.trim(),
       category: form.category,
       tags: form.tags,
@@ -385,6 +392,19 @@ const EventForm = ({ mode = "create" }) => {
               onChange={set("venue")}
             />
             <FieldError message={errors.venue} />
+          </div>
+
+          <div>
+            <Label>Registration Deadline</Label>
+            <p className="text-xs text-gray-400 mb-1.5">
+              Optional — students with this deadline closing today will see this event in their dashboard.
+            </p>
+            <Input
+              type="date"
+              value={form.registrationDeadline}
+              onChange={set("registrationDeadline")}
+              min={new Date().toISOString().split("T")[0]}
+            />
           </div>
         </Section>
 

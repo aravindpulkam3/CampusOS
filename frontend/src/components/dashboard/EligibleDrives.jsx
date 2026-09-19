@@ -1,15 +1,14 @@
 import { Link } from "react-router-dom";
-import { Briefcase, UserCog } from "lucide-react";
+import { Briefcase } from "lucide-react";
 import { Section, Empty } from "./Section";
+import Row, { RowList } from "./Row";
 import { describeDue } from "./format";
 
-// Three distinct states, keyed on the TWO independent profile flags:
+// Keyed on the TWO independent profile flags:
 //   canEvaluateEligibility false → we cannot tell; claim nothing
 //   evaluable but incomplete     → show drives, note the imprecision
-//   complete                     → show drives plainly
 const EligibleDrives = ({ drives = [], profile = {} }) => {
-  const { canEvaluateEligibility = true, placementProfileComplete = true } =
-    profile;
+  const { canEvaluateEligibility = true, placementProfileComplete = true } = profile;
 
   return (
     <Section
@@ -17,79 +16,62 @@ const EligibleDrives = ({ drives = [], profile = {} }) => {
       icon={Briefcase}
       linkTo="/career/drives"
       linkLabel="All drives"
+      footer={
+        canEvaluateEligibility &&
+        !placementProfileComplete && (
+          <Link
+            to="/profile"
+            className="text-[11px] text-gray-400 hover:text-gray-700 transition-colors"
+          >
+            Add backlog information for more accurate eligibility →
+          </Link>
+        )
+      }
     >
       {!canEvaluateEligibility ? (
-        // Crucially NOT "no drives available" — we simply can't work it out yet,
-        // and saying otherwise would wrongly imply the student doesn't qualify.
-        <Link
-          to="/profile"
-          className="flex items-center gap-3 p-3 bg-amber-50/60 border border-amber-200 rounded-xl hover:border-amber-300 transition-colors"
-        >
-          <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0">
-            <UserCog size={14} className="text-amber-700" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs font-semibold text-gray-900">
-              Complete your placement profile
-            </p>
-            <p className="text-xs text-gray-500 mt-0.5">
-              Add your CGPA to see the drives you're eligible for.
-            </p>
-          </div>
-        </Link>
+        <RowList>
+          <li>
+            <Row url="/profile">
+              <p className="flex-1 text-sm text-gray-600">
+                Complete your placement profile to see eligible drives
+              </p>
+            </Row>
+          </li>
+        </RowList>
       ) : drives.length > 0 ? (
-        <>
-          <div className="space-y-2">
-            {drives.map((drive) => {
-              const due = describeDue(drive.registrationDeadline);
-              return (
-                <Link
-                  key={drive.id}
-                  to={drive.url}
-                  className="flex items-center gap-3 p-3 bg-gray-50/80 border border-gray-100 rounded-xl hover:border-gray-300 hover:bg-white transition-all group"
+        <RowList>
+          {drives.map((drive) => {
+            const due = describeDue(drive.registrationDeadline);
+            return (
+              <li key={drive.id}>
+                <Row
+                  url={drive.url}
+                  trailing={
+                    due && (
+                      <span className={`text-xs font-semibold flex-shrink-0 ${due.color}`}>
+                        {due.label}
+                      </span>
+                    )
+                  }
                 >
-                  <div className="w-9 h-9 rounded-lg bg-white border border-gray-100 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                  <span className="w-6 h-6 rounded-md border border-gray-100 bg-gray-50 flex items-center justify-center flex-shrink-0 overflow-hidden">
                     {drive.companyLogo ? (
-                      <img
-                        src={drive.companyLogo}
-                        alt=""
-                        className="w-full h-full object-contain p-1"
-                      />
+                      <img src={drive.companyLogo} alt="" className="w-full h-full object-contain p-0.5" />
                     ) : (
-                      <span className="text-xs font-bold text-gray-500">
+                      <span className="text-[9px] font-bold text-gray-500">
                         {drive.companyName?.slice(0, 2).toUpperCase()}
                       </span>
                     )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-gray-900 truncate group-hover:text-gray-700 transition-colors">
-                      {drive.companyName}
-                    </p>
-                    <p className="text-xs text-gray-400 truncate">
-                      {drive.role}
-                    </p>
-                  </div>
-                  {due && (
-                    <span
-                      className={`text-xs font-semibold flex-shrink-0 ${due.color}`}
-                    >
-                      {due.label === "Today" ? "Closes today" : due.label}
-                    </span>
-                  )}
-                </Link>
-              );
-            })}
-          </div>
-
-          {!placementProfileComplete && (
-            <Link
-              to="/profile"
-              className="block mt-3 text-xs text-gray-400 hover:text-gray-700 transition-colors"
-            >
-              Add backlog information for more accurate eligibility →
-            </Link>
-          )}
-        </>
+                  </span>
+                  <p className="flex-1 min-w-0 text-sm text-gray-900 truncate">
+                    <span className="font-medium">{drive.companyName}</span>
+                    {drive.role && <span className="text-gray-500"> — {drive.role}</span>}
+                  </p>
+                </Row>
+              </li>
+            );
+          })}
+        </RowList>
       ) : (
         <Empty message="No eligible drives currently accepting applications." />
       )}

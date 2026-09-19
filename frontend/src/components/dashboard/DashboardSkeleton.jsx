@@ -1,35 +1,28 @@
-// Mirrors the real hierarchy so the page doesn't reflow on load.
+// Mirrors the real layout so the page doesn't reflow on load.
 const Card = ({ className = "" }) => (
-  <div className={`bg-white border border-gray-100 rounded-2xl ${className}`} />
+  <div className={`bg-white border border-gray-200/70 rounded-xl ${className}`} />
 );
 
 const DashboardSkeleton = () => (
-  <div className="max-w-6xl mx-auto space-y-4 pb-10 animate-pulse">
-    {/* Greeting */}
-    <div className="bg-white border border-gray-100 rounded-2xl px-6 py-5">
-      <div className="w-52 h-7 bg-gray-100 rounded-lg mb-2" />
-      <div className="w-40 h-4 bg-gray-100 rounded-lg" />
+  <div className="max-w-6xl mx-auto space-y-3 pb-10 animate-pulse" aria-busy="true">
+    <div className="py-1">
+      <div className="w-56 h-6 bg-gray-200/70 rounded-md mb-2" />
+      <div className="w-44 h-3.5 bg-gray-100 rounded-md" />
     </div>
 
-    {/* Action Required */}
-    <Card className="h-28" />
-
-    {/* Schedule + Notices */}
-    <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-      <Card className="lg:col-span-3 h-64" />
-      <Card className="lg:col-span-2 h-64" />
+    <div className="grid grid-cols-1 lg:grid-cols-5 gap-3">
+      <Card className="lg:col-span-3 h-56" />
+      <Card className="lg:col-span-2 h-56" />
     </div>
 
-    {/* Deadlines + Eligible Drives */}
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      <Card className="h-52" />
-      <Card className="h-52" />
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+      <Card className="h-44" />
+      <Card className="h-44" />
     </div>
 
-    {/* Quick access */}
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+    <div className="grid grid-cols-2 sm:flex gap-2">
       {Array.from({ length: 4 }).map((_, i) => (
-        <Card key={i} className="h-12" />
+        <Card key={i} className="h-9 sm:w-36" />
       ))}
     </div>
   </div>

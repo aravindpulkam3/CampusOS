@@ -54,7 +54,6 @@ import useAuth from "./hooks/useAuth.js";
 import EditClub from "./pages/clubs/EditClub.jsx";
 
 const adminTabs = [
-  { label: "Clubs", path: "/admin", end: true },
   { label: "Drives", path: "/admin/drives", end: false },
   { label: "Moderation", path: "/admin/moderation", end: false },
   { label: "Notices", path: "/admin/notices", end: false },
