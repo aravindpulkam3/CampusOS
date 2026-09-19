@@ -8,6 +8,7 @@ import ProtectedRoute from "./components/common/ProtectedRoute"; // 1. IMPORT YO
 // Auth
 import Login from "./pages/auth/Login";
 import Signup from "./pages/auth/Signup";
+import VerifyEmail from "./pages/auth/VerifyEmail.jsx";
 
 // Dashboard
 import Dashboard from "./pages/dashboard/Dashboard";
@@ -44,6 +45,7 @@ import ManageDrives from "./pages/admin/ManageDrives";
 import ModerationQueue from "./pages/admin/ModerationQueue";
 import ClassroomManagement from "./pages/admin/ClassroomManagement.jsx";
 import CurriculumManagement from "./pages/admin/CurriculumManagement.jsx";
+import RosterManagement from "./pages/admin/RosterManagement.jsx";
 
 // Profile
 import Profile from "./pages/profile/Profile";
@@ -59,6 +61,7 @@ const adminTabs = [
   { label: "Notices", path: "/admin/notices", end: false },
   { label: "Classrooms", path: "/admin/classrooms", end: false },
   { label: "Curricula", path: "/admin/curricula", end: false },
+  { label: "Roster", path: "/admin/roster", end: false },
 ];
 
 function App() {
@@ -78,6 +81,7 @@ function App() {
         {/* Public — no layout */}
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
+        <Route path="/verify-email" element={<VerifyEmail />} />
 
         {/* 3. WRAP THE MASTER LAYOUT ROUTE IN PROTECTEDROUTE */}
         <Route
@@ -160,6 +164,7 @@ function App() {
             <Route path="notices" element={<ManageNotices />} />
             <Route path="classrooms" element={<ClassroomManagement />} />
             <Route path="curricula" element={<CurriculumManagement />} />
+            <Route path="roster" element={<RosterManagement />} />
           </Route>
           
           <Route path="/admin/notices/create" element={

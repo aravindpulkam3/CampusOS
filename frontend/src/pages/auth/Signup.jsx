@@ -1,119 +1,32 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { signupApi } from "../../api/auth.api.js";
-import { BRANCHES } from "../../constants/branches.js";
 
-const YEARS = [1, 2, 3, 4];
-const SECTIONS = ["A", "B"];
-
-const CURRENT_YEAR = new Date().getFullYear();
-// A student's admission year — collected explicitly (not derived from roll
-// number, which has no enforced format) since it anchors them to a stable
-// Classroom for their whole program, unlike `year`, which changes yearly.
-const BATCH_YEARS = Array.from({ length: 6 }, (_, i) => CURRENT_YEAR - i);
-
-const INITIAL_FORM = {
-  firstName: "",
-  lastName: "",
-  email: "",
-  password: "",
-  confirmPassword: "",
-  branch: "",
-  batch: "",
-  year: "",
-  section: "",
-  rollNumber: "",
-  cgpa: "",
-};
-
-
-const Field = ({ name, label, type = "text", placeholder, value, onChange, error, children }) => (
-  <div>
-    <label className="block text-xs font-medium text-gray-700 mb-1.5">{label}</label>
-    {children || (
-      <input
-        type={type}
-        name={name}
-        value={value}
-        onChange={onChange}
-        placeholder={placeholder}
-        className={`w-full px-3.5 py-2.5 text-sm border rounded-lg outline-none focus:ring-2 transition-all placeholder:text-gray-300 ${
-          error
-            ? "border-red-300 focus:border-red-400 focus:ring-red-100"
-            : "border-gray-200 focus:border-gray-900 focus:ring-gray-900/5"
-        }`}
-      />
-    )}
-    {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
-  </div>
-);
-
-const selectClass = (fieldError) =>
-  `w-full px-3.5 py-2.5 text-sm border rounded-lg outline-none focus:ring-2 transition-all bg-white ${
-    fieldError
-      ? "border-red-300 focus:border-red-400 focus:ring-red-100"
-      : "border-gray-200 focus:border-gray-900 focus:ring-gray-900/5"
-  }`;
-
+// "Claim your account". Student accounts come from the college roster: the
+// student only proves they own their roster email, and roll number, cohort and
+// academic details are filled in from the roster. The server answers every
+// address with the same message, so this page never learns (or reveals)
+// whether an address is on the roster.
 export default function Signup() {
-  const navigate = useNavigate();
-  const [form, setForm] = useState(INITIAL_FORM);
+  const [email, setEmail] = useState("");
   const [error, setError] = useState("");
-  const [fieldErrors, setFieldErrors] = useState({});
+  const [sentMessage, setSentMessage] = useState("");
   const [loading, setLoading] = useState(false);
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
-    setFieldErrors((prev) => ({ ...prev, [name]: "" }));
-    setError("");
-  };
-
-  const validate = () => {
-    const errors = {};
-    if (!form.firstName.trim()) errors.firstName = "Required";
-    if (!form.lastName.trim()) errors.lastName = "Required";
-    if (!form.email.trim()) errors.email = "Required";
-    if (!form.password) errors.password = "Required";
-    if (form.password.length < 8) errors.password = "Minimum 8 characters";
-    if (form.password !== form.confirmPassword)
-      errors.confirmPassword = "Passwords do not match";
-    if (!form.branch) errors.branch = "Required";
-    if (!form.batch) errors.batch = "Required";
-    if (!form.year) errors.year = "Required";
-    if (!form.section) errors.section = "Required";
-    if (!form.rollNumber.trim()) errors.rollNumber = "Required";
-    if (form.cgpa && (isNaN(form.cgpa) || form.cgpa < 0 || form.cgpa > 10))
-      errors.cgpa = "Enter a value between 0 and 10";
-    return errors;
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const errors = validate();
-    if (Object.keys(errors).length > 0) {
-      setFieldErrors(errors);
+    if (!email.trim()) {
+      setError("Enter your college email address.");
       return;
     }
 
     setLoading(true);
     setError("");
-
-    const { confirmPassword, ...payload } = form;
-    if (!payload.cgpa) delete payload.cgpa;
-
     try {
-      await signupApi({
-        ...payload,
-        year: Number(payload.year),
-        batch: Number(payload.batch),
-        // null, not 0 — a blank CGPA means "not provided yet", and storing 0
-        // here is what made drive eligibility silently unfilterable.
-        cgpa: payload.cgpa ? Number(payload.cgpa) : null,
-      });
-      navigate("/login", { state: { registered: true } });
+      const res = await signupApi({ email: email.trim() });
+      setSentMessage(res.data.message);
     } catch (err) {
-      setError(err.response?.data?.message || "Signup failed. Please try again.");
+      setError(err.response?.data?.message || "Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -132,23 +45,26 @@ export default function Signup() {
             <span className="font-semibold">campus network.</span>
           </h1>
           <p className="text-gray-400 text-sm leading-relaxed max-w-xs">
-            Create your account to access events, placements, academic resources, and everything in between.
+            Activate the account your college has set up for you to access events, placements,
+            academic resources, and everything in between.
           </p>
         </div>
         <p className="text-gray-600 text-xs">© {new Date().getFullYear()} EventSphere</p>
       </div>
 
       {/* Right panel */}
-      <div className="flex-1 flex items-start justify-center px-6 py-12 overflow-y-auto">
-        <div className="w-full max-w-lg">
+      <div className="flex-1 flex items-center justify-center px-6 py-12">
+        <div className="w-full max-w-sm">
           {/* Mobile logo */}
           <div className="lg:hidden mb-10">
             <span className="text-gray-900 text-xl font-semibold tracking-tight">EventSphere</span>
           </div>
 
           <div className="mb-8">
-            <h2 className="text-2xl font-semibold text-gray-900 mb-1">Create account</h2>
-            <p className="text-sm text-gray-500">Fill in your details to get started.</p>
+            <h2 className="text-2xl font-semibold text-gray-900 mb-1">Activate your account</h2>
+            <p className="text-sm text-gray-500">
+              Enter your college email. We'll send you a link to set your password.
+            </p>
           </div>
 
           {error && (
@@ -157,181 +73,53 @@ export default function Signup() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Name row */}
-            <div className="grid grid-cols-2 gap-4">
-              <Field
-                name="firstName"
-                label="First name"
-                placeholder="Arjun"
-                value={form.firstName}
-                onChange={handleChange}
-                error={fieldErrors.firstName}
-              />
-              <Field
-                name="lastName"
-                label="Last name"
-                placeholder="Sharma"
-                value={form.lastName}
-                onChange={handleChange}
-                error={fieldErrors.lastName}
-              />
-            </div>
-
-            <Field
-              name="email"
-              label="Email address"
-              type="email"
-              placeholder="you@college.edu"
-              value={form.email}
-              onChange={handleChange}
-              error={fieldErrors.email}
-            />
-
-            {/* Password row */}
-            <div className="grid grid-cols-2 gap-4">
-              <Field
-                name="password"
-                label="Password"
-                type="password"
-                placeholder="Min. 8 characters"
-                value={form.password}
-                onChange={handleChange}
-                error={fieldErrors.password}
-              />
-              <Field
-                name="confirmPassword"
-                label="Confirm password"
-                type="password"
-                placeholder="Repeat password"
-                value={form.confirmPassword}
-                onChange={handleChange}
-                error={fieldErrors.confirmPassword}
-              />
-            </div>
-
-            {/* Academic details */}
-            <div className="pt-1">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">
-                Academic Details
+          {sentMessage ? (
+            <div className="px-4 py-4 bg-gray-50 border border-gray-200 rounded-lg space-y-2">
+              <p className="text-sm text-gray-900">{sentMessage}</p>
+              <p className="text-xs text-gray-500">
+                The link expires in 24 hours. Didn't get it? Check your spam folder, or try again in
+                a minute. If your email isn't recognised, contact your college administrator.
               </p>
-              <div className="space-y-5">
-                <Field
-                  name="rollNumber"
-                  label="Roll number"
-                  placeholder="22CS001"
-                  value={form.rollNumber}
-                  onChange={handleChange}
-                  error={fieldErrors.rollNumber}
-                />
-
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1.5">Branch</label>
-                  <select
-                    name="branch"
-                    value={form.branch}
-                    onChange={handleChange}
-                    className={selectClass(fieldErrors.branch)}
-                  >
-                    <option value="">Select branch</option>
-                    {BRANCHES.map((b) => (
-                      <option key={b} value={b}>{b}</option>
-                    ))}
-                  </select>
-                  {fieldErrors.branch && (
-                    <p className="mt-1 text-xs text-red-600">{fieldErrors.branch}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1.5">Admission year</label>
-                  <select
-                    name="batch"
-                    value={form.batch}
-                    onChange={handleChange}
-                    className={selectClass(fieldErrors.batch)}
-                  >
-                    <option value="">Select admission year</option>
-                    {BATCH_YEARS.map((y) => (
-                      <option key={y} value={y}>{y}</option>
-                    ))}
-                  </select>
-                  <p className="mt-1 text-xs text-gray-400">
-                    The year you joined — this stays fixed and links you to your cohort's classroom.
-                  </p>
-                  {fieldErrors.batch && (
-                    <p className="mt-1 text-xs text-red-600">{fieldErrors.batch}</p>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1.5">Year</label>
-                    <select
-                      name="year"
-                      value={form.year}
-                      onChange={handleChange}
-                      className={selectClass(fieldErrors.year)}
-                    >
-                      <option value="">Year</option>
-                      {YEARS.map((y) => (
-                        <option key={y} value={y}>{y}</option>
-                      ))}
-                    </select>
-                    {fieldErrors.year && (
-                      <p className="mt-1 text-xs text-red-600">{fieldErrors.year}</p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1.5">Section</label>
-                    <select
-                      name="section"
-                      value={form.section}
-                      onChange={handleChange}
-                      className={selectClass(fieldErrors.section)}
-                    >
-                      <option value="">Sec.</option>
-                      {SECTIONS.map((s) => (
-                        <option key={s} value={s}>{s}</option>
-                      ))}
-                    </select>
-                    {fieldErrors.section && (
-                      <p className="mt-1 text-xs text-red-600">{fieldErrors.section}</p>
-                    )}
-                  </div>
-
-                  <Field
-                    name="cgpa"
-                    label="CGPA"
-                    type="number"
-                    placeholder="8.5"
-                    value={form.cgpa}
-                    onChange={handleChange}
-                    error={fieldErrors.cgpa}
-                  />
-                </div>
-              </div>
             </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1.5">
+                  College email address
+                </label>
+                <input
+                  type="email"
+                  name="email"
+                  value={email}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    setError("");
+                  }}
+                  required
+                  placeholder="you@college.edu"
+                  className="w-full px-3.5 py-2.5 text-sm border border-gray-200 rounded-lg outline-none focus:border-gray-900 focus:ring-2 focus:ring-gray-900/5 transition-all placeholder:text-gray-300"
+                />
+              </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-gray-900 text-white text-sm font-medium py-2.5 rounded-lg hover:bg-gray-800 active:bg-gray-950 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-2"
-            >
-              {loading ? (
-                <>
-                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Creating account...
-                </>
-              ) : (
-                "Create account"
-              )}
-            </button>
-          </form>
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-gray-900 text-white text-sm font-medium py-2.5 rounded-lg hover:bg-gray-800 active:bg-gray-950 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {loading ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Sending link...
+                  </>
+                ) : (
+                  "Send activation link"
+                )}
+              </button>
+            </form>
+          )}
 
           <p className="mt-6 text-sm text-gray-500 text-center">
-            Already have an account?{" "}
+            Already activated?{" "}
             <Link to="/login" className="text-gray-900 font-medium hover:underline underline-offset-2">
               Sign in
             </Link>

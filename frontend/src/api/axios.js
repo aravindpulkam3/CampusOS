@@ -9,12 +9,23 @@ const api = axios.create({
 const AUTH_ROUTES = ["/auth/refresh", "/auth/me", "/auth/login", "/auth/signup"];
 
 // The single owner of token refresh — nothing else may POST /auth/refresh.
-// Concurrent callers (parallel 401s, useSocket's reconnect) share one in-flight
-// request: refresh tokens rotate, so a second parallel refresh would present an
-// already-rotated token, be rejected as reuse, and log the user out.
+// The server rotates refresh tokens strictly: presenting a token that was
+// already rotated counts as reuse and revokes the whole session. So two
+// refreshes carrying the SAME token must never be in flight at once:
+//  - within a tab, concurrent callers (parallel 401s, useSocket's reconnect)
+//    share one in-flight request;
+//  - across tabs, the Web Lock serializes refreshes. A waiting tab only sends
+//    its refresh after the previous holder's response (and its Set-Cookie) has
+//    landed in the shared cookie jar, so it always presents the current token.
+// A waiting tab may still do one redundant, valid rotation — correctness does
+// not depend on exactly one refresh happening across tabs.
+const REFRESH_LOCK = "campusos:auth-refresh";
+const withRefreshLock = (fn) =>
+  navigator.locks?.request ? navigator.locks.request(REFRESH_LOCK, fn) : fn();
+
 let refreshPromise = null;
 export const refreshAccessToken = () => {
-  refreshPromise ??= api.post("/auth/refresh").finally(() => {
+  refreshPromise ??= withRefreshLock(() => api.post("/auth/refresh")).finally(() => {
     refreshPromise = null;
   });
   return refreshPromise;

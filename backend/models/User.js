@@ -61,8 +61,9 @@ const userSchema = new mongoose.Schema(
     },
     // Placement profile. `null` means "not provided", which is deliberately
     // distinct from a genuine 0 — eligibility must never claim a student is
-    // ineligible just because they haven't filled this in. Self-reported and
-    // editable from Profile; coordinators verify at shortlist time.
+    // ineligible just because they haven't filled this in. Authoritative:
+    // copied from the college roster and changed only by the placement office
+    // (routes/roster.routes.js) — students cannot edit them.
     cgpa: {
       type: Number,
       min: 0,
@@ -131,10 +132,13 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
-    refreshToken: {
-      type: String,
+    // Refresh tokens live in models/Session.js (hashed, one per device), not here.
+
+    // Set when the user proves ownership of their roster email (claim link).
+    // Login is refused while null. Staff accounts are set by the migration.
+    emailVerifiedAt: {
+      type: Date,
       default: null,
-      select: false,
     },
   },
   { timestamps: true },
@@ -149,6 +153,12 @@ userSchema.pre("save", async function (next) {
 userSchema.methods.comparePassword = async function (candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
 };
+
+// Event registration lives here (single source of truth); this index backs the
+// derived registration count and notifyEventRegistrants.
+userSchema.index({ registeredEvents: 1 });
+// Backs notifyClubFollowers and the follower-count reconciliation script.
+userSchema.index({ followedClubs: 1 });
 
 const User = mongoose.model("User", userSchema);
 export default User;

@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { loginApi } from "../../api/auth.api.js";
 import useAuth from "../../hooks/useAuth.js";
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { setUser } = useAuth();
+  const justActivated = location.state?.activated === true;
 
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
@@ -78,6 +80,12 @@ export default function Login() {
             </p>
           </div>
 
+          {justActivated && !error && (
+            <div className="mb-5 px-4 py-3 bg-green-50 border border-green-200 rounded-lg">
+              <p className="text-sm text-green-800">Account activated. Sign in with your new password.</p>
+            </div>
+          )}
+
           {error && (
             <div className="mb-5 px-4 py-3 bg-red-50 border border-red-200 rounded-lg">
               <p className="text-sm text-red-700">{error}</p>
@@ -134,12 +142,12 @@ export default function Login() {
           </form>
 
           <p className="mt-6 text-sm text-gray-500 text-center">
-            Don't have an account?{" "}
+            First time here?{" "}
             <Link
               to="/signup"
               className="text-gray-900 font-medium hover:underline underline-offset-2"
             >
-              Create one
+              Activate your account
             </Link>
           </p>
         </div>
