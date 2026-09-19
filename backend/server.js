@@ -7,7 +7,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import connectDB from './config/db.js'
 import redisClient, { connectRedis } from './config/redis.js'
-import errorMiddleware from './middleware/errorMiddleware.js'
+import errorMiddleware, { notFound } from './middleware/errorMiddleware.js'
 import authRouter from './routes/auth.routes.js';
 import clubRouter from './routes/club.routes.js';
 import eventRouter from './routes/event.routes.js';
@@ -55,6 +55,7 @@ app.use('/api/applications', applicationRouter);
 app.use("/api/v1/upload", uploadRouter);
 app.use("/api/notifications", notificationRouter);
 
+app.use(notFound);
 app.use(errorMiddleware);
 
 const PORT = process.env.PORT || 5000;

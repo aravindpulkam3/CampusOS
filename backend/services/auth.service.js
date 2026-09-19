@@ -4,6 +4,7 @@ import Classroom from "../models/Classroom.js"
 import Discussion from "../models/Discussion.js";
 import Application from "../models/Application.js";
 import { findClassroomForUser } from "./classroom.service.js";
+import ApiError from "../utils/apiError.js";
 
 const COOKIE_OPTIONS = {
   httpOnly: true,
@@ -30,9 +31,7 @@ export const registerUser = async (userData) => {
   const existingUser = await User.findOne({ $or: [{ email }, { rollNumber }] });
   if (existingUser) {
     const field = existingUser.email === email ? "Email" : "Roll number";
-    const error = new Error(`${field} already registered.`);
-    error.statusCode = 409;
-    throw error;
+    throw new ApiError(409, `${field} already registered.`);
   }
 
   const user = await User.create({
@@ -60,16 +59,12 @@ export const loginUser = async (email, password) => {
   const user = await User.findOne({ email }).select("+password +refreshToken");//Doesn't return password and refreshtoken by default so we have to do that
 
   if (!user) {
-    const error = new Error("Invalid email or password.");
-    error.statusCode = 401;
-    throw error;
+    throw new ApiError(401, "Invalid email or password.");
   }
 
   const isMatch = await user.comparePassword(password);
   if (!isMatch) {
-    const error = new Error("Invalid email or password.");
-    error.statusCode = 401;
-    throw error;
+    throw new ApiError(401, "Invalid email or password.");
   }
 
   const accessToken = generateAccessToken(user._id);
@@ -88,9 +83,7 @@ export const loginUser = async (email, password) => {
 
 export const refreshAccessToken = async (incomingRefreshToken) => {
   if (!incomingRefreshToken) {
-    const error = new Error("No refresh token.");
-    error.statusCode = 401;
-    throw error;
+    throw new ApiError(401, "No refresh token.");
   }
 
   let decoded;
@@ -98,16 +91,12 @@ export const refreshAccessToken = async (incomingRefreshToken) => {
     const jwt = await import("jsonwebtoken");
     decoded = jwt.default.verify(incomingRefreshToken, process.env.JWT_REFRESH_SECRET);
   } catch {
-    const error = new Error("Invalid or expired refresh token.");
-    error.statusCode = 401;
-    throw error;
+    throw new ApiError(401, "Invalid or expired refresh token.");
   }
 
   const user = await User.findById(decoded.id).select("+refreshToken");
   if (!user || user.refreshToken !== incomingRefreshToken) {
-    const error = new Error("Refresh token reuse detected or user not found.");
-    error.statusCode = 401;
-    throw error;
+    throw new ApiError(401, "Refresh token reuse detected or user not found.");
   }
 
   // Rotate: issue new pair
