@@ -31,6 +31,12 @@ export const applyToDrive = asyncHandler(async (req, res) => {
     throw new ApiError(400, "This drive is not open for applications.");
   }
 
+  // Once Round 1 has begun, joining would skip rounds already under way —
+  // even if the registration deadline was later extended.
+  if (drive.currentRoundId) {
+    throw new ApiError(400, "Recruitment has already started for this drive.");
+  }
+
   if (new Date() > new Date(drive.registrationDeadline)) {
     throw new ApiError(400, "The registration deadline for this drive has passed.");
   }
@@ -104,13 +110,19 @@ export const getApplicationById = asyncHandler(async (req, res) => {
 });
 
 // ─── PATCH /api/applications/:id/notes  (student updates own private notes) ───
+const MAX_NOTES_LENGTH = 2000;
+
 export const updateApplicationNotes = asyncHandler(async (req, res) => {
-  const { notes } = req.body;
+  const { notes } = req.body ?? {};
+  if (typeof notes !== "string") throw new ApiError(400, "Notes must be text.");
+  if (notes.length > MAX_NOTES_LENGTH) {
+    throw new ApiError(400, `Notes must be at most ${MAX_NOTES_LENGTH} characters.`);
+  }
 
   const application = await Application.findOneAndUpdate(
     { _id: req.params.id, student: req.user._id },
-    { notes },
-    { new: true },
+    { $set: { notes } },
+    { new: true, runValidators: true },
   );
 
   if (!application) throw new ApiError(404, "Application not found.");

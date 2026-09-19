@@ -30,6 +30,7 @@ const replySchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
+      maxlength: 5000,
     },
     upvotes:   [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
     isEdited:  { type: Boolean, default: false },

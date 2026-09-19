@@ -18,7 +18,13 @@ import {
   Bell,
   BellOff,
 } from "lucide-react";
-import { followClub, getClubDetails, toggleMuteClub } from "../../api/club.api";
+import {
+  followClub,
+  unfollowClub,
+  getClubDetails,
+  muteClub,
+  unmuteClub,
+} from "../../api/club.api";
 import useAuth from "../../hooks/useAuth";
 import NoticeFeed from "../../components/cards/NoticeFeed";
 import AnnouncementCard from "../announcements/AnnouncementCard";
@@ -187,6 +193,8 @@ const ClubDetail = () => {
   const [joined, setJoined] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+  const [followPending, setFollowPending] = useState(false);
+  const [mutePending, setMutePending] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
@@ -229,30 +237,38 @@ const ClubDetail = () => {
     fetchClub();
   }, [clubId, user]);
 
+  // Each control sends the desired state and stays disabled until its request
+  // settles, so an older response can never land after a newer one.
   const handleFollowButton = async () => {
+    if (followPending) return;
+    setFollowPending(true);
     try {
-      const payload = await followClub(clubId);
+      const payload = await (isFollowing ? unfollowClub : followClub)(clubId);
       setClub(payload.data.data.club);
       setUser(payload.data.data.user);
       setIsFollowing(payload.data.data.isFollowing);
     } catch (error) {
       console.error(error);
+    } finally {
+      setFollowPending(false);
     }
   };
 
   const handleMuteButton = async () => {
+    if (mutePending) return;
+    setMutePending(true);
     try {
-      const payload = await toggleMuteClub(clubId);
+      const payload = await (isMuted ? unmuteClub : muteClub)(clubId);
       const nowMuted = payload.data.data.isMuted;
       setIsMuted(nowMuted);
-      setUser((prev) => ({
-        ...prev,
-        mutedClubs: nowMuted
-          ? [...(prev.mutedClubs || []), clubId]
-          : (prev.mutedClubs || []).filter((id) => id.toString() !== clubId),
-      }));
+      setUser((prev) => {
+        const others = (prev.mutedClubs || []).filter((id) => id.toString() !== clubId);
+        return { ...prev, mutedClubs: nowMuted ? [...others, clubId] : others };
+      });
     } catch (error) {
       console.error(error);
+    } finally {
+      setMutePending(false);
     }
   };
 
@@ -376,7 +392,8 @@ const ClubDetail = () => {
           <div className="flex items-center gap-2 self-start sm:self-end z-10">
             <button
               onClick={handleFollowButton}
-              className={`px-3.5 py-1.5 text-xs font-bold rounded-xl border transition-all duration-150 shadow-3xs
+              disabled={followPending}
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-xl border transition-all duration-150 shadow-3xs disabled:opacity-60 disabled:cursor-wait
                 ${
                   isFollowing
                     ? "border-slate-200 text-slate-400 bg-slate-50 hover:border-red-200 hover:text-red-500 hover:bg-red-50/30"
@@ -388,8 +405,9 @@ const ClubDetail = () => {
             {isFollowing && (
               <button
                 onClick={handleMuteButton}
+                disabled={mutePending}
                 title={isMuted ? "Unmute notifications" : "Mute notifications"}
-                className={`p-1.5 rounded-xl border transition-all duration-150 shadow-3xs
+                className={`p-1.5 rounded-xl border transition-all duration-150 shadow-3xs disabled:opacity-60 disabled:cursor-wait
                   ${
                     isMuted
                       ? "border-slate-200 text-slate-300 bg-slate-50 hover:border-slate-400 hover:text-slate-600"

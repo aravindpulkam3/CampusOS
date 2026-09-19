@@ -32,6 +32,8 @@ import {
   updateDrive,
 } from "../../api/career.api";
 import NoticeFeed from "../../components/cards/NoticeFeed";
+import safeHref from "../../utils/safeHref";
+import { toCsv } from "../../utils/csv";
 
 // ─── Helpers ──────────────────────────────────────────────────
 const formatDate = (d) =>
@@ -128,13 +130,7 @@ const applicationStatusConfig = {
 };
 
 const downloadCSV = (rows, filename) => {
-  const csv = rows
-    .map((row) =>
-      row
-        .map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`)
-        .join(","),
-    )
-    .join("\n");
+  const csv = toCsv(rows);
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -464,8 +460,19 @@ const RoundsTab = ({ drive, application, isCoordinator, onRefresh }) => {
 
   const handleDownloadActive = async () => {
     try {
-      const res = await getDriveApplications(drive._id, { status: "active", limit: 5000 });
-      const applications = res.data.data.applications || [];
+      // The server caps a page at 200, so fetch every page until `total`.
+      const PAGE_SIZE = 200;
+      const applications = [];
+      for (let page = 1; ; page++) {
+        const res = await getDriveApplications(drive._id, {
+          status: "active",
+          limit: PAGE_SIZE,
+          page,
+        });
+        const { applications: batch = [], pagination } = res.data.data;
+        applications.push(...batch);
+        if (!batch.length || applications.length >= (pagination?.total ?? 0)) break;
+      }
       const rows = [["rollNumber", "name", "email"]];
       applications.forEach((a) => {
         rows.push([
@@ -985,6 +992,8 @@ const DriveDetail = () => {
   const isEligible = eligibility ? eligibility.eligible : true;
   const ineligibilityReasons = eligibility ? eligibility.reasons : [];
   const canApply = isEligible && !hasApplied && !isClosed;
+  const applicationHref = safeHref(drive.applicationLink);
+  const brochureHref = safeHref(drive.brochureUrl);
   const compensation =
     drive.jobType === "internship" ? drive.stipend : drive.ctc;
 
@@ -1151,23 +1160,41 @@ const DriveDetail = () => {
 
                   {canApply && (
                     <div className="flex flex-col items-end gap-1.5">
-                      <a
-                        href={drive.applicationLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={handleApply}
-                        className="flex items-center gap-2 px-5 py-2.5 bg-gray-900 text-white text-xs font-semibold rounded-xl hover:bg-gray-700 transition-colors"
-                      >
-                        <ExternalLink size={12} />
-                        {applying ? "Processing..." : "Apply Now"}
-                      </a>
+                      {/* External navigation only for a valid http(s) link;
+                          otherwise a plain button that just registers. */}
+                      {applicationHref ? (
+                        <a
+                          href={applicationHref}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={handleApply}
+                          className="flex items-center gap-2 px-5 py-2.5 bg-gray-900 text-white text-xs font-semibold rounded-xl hover:bg-gray-700 transition-colors"
+                        >
+                          <ExternalLink size={12} />
+                          {applying ? "Processing..." : "Apply Now"}
+                        </a>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            onClick={handleApply}
+                            disabled={applying}
+                            className="flex items-center gap-2 px-5 py-2.5 bg-gray-900 text-white text-xs font-semibold rounded-xl hover:bg-gray-700 transition-colors disabled:opacity-60"
+                          >
+                            {applying ? "Processing..." : "Apply Now"}
+                          </button>
+                          <p className="text-xs text-gray-400">
+                            External application link unavailable — contact the placement office.
+                          </p>
+                        </>
+                      )}
                       {applyError && <p className="text-xs text-red-500">{applyError}</p>}
                     </div>
                   )}
 
-                  {drive.brochureUrl && (
+                  {brochureHref && (
                     <a
-                      href={drive.brochureUrl}
+                      href={brochureHref}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-700 transition-colors"

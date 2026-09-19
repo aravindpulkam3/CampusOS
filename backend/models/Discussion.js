@@ -12,6 +12,7 @@ const discussionSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
+      maxlength: 10000,
     },
     category: {
       type: String,

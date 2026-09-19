@@ -85,7 +85,7 @@ export const DiscussionCard = ({ discussion }) => (
         </svg>
       </div>
       <span className="text-xs font-medium text-gray-500 tabular-nums">
-        {discussion.upvotes?.length ?? 0}
+        {discussion.upvoteCount ?? 0}
       </span>
     </div>
 

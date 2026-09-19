@@ -13,8 +13,8 @@ const UPCOMING_EVENTS_CACHE_KEY = "cache:events:upcoming";
 const UPCOMING_EVENTS_TTL = 60 * 15; // 15m
 
 // The only fields a client may set on create/update — exactly what EventForm
-// sends. Anything else (createdBy, registrationCount, eventOrganizers, status,
-// or a field added to the schema later) is ignored until deliberately listed.
+// sends. Anything else (createdBy, eventOrganizers, status, or a field added to
+// the schema later) is ignored until deliberately listed.
 // eventOrganizers and status are intentionally absent: no UI manages them, and
 // changing them should be a dedicated, separately-authorized action.
 const EVENT_WRITABLE_FIELDS = [
@@ -40,9 +40,44 @@ const pickEventFields = (body) => {
   return fields;
 };
 
+// Date invariants every stored event must satisfy. `current` supplies the
+// stored value for any side not being changed (updates). Unparseable dates are
+// left for the schema's Date cast to reject.
+//  - the event ends after it starts;
+//  - registration closes no later than the start — registering for an event
+//    that has already started is never possible.
+const assertEventDates = (updates, current = {}) => {
+  const pick = (key) => (updates[key] !== undefined ? updates[key] : current[key]);
+  const start = pick("startDateTime") ? new Date(pick("startDateTime")) : null;
+  const end = pick("endDateTime") ? new Date(pick("endDateTime")) : null;
+  const deadlineRaw = pick("registrationDeadline");
+  const deadline = deadlineRaw ? new Date(deadlineRaw) : null;
+
+  if (start && end && !isNaN(start) && !isNaN(end) && end <= start) {
+    throw new ApiError(400, "End date and time must be after the start timeline");
+  }
+  if (start && deadline && !isNaN(start) && !isNaN(deadline) && deadline > start) {
+    throw new ApiError(400, "Registration deadline must be on or before the event start");
+  }
+};
+
+// Registration cutoff, enforced defensively at registration time even though
+// writes now guarantee deadline <= start: events stored before that rule may
+// still have a later deadline. The earlier of the two always wins.
+const registrationCutoff = (event) => {
+  const start = new Date(event.startDateTime);
+  if (!event.registrationDeadline) return start;
+  const deadline = new Date(event.registrationDeadline);
+  return deadline < start ? deadline : start;
+};
+
+// Derived from the single source of truth (User.registeredEvents, indexed).
+const countRegistrations = (eventId) => User.countDocuments({ registeredEvents: eventId });
+
 // TODO: implement controller function
 export const createEvent = asyncHandler(async (req, res) => {
   const fields = pickEventFields(req.body);
+  assertEventDates(fields);
 
   // Authorize against the exact club the event is being created for.
   await assertClubAdmin(req.user, fields.organizerClub);
@@ -67,8 +102,11 @@ export const createEvent = asyncHandler(async (req, res) => {
 });
 
 export const getAllEvents = asyncHandler(async (req, res) => {
-  const { category, search, offset = 0 } = req.query;
-  const skipCount = Number(offset) || 0;
+  // Strings only (Express 4 turns `?category[$ne]=x` into an object, and this
+  // is an aggregate, which Mongoose does not cast); offset clamped to >= 0.
+  const category = typeof req.query.category === "string" ? req.query.category : undefined;
+  const search = req.query.search;
+  const skipCount = Math.max(0, parseInt(req.query.offset, 10) || 0);
   const limitCount = 15;
   const now = new Date();
 
@@ -180,16 +218,36 @@ export const getEventById = asyncHandler(async (req, res) => {
     const isOrganizer=event.eventOrganizers.some(organizer=> organizer.equals(req.user._id));
   sendResponse(res, 200, "Events fetched Successfully",{
     event,
-    isOrganizer
+    isOrganizer,
+    registrationCount: await countRegistrations(event._id),
   } );
 });
 
+// Registration state lives only on User.registeredEvents, so registering is
+// ONE atomic conditional write: the `$ne` guard and the `$push` apply to a
+// single document together, so N parallel requests register exactly once.
+// There is no counter to keep in sync — the count is derived.
+//
+// Residual, accepted non-atomicity: the cancelled/cutoff checks and the push
+// are two operations, so an event cancelled in the milliseconds between them
+// can still take one registration. Harmless while events have no capacity; a
+// capacity limit would require a real transaction (utils/transaction.js) —
+// never withOptionalTransaction, which silently drops atomicity.
+//
+// (There is no unregister flow. If one is added it must mirror this:
+// User.updateOne({ _id, registeredEvents: id }, { $pull: { registeredEvents: id } })
+// and no counter write.)
 export const registerForEvent = asyncHandler(async (req, res) => {
   const event = await Event.findById(req.params.id);
-  const user=await User.findById(req.user._id);
-
   if (!event) {
     throw new ApiError(404, "Event not found");
+  }
+
+  if (event.status === "Cancelled") {
+    throw new ApiError(400, "This event has been cancelled");
+  }
+  if (new Date() >= registrationCutoff(event)) {
+    throw new ApiError(400, "Registration for this event is closed");
   }
   if (
     event.eligibleBranches?.length > 0 &&
@@ -203,19 +261,19 @@ export const registerForEvent = asyncHandler(async (req, res) => {
   ) {
     throw new ApiError(403, "Your year is not eligible for this event");
   }
-  const alreadyRegistered = user.registeredEvents.some(
-    (registeredEvent) => registeredEvent.toString() === req.params.id.toString(),
-  );
 
-  if (alreadyRegistered) {
+  const result = await User.updateOne(
+    { _id: req.user._id, registeredEvents: { $ne: event._id } },
+    { $push: { registeredEvents: event._id } },
+  );
+  if (result.modifiedCount === 0) {
     throw new ApiError(409, "Already registered");
   }
-  
-  user.registeredEvents.push(req.params.id);
 
-  await user.save();
-  const updatedEvent = await Event.findByIdAndUpdate(req.params.id, { $inc: { registrationCount: 1 } }, { new: true });
-  sendResponse(res, 201, "Registered Successfully", {user, event: updatedEvent});
+  sendResponse(res, 201, "Registered Successfully", {
+    event,
+    registrationCount: await countRegistrations(event._id),
+  });
 });
 
 export const getUpcomingEvents = asyncHandler(async (req, res) => {
@@ -256,11 +314,7 @@ export const updateEvent = asyncHandler(async (req, res) => {
   }
 
   // Compare against the stored value when only one side is being changed.
-  const start = updates.startDateTime ?? req.event.startDateTime;
-  const end = updates.endDateTime ?? req.event.endDateTime;
-  if (start && end && new Date(end) <= new Date(start)) {
-    throw new ApiError(400, "End date and time must be after the start timeline");
-  }
+  assertEventDates(updates, req.event);
 
   // Moving an event to another club requires admin rights over that club too.
   if (

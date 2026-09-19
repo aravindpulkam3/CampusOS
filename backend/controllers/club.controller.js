@@ -6,6 +6,7 @@ import sendResponse from "../utils/sendResponse.js";
 import { Announcement } from "../models/Announcement.js";
 import User from "../models/User.js";
 import { getJSON, setJSON, del } from "../utils/cache.js";
+import { withTransaction } from "../utils/transaction.js";
 
 const ALL_CLUBS_CACHE_KEY = "cache:clubs:all";
 const ALL_CLUBS_TTL = 60 * 60 * 24; // 24h
@@ -27,7 +28,10 @@ export const createClub = asyncHandler(async (req, res) => {
   const { clubName, description, category, logo, banner } = req.body;
 
   if (!clubName?.trim() || !description?.trim() || !category) {
-    throw new ApiError(400, "Club name, description, and category are required.");
+    throw new ApiError(
+      400,
+      "Club name, description, and category are required.",
+    );
   }
 
   const club = await Club.create({
@@ -52,8 +56,9 @@ export const getClubDetails = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Club not found");
   }
   const isAdmin =
-    club.clubAdmins.some((adminId) => adminId.toString() === req.user._id.toString()) ||
-    req.user.role === "superadmin";
+    club.clubAdmins.some(
+      (adminId) => adminId.toString() === req.user._id.toString(),
+    ) || req.user.role === "superadmin";
 
   const events = await Event.find({
     organizerClub: clubId,
@@ -77,70 +82,86 @@ export const getClubDetails = asyncHandler(async (req, res) => {
   });
 });
 
-export const followClub = asyncHandler(async (req, res) => {
-  const clubId = req.params.clubId;
-
-  const club = await Club.findById(clubId);
-  const user = await User.findById(req.user._id);
-
-  if (!club) throw new ApiError(404, "Club not found");
-
-  const alreadyFollowing = user.followedClubs.some(
-    (followedClub) => followedClub.toString() === clubId.toString(),
-  );
-
-  if (alreadyFollowing) {
-    user.followedClubs = user.followedClubs.filter(
-      (followedClub) => followedClub.toString() !== clubId.toString(),
+// Follow and mute are SET, never toggled: PUT follows/mutes, DELETE undoes it.
+// $addToSet/$pull are idempotent, so repeated or parallel requests converge on
+// the requested state instead of flipping it.
+//
+// Following is stored twice — User.followedClubs (membership) and
+// Club.followerCount (count) — so both writes run in ONE transaction and the
+// count moves only when membership actually changed. Any failure, including
+// the club vanishing after the caller's existence check, rolls both back.
+//
+// The membership condition is in the FILTER, not inferred from modifiedCount:
+// User has timestamps, so Mongoose adds $set:{updatedAt} to every update and
+// modifiedCount is 1 even when $addToSet/$pull changed nothing.
+export const setClubFollow = (userId, clubId, follow) =>
+  withTransaction(async (session) => {
+    const membership = await User.updateOne(
+      follow
+        ? { _id: userId, followedClubs: { $ne: clubId } }
+        : { _id: userId, followedClubs: clubId },
+      follow
+        ? { $addToSet: { followedClubs: clubId } }
+        : { $pull: { followedClubs: clubId } },
+      { session },
     );
+    if (membership.matchedCount === 0) {
+      // Already in the requested state — or the user no longer exists.
+      if (!(await User.exists({ _id: userId }).session(session))) {
+        throw new ApiError(404, "User not found");
+      }
+      return;
+    }
 
-    await user.save();
-    const updatedClub = await Club.findByIdAndUpdate(clubId, { $inc: { followerCount: -1 } }, { new: true });
-
-    return sendResponse(res, 200, "Club unfollowed", {
-      club: updatedClub,
-      user,
-      isFollowing: false,
-    });
-  }
-
-  user.followedClubs.push(clubId);
-
-  await user.save();
-  const updatedClub = await Club.findByIdAndUpdate(clubId, { $inc: { followerCount: 1 } }, { new: true });
-
-  sendResponse(res, 200, "Club followed", {
-    club: updatedClub,
-    user,
-    isFollowing: true,
+    const counter = await Club.updateOne(
+      { _id: clubId },
+      { $inc: { followerCount: follow ? 1 : -1 } },
+      { session },
+    );
+    if (counter.matchedCount === 0) throw new ApiError(404, "Club not found");
   });
-});
 
-export const toggleMuteClub = asyncHandler(async (req, res) => {
-  const clubId = req.params.clubId;
+const followHandler = (follow) =>
+  asyncHandler(async (req, res) => {
+    const { clubId } = req.params;
+    if (!(await Club.exists({ _id: clubId }))) throw new ApiError(404, "Club not found");
 
-  const club = await Club.findById(clubId);
-  if (!club) throw new ApiError(404, "Club not found");
+    await setClubFollow(req.user._id, clubId, follow);
+    await del(ALL_CLUBS_CACHE_KEY);
+    await del(POPULAR_CLUBS_CACHE_KEY);
 
-  const user = await User.findById(req.user._id);
+    const [club, user] = await Promise.all([
+      Club.findById(clubId),
+      User.findById(req.user._id),
+    ]);
+    sendResponse(res, 200, follow ? "Club followed" : "Club unfollowed", {
+      club,
+      user,
+      isFollowing: follow,
+    });
+  });
 
-  const isMuted = user.mutedClubs.some(
-    (mutedClub) => mutedClub.toString() === clubId.toString(),
-  );
+// PUT / DELETE /api/clubs/:clubId/follow
+export const followClub = followHandler(true);
+export const unfollowClub = followHandler(false);
 
-  if (isMuted) {
-    user.mutedClubs = user.mutedClubs.filter(
-      (mutedClub) => mutedClub.toString() !== clubId.toString(),
+const muteHandler = (mute) =>
+  asyncHandler(async (req, res) => {
+    const { clubId } = req.params;
+    if (!(await Club.exists({ _id: clubId }))) throw new ApiError(404, "Club not found");
+
+    await User.updateOne(
+      { _id: req.user._id },
+      mute ? { $addToSet: { mutedClubs: clubId } } : { $pull: { mutedClubs: clubId } },
     );
-    await user.save();
-    return sendResponse(res, 200, "Club notifications unmuted", { isMuted: false });
-  }
+    sendResponse(res, 200, mute ? "Club notifications muted" : "Club notifications unmuted", {
+      isMuted: mute,
+    });
+  });
 
-  user.mutedClubs.push(clubId);
-  await user.save();
-
-  sendResponse(res, 200, "Club notifications muted", { isMuted: true });
-});
+// PUT / DELETE /api/clubs/:clubId/mute
+export const muteClub = muteHandler(true);
+export const unmuteClub = muteHandler(false);
 
 export const getPopularClubs = asyncHandler(async (req, res) => {
   const cached = await getJSON(POPULAR_CLUBS_CACHE_KEY);
@@ -148,10 +169,7 @@ export const getPopularClubs = asyncHandler(async (req, res) => {
     return sendResponse(res, 200, "Popular clubs fetched", cached);
   }
 
-  const clubs = await Club.find()
-    .sort({ followerCount: -1 })
-    .limit(5)
-    .lean();
+  const clubs = await Club.find().sort({ followerCount: -1 }).limit(5).lean();
 
   await setJSON(POPULAR_CLUBS_CACHE_KEY, clubs, POPULAR_CLUBS_TTL);
   sendResponse(res, 200, "Popular clubs fetched", clubs);
@@ -181,6 +199,11 @@ export const updateClub = asyncHandler(async (req, res) => {
       403,
       "Access Denied: You do not have permissions to modify this club.",
     );
+  }
+  // Same rule as assertClubAdmin: an inactive club is frozen for its admins;
+  // only a superadmin (who controls activation) may still edit it.
+  if (!isSuperAdmin && !club.isActive) {
+    throw new ApiError(403, "Club is not active.");
   }
 
   // Type checks before any .trim(): a non-string here used to throw a TypeError (500).

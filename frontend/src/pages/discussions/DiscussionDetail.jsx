@@ -16,13 +16,17 @@ import useAuth from "../../hooks/useAuth";
 import {
   getDiscussionById,
   upvoteDiscussion,
+  unupvoteDiscussion,
   bookmarkDiscussion,
+  unbookmarkDiscussion,
   addComment,
   upvoteComment,
+  unupvoteComment,
   acceptAnswer,
   deleteComment,
   addReply,
   upvoteReply,
+  unupvoteReply,
   deleteReply,
   deleteDiscussion,
 } from "../../api/discussion.api";
@@ -80,10 +84,10 @@ const ReplyNode = ({
   onDeleteReply,
   onNewReply,
 }) => {
-  const [upvotes, setUpvotes] = useState(reply.upvotes?.length ?? 0);
-  const [upvoted, setUpvoted] = useState(
-    reply.upvotes?.some((u) => (u._id ?? u) === currentUser?._id),
-  );
+  // The server sends counts + the viewer's own state, not who voted.
+  const [upvotes, setUpvotes] = useState(reply.upvoteCount ?? 0);
+  const [upvoted, setUpvoted] = useState(!!reply.upvoted);
+  const [votePending, setVotePending] = useState(false);
   const [replyBox, setReplyBox] = useState(false);
   const [replyText, setReplyText] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -94,14 +98,23 @@ const ReplyNode = ({
     currentUser && currentUser._id === (reply.author?._id ?? reply.author);
   const children = reply.children ?? [];
 
+  // Sends the desired state; disabled while pending so responses can't
+  // arrive out of order and overwrite a newer state.
   const handleUpvote = async () => {
-    if (!currentUser) return;
+    if (!currentUser || votePending) return;
+    setVotePending(true);
     try {
-      const res = await upvoteReply(discussionId, commentId, reply._id);
-      setUpvotes(res.data.data.upvotes);
+      const res = await (upvoted ? unupvoteReply : upvoteReply)(
+        discussionId,
+        commentId,
+        reply._id,
+      );
+      setUpvotes(res.data.data.upvoteCount);
       setUpvoted(res.data.data.upvoted);
     } catch (err) {
       console.error(err);
+    } finally {
+      setVotePending(false);
     }
   };
 
@@ -175,7 +188,8 @@ const ReplyNode = ({
         <div className="flex items-center gap-3 ml-8">
           <button
             onClick={handleUpvote}
-            className={`flex items-center gap-1 text-xs transition-colors ${
+            disabled={votePending}
+            className={`flex items-center gap-1 text-xs transition-colors disabled:opacity-60 ${
               upvoted
                 ? "text-gray-900 font-semibold"
                 : "text-gray-400 hover:text-gray-700"
@@ -279,10 +293,9 @@ const CommentBlock = ({
   onDelete,
   onAccept,
 }) => {
-  const [upvotes, setUpvotes] = useState(comment.upvotes?.length ?? 0);
-  const [upvoted, setUpvoted] = useState(
-    comment.upvotes?.some((u) => (u._id ?? u) === currentUser?._id),
-  );
+  const [upvotes, setUpvotes] = useState(comment.upvoteCount ?? 0);
+  const [upvoted, setUpvoted] = useState(!!comment.upvoted);
+  const [votePending, setVotePending] = useState(false);
   const [replyTree, setReplyTree] = useState(comment.replies ?? []);
   const [showReplies, setShowReplies] = useState(false);
   const [replyBox, setReplyBox] = useState(false);
@@ -340,13 +353,19 @@ const CommentBlock = ({
   };
 
   const handleUpvote = async () => {
-    if (!currentUser) return;
+    if (!currentUser || votePending) return;
+    setVotePending(true);
     try {
-      const res = await upvoteComment(discussionId, comment._id);
-      setUpvotes(res.data.data.upvotes);
+      const res = await (upvoted ? unupvoteComment : upvoteComment)(
+        discussionId,
+        comment._id,
+      );
+      setUpvotes(res.data.data.upvoteCount);
       setUpvoted(res.data.data.upvoted);
     } catch (err) {
       console.error(err);
+    } finally {
+      setVotePending(false);
     }
   };
 
@@ -390,7 +409,8 @@ const CommentBlock = ({
         <div className="flex flex-col items-center gap-1 flex-shrink-0 pt-0.5">
           <button
             onClick={handleUpvote}
-            className={`p-1 rounded-lg transition-colors ${
+            disabled={votePending}
+            className={`p-1 rounded-lg transition-colors disabled:opacity-60 ${
               upvoted
                 ? "bg-gray-900 text-white"
                 : "text-gray-400 hover:bg-gray-100"
@@ -546,7 +566,9 @@ export default function DiscussionDetail() {
   const [upvotes, setUpvotes] = useState(0);
   const [upvoted, setUpvoted] = useState(false);
   const [bookmarked, setBookmarked] = useState(false);
-  
+  const [votePending, setVotePending] = useState(false);
+  const [bookmarkPending, setBookmarkPending] = useState(false);
+
   // ─── Refactored Comment Box State Management ───
   const [isFormExpanded, setIsFormExpanded] = useState(false);
   const [commentText, setCommentText] = useState("");
@@ -560,11 +582,9 @@ export default function DiscussionDetail() {
         const { discussion: d, comments: c } = res.data.data;
         setDiscussion(d);
         setComments(c);
-        setUpvotes(d.upvotes?.length ?? 0);
-        setUpvoted(d.upvotes?.some((u) => (u._id ?? u) === user?._id) ?? false);
-        setBookmarked(
-          d.bookmarks?.some((u) => (u._id ?? u) === user?._id) ?? false,
-        );
+        setUpvotes(d.upvoteCount ?? 0);
+        setUpvoted(!!d.upvoted);
+        setBookmarked(!!d.bookmarked);
       } catch {
         setError("Discussion not found.");
       } finally {
@@ -574,24 +594,32 @@ export default function DiscussionDetail() {
     fetch();
   }, [id, user]);
 
+  // Each control sends the desired state and stays disabled until its request
+  // settles, so an older response can never overwrite a newer state.
   const handleUpvote = async () => {
-    if (!user) return;
+    if (!user || votePending) return;
+    setVotePending(true);
     try {
-      const res = await upvoteDiscussion(id);
-      setUpvotes(res.data.data.upvotes);
+      const res = await (upvoted ? unupvoteDiscussion : upvoteDiscussion)(id);
+      setUpvotes(res.data.data.upvoteCount);
       setUpvoted(res.data.data.upvoted);
     } catch (err) {
       console.error(err);
+    } finally {
+      setVotePending(false);
     }
   };
 
   const handleBookmark = async () => {
-    if (!user) return;
+    if (!user || bookmarkPending) return;
+    setBookmarkPending(true);
     try {
-      const res = await bookmarkDiscussion(id);
+      const res = await (bookmarked ? unbookmarkDiscussion : bookmarkDiscussion)(id);
       setBookmarked(res.data.data.bookmarked);
     } catch (err) {
       console.error(err);
+    } finally {
+      setBookmarkPending(false);
     }
   };
 
@@ -742,7 +770,8 @@ export default function DiscussionDetail() {
           <div className="flex items-center gap-3">
             <button
               onClick={handleUpvote}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
+              disabled={votePending}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all disabled:opacity-60 ${
                 upvoted
                   ? "bg-gray-900 text-white border-gray-900"
                   : "bg-white text-gray-600 border-gray-200 hover:border-gray-400"
@@ -752,7 +781,8 @@ export default function DiscussionDetail() {
             </button>
             <button
               onClick={handleBookmark}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
+              disabled={bookmarkPending}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all disabled:opacity-60 ${
                 bookmarked
                   ? "bg-amber-50 text-amber-700 border-amber-200"
                   : "bg-white text-gray-600 border-gray-200 hover:border-gray-400"

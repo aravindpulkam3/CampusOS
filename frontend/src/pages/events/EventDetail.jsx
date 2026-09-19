@@ -188,7 +188,11 @@ export default function EventDetail() {
     try {
       const payload = await registerForEvent(id);
       setEvent(payload.data.data.event);
-      setUser(payload.data.data.user);
+      // The server registers atomically and returns only the event; mirror the
+      // registration into the cached user.
+      setUser((prev) =>
+        prev ? { ...prev, registeredEvents: [...(prev.registeredEvents || []), id] } : prev,
+      );
       setRegistered(true);
     } catch (err) {
       setRegisterError(err.response?.data?.message || "Registration failed.");
