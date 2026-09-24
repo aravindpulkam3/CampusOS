@@ -6,7 +6,12 @@ const api = axios.create({
 });
 
 // Routes that should never trigger a silent refresh attempt
-const AUTH_ROUTES = ["/auth/refresh", "/auth/me", "/auth/login", "/auth/signup"];
+const AUTH_ROUTES = [
+  "/auth/refresh",
+  "/auth/me",
+  "/auth/login",
+  "/auth/signup",
+];
 
 // The single owner of token refresh — nothing else may POST /auth/refresh.
 // The server rotates refresh tokens strictly: presenting a token that was
@@ -25,32 +30,37 @@ const withRefreshLock = (fn) =>
 
 let refreshPromise = null;
 export const refreshAccessToken = () => {
-  refreshPromise ??= withRefreshLock(() => api.post("/auth/refresh")).finally(() => {
-    refreshPromise = null;
-  });
+  refreshPromise ??= withRefreshLock(() => api.post("/auth/refresh")).finally(
+    () => {
+      refreshPromise = null;
+    },
+  );
   return refreshPromise;
 };
 
 // Response interceptor — on 401, attempt one silent token refresh then retry
 api.interceptors.response.use(
   (response) => response, // ← success path: do nothing, just return
-  async (error) => {   // ← failure path: runs on every error response
+  async (error) => {
+    // ← failure path: runs on every error response
     const originalRequest = error.config;
-     // error.config contains everything about the failed request
+    // error.config contains everything about the failed request
     // method, url, headers, data — everything needed to retry it
     if (!originalRequest) return Promise.reject(error); // not a request/response error
 
-    const isAuthRoute = AUTH_ROUTES.some((route) => originalRequest.url?.includes(route));
+    const isAuthRoute = AUTH_ROUTES.some((route) =>
+      originalRequest.url?.includes(route),
+    );
 
-    if (error.response?.status === 401 // only care about auth failures
-      && !originalRequest._retry // haven't retried yet (prevents loop)
-      && !isAuthRoute // not an auth route itself
-      ) {
-
-      originalRequest._retry = true; 
+    if (
+      error.response?.status === 401 && // only care about auth failures
+      !originalRequest._retry && // haven't retried yet (prevents loop)
+      !isAuthRoute // not an auth route itself
+    ) {
+      originalRequest._retry = true;
       // ↑ stamps the request so if it fails again with 401
       //   the condition above fails and we don't retry infinitely
-      
+
       try {
         await refreshAccessToken();
         return api(originalRequest);
@@ -61,7 +71,7 @@ api.interceptors.response.use(
     }
 
     return Promise.reject(error);
-  }
+  },
 );
 
 export default api;

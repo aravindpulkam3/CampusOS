@@ -119,7 +119,7 @@ const NoticeFeed = ({
           {!loading && notices.length > 0 && (
             <span
               className={`text-xs font-semibold px-2 py-0.5 rounded-full
-              ${urgentCount > 0 ? "bg-red-50 text-red-600" : "bg-gray-100 text-gray-500"}`}
+              ${urgentCount > 0 ? "bg-red-50 text-red-700" : "bg-gray-100 text-gray-500"}`}
             >
               {urgentCount > 0
                 ? `${urgentCount} alert${urgentCount > 1 ? "s" : ""}`
@@ -137,7 +137,7 @@ const NoticeFeed = ({
           <FullSkeleton />
         )
       ) : error ? (
-        <p className="text-xs text-red-400">{error}</p>
+        <p className="text-xs text-red-600">{error}</p>
       ) : notices.length > 0 ? (
         <>
           <div className={compact ? "" : "space-y-2"}>
@@ -162,7 +162,7 @@ const NoticeFeed = ({
           </div>
         </>
       ) : (
-        <p className="text-xs text-gray-400">No notices yet.</p>
+        <p className="text-xs text-gray-500">No notices yet.</p>
       )}
     </div>
   );

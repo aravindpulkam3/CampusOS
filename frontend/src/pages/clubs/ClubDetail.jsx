@@ -1,22 +1,21 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   ArrowLeft,
   Users,
   MapPin,
+  Clock,
   Calendar,
   Plus,
   Megaphone,
-  UserPlus,
-  UserMinus,
   ChevronRight,
-  Image,
-  Edit,
+  ChevronDown,
+  ChevronUp,
+  Pencil,
   Shield,
-  Info,
-  Activity,
   Bell,
   BellOff,
+  Loader2,
 } from "lucide-react";
 import {
   followClub,
@@ -25,10 +24,16 @@ import {
   muteClub,
   unmuteClub,
 } from "../../api/club.api";
+import {
+  getAnnouncements,
+  deleteAnnouncement,
+} from "../../api/announcement.api";
 import useAuth from "../../hooks/useAuth";
+import useIsClamped from "../../hooks/useIsClamped";
+import useImageOk from "../../hooks/useImageOk";
+import { focusRing, SectionHeader, ManageLink } from "../../components/common/SectionBits";
 import NoticeFeed from "../../components/cards/NoticeFeed";
 import AnnouncementCard from "../announcements/AnnouncementCard";
-import { deleteAnnouncement } from "../../api/announcement.api";
 
 // ─── Helpers ──────────────────────────────────────────────────
 const clubBg = [
@@ -40,12 +45,19 @@ const clubBg = [
   "bg-rose-600",
 ];
 
+// Same map as the Clubs list, so a club's chip looks identical on both pages.
 const categoryColor = {
   Technical: "bg-blue-50 text-blue-700 border-blue-100",
   Cultural: "bg-purple-50 text-purple-700 border-purple-100",
   Creative: "bg-orange-50 text-orange-700 border-orange-100",
-  Business: "bg-emerald-50 text-emerald-700 border-emerald-100",
+  Business: "bg-green-50 text-green-700 border-green-100",
+  Sports: "bg-emerald-50 text-emerald-700 border-emerald-100",
 };
+
+// No display class here: callers add one, so `hidden sm:inline-flex` can't be
+// overridden by a display utility baked into the base.
+const chipBase =
+  "items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md border whitespace-nowrap";
 
 const clubInitials = (name) =>
   name
@@ -55,187 +67,271 @@ const clubInitials = (name) =>
     .join("")
     .toUpperCase();
 
-const eligibilityLabel = (branches, years) => {
-  if (!branches?.length && !years?.length) return "Open to All";
-  const b = branches?.length ? branches.join(", ") : "All Branches";
-  const y = years?.length ? `Year ${years.join(", ")}` : "All Years";
-  return `${b} • ${y}`;
+// Ids arrive either bare or populated.
+const idOf = (x) => String(x?._id ?? x);
+
+const formatDay = (d) => {
+  const date = new Date(d);
+  return date.toLocaleDateString("en-IN", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    ...(date.getFullYear() !== new Date().getFullYear() && { year: "numeric" }),
+  });
 };
 
-// ─── Skeleton ─────────────────────────────────────────────────
+const formatTime = (d) =>
+  new Date(d).toLocaleTimeString("en-IN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+
+const formatShortDate = (d) =>
+  new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+
+const formatEventWhen = (start, end) =>
+  new Date(start).toDateString() === new Date(end).toDateString()
+    ? `${formatDay(start)} · ${formatTime(start)}–${formatTime(end)}`
+    : `${formatDay(start)} – ${formatDay(end)}`;
+
+// Mirrors the backend rule: registration closes at the earlier of the
+// deadline and the start.
+const registrationCutoff = (event) => {
+  const start = new Date(event.startDateTime);
+  if (!event.registrationDeadline) return start;
+  const deadline = new Date(event.registrationDeadline);
+  return deadline < start ? deadline : start;
+};
+
+const eventStatus = (event, registered, now) => {
+  if (event.status === "Cancelled")
+    return { label: "Cancelled", color: "bg-red-50 text-red-700 border-red-100/60" };
+  if (new Date(event.endDateTime) < now) return null;
+  if (registered)
+    return { label: "Registered", color: "bg-emerald-50 text-emerald-700 border-emerald-100/60" };
+  if (new Date(event.startDateTime) <= now)
+    return {
+      label: "Happening now",
+      color: "bg-blue-50 text-blue-700 border-blue-100/60",
+      dot: "bg-blue-500",
+    };
+  const cutoff = registrationCutoff(event);
+  if (cutoff > now) {
+    const soon = cutoff - now < 2 * 24 * 60 * 60 * 1000;
+    return {
+      label: `Registration closes ${formatShortDate(cutoff)}`,
+      color: soon
+        ? "bg-amber-50 text-amber-700 border-amber-100"
+        : "bg-slate-50 text-slate-600 border-slate-200/70",
+    };
+  }
+  return { label: "Registration closed", color: "bg-slate-50 text-slate-500 border-slate-200/70" };
+};
+
+// ─── Small building blocks ────────────────────────────────────
 const Skeleton = () => (
-  <div className="max-w-6xl mx-auto px-4 py-4 animate-pulse space-y-6">
-    <div className="w-20 h-4 bg-slate-200 rounded" />
-    <div className="h-44 bg-slate-200 rounded-2xl" />
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <div className="lg:col-span-2 space-y-4">
-        <div className="h-40 bg-slate-100 rounded-2xl" />
-        <div className="h-60 bg-slate-100 rounded-2xl" />
-      </div>
-      <div className="space-y-4">
-        <div className="h-32 bg-slate-100 rounded-2xl" />
-        <div className="h-44 bg-slate-100 rounded-2xl" />
+  <div className="max-w-5xl mx-auto px-4 sm:px-6 py-2 space-y-5 animate-pulse">
+    <div className="w-12 h-3 bg-slate-200 rounded" />
+    <div className="bg-white border border-slate-100 rounded-2xl overflow-hidden">
+      <div className="h-24 sm:h-32 bg-slate-100" />
+      <div className="px-4 sm:px-5 pb-5">
+        <div className="w-16 h-16 sm:w-20 sm:h-20 -mt-8 sm:-mt-10 rounded-2xl bg-slate-200 border-4 border-white" />
+        <div className="mt-3 w-48 h-5 bg-slate-100 rounded" />
+        <div className="mt-2 w-64 max-w-full h-3 bg-slate-100 rounded" />
       </div>
     </div>
+    <div className="h-28 bg-white border border-slate-100 rounded-2xl" />
+    <div className="h-20 bg-white border border-slate-100 rounded-2xl" />
+    <div className="h-48 bg-white border border-slate-100 rounded-2xl" />
   </div>
 );
 
-const EmptyState = ({ message }) => (
-  <div className="text-center py-12 bg-white border border-slate-100 rounded-2xl shadow-3xs px-4">
-    <Megaphone size={20} className="mx-auto text-slate-300 mb-2.5" />
-    <p className="text-xs font-medium text-slate-400">{message}</p>
-  </div>
+const StatusChip = ({ status, className = "" }) => (
+  <span className={`${chipBase} ${status.color} ${className || "inline-flex"}`}>
+    {status.dot && <span className={`w-1.5 h-1.5 rounded-full ${status.dot}`} />}
+    {status.label}
+  </span>
 );
 
-const AdminBtn = ({ to, icon: Icon, label }) => (
-  <Link
-    to={to}
-    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold border border-slate-200/80 text-slate-600 rounded-xl hover:border-slate-400 hover:text-slate-900 transition-all bg-white/90 backdrop-blur-xs shadow-3xs"
-  >
-    <Icon size={12} className="text-slate-400" />
-    {label}
-  </Link>
-);
-
-const SectionHeader = ({ title, icon: Icon, count, action }) => (
-  <div className="flex items-center justify-between mb-4 mt-2 px-1">
-    <div className="flex items-center gap-2">
-      <Icon size={14} className="text-slate-400" />
-      <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-        {title}
-      </h2>
-      {count > 0 && (
-        <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
-          {count}
-        </span>
-      )}
-    </div>
-    {action}
-  </div>
-);
-
-// ─── Event Card ───────────────────────────────────────────────
-const EventCard = ({ event, past = false }) => (
-  <Link
-    to={`/community/events/${event._id}`}
-    className={`flex flex-col sm:flex-row items-start sm:items-center gap-4 p-4 bg-white border rounded-2xl hover:border-slate-300 hover:shadow-xs transition-all duration-200 group relative overflow-hidden
-      ${past ? "border-slate-100 opacity-60 bg-slate-50/40" : "border-slate-100/90 shadow-3xs"}`}
-  >
-    <div className="w-full sm:w-20 h-24 sm:h-14 rounded-xl bg-slate-50 border border-slate-100 overflow-hidden flex-shrink-0 relative">
-      {event.bannerUrl || event.image || event.banner ? (
-        <img
-          src={event.bannerUrl || event.image || event.banner}
-          alt=""
-          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-103"
-          loading="lazy"
-        />
-      ) : (
-        <div className="w-full h-full flex items-center justify-center bg-slate-50 text-slate-300">
-          <Calendar size={15} />
+const EventRow = ({ event, status, past = false }) => {
+  const start = new Date(event.startDateTime);
+  const [showBanner, onBannerError] = useImageOk(event.banner);
+  return (
+    <li>
+      <Link
+        to={`/community/events/${event._id}`}
+        className="group flex items-center gap-3 sm:gap-4 px-4 py-3 hover:bg-slate-50/70 focus-visible:outline-none focus-visible:bg-slate-50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-slate-900/15 transition-colors"
+      >
+        {/* Event banner as the thumbnail; the date tile stands in when there is none. */}
+        <div
+          className={`w-20 h-14 sm:w-24 sm:h-16 flex-shrink-0 rounded-xl border overflow-hidden flex flex-col items-center justify-center ${
+            past ? "border-slate-100 bg-slate-50/60" : "border-slate-200 bg-white"
+          }`}
+        >
+          {showBanner ? (
+            <img
+              src={event.banner}
+              alt=""
+              loading="lazy"
+              onError={onBannerError}
+              className={`w-full h-full object-cover ${past ? "opacity-70" : ""}`}
+            />
+          ) : (
+            <>
+              <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                {start.toLocaleDateString("en-IN", { month: "short" })}
+              </div>
+              <div
+                className={`text-lg font-black leading-none mt-0.5 ${
+                  past ? "text-slate-500" : "text-slate-800"
+                }`}
+              >
+                {start.getDate()}
+              </div>
+            </>
+          )}
         </div>
-      )}
-    </div>
 
-    <div className="flex items-center gap-3 flex-shrink-0 sm:border-r sm:border-slate-100 sm:pr-4 min-w-[55px]">
-      <div className="text-center sm:w-full">
-        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">
-          {new Date(event.startDateTime).toLocaleDateString("en-IN", {
-            month: "short",
-          })}
-        </div>
-        <div className="text-2xl font-black text-slate-800 leading-none mt-0.5">
-          {new Date(event.startDateTime).getDate()}
-        </div>
-      </div>
-    </div>
-
-    <div className="flex-1 min-w-0 space-y-1">
-      <div className="flex flex-wrap items-center gap-2">
-        <h4 className="text-xs font-bold text-slate-800 group-hover:text-blue-600 leading-snug truncate transition-colors">
-          {event.eventName}
-        </h4>
-        {event.category && (
-          <span
-            className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${categoryColor[event.category] || "bg-slate-50 text-slate-600"}`}
+        <div className="flex-1 min-w-0">
+          <p
+            className={`text-sm font-semibold truncate transition-colors group-hover:text-blue-600 ${
+              past ? "text-slate-500" : "text-slate-800"
+            }`}
           >
-            {event.category}
-          </span>
-        )}
-      </div>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-400 font-medium">
-        <span className="flex items-center gap-1 truncate">
-          <MapPin size={11} className="text-slate-300" /> {event.venue}
-        </span>
-        <span className="flex items-center gap-1 truncate">
-          <Users size={11} className="text-slate-300" />{" "}
-          {eligibilityLabel(event.eligibleBranches, event.eligibleYears)}
-        </span>
-      </div>
-    </div>
+            {event.eventName}
+          </p>
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] font-medium text-slate-500">
+            <span className="flex items-center gap-1">
+              <Clock size={11} className="text-slate-400 flex-shrink-0" />
+              {formatEventWhen(event.startDateTime, event.endDateTime)}
+            </span>
+            {event.venue && (
+              <span className="flex items-center gap-1 min-w-0">
+                <MapPin size={11} className="text-slate-400 flex-shrink-0" />
+                <span className="truncate">{event.venue}</span>
+              </span>
+            )}
+          </div>
+          {status && <StatusChip status={status} className="mt-1.5 inline-flex sm:hidden" />}
+        </div>
 
-    <ChevronRight
-      size={14}
-      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 hidden sm:block transition-transform group-hover:translate-x-0.5 group-hover:text-slate-500"
-    />
-  </Link>
-);
+        {status && <StatusChip status={status} className="hidden sm:inline-flex flex-shrink-0" />}
+        <ChevronRight
+          size={14}
+          className="flex-shrink-0 text-slate-300 transition-colors group-hover:text-slate-500"
+        />
+      </Link>
+    </li>
+  );
+};
 
-// ─── Main View Component ──────────────────────────────────────
+// ─── Page ─────────────────────────────────────────────────────
 const ClubDetail = () => {
   const { clubId } = useParams();
   const navigate = useNavigate();
   const { user, setUser } = useAuth();
 
   const [club, setClub] = useState(null);
-  const [events, setEvents] = useState([]);
-  const [announcements, setAnnouncements] = useState([]);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [upcomingEvents, setUpcomingEvents] = useState([]);
+  const [pastEvents, setPastEvents] = useState([]);
+  const [pastEventCount, setPastEventCount] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [joined, setJoined] = useState(false);
-  const [isFollowing, setIsFollowing] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
+  const [loadError, setLoadError] = useState(null); // "notFound" | "failed"
+  const [reloadKey, setReloadKey] = useState(0);
   const [followPending, setFollowPending] = useState(false);
   const [mutePending, setMutePending] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [aboutExpanded, setAboutExpanded] = useState(false);
+
+  // Announcements page through their own endpoint, 10 at a time.
+  const [announcements, setAnnouncements] = useState([]);
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [feedLoading, setFeedLoading] = useState(true);
+  const [loadMoreLoading, setLoadMoreLoading] = useState(false);
+  const [feedError, setFeedError] = useState(false);
+  const activeClubRef = useRef(clubId);
+
+  const [showClubBanner, onClubBannerError] = useImageOk(club?.banner);
+  const [showLogo, onLogoError] = useImageOk(club?.logo);
+
+  const descriptionRef = useRef(null);
+  const descriptionClamped = useIsClamped(
+    descriptionRef,
+    !aboutExpanded,
+    club?.description,
+  );
+
+  // Fetched per club only: follow/mute update the user in context, and the
+  // page derives its state from that instead of refetching.
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setLoadError(null);
+    setAboutExpanded(false);
+    getClubDetails(clubId)
+      .then((payload) => {
+        if (cancelled) return;
+        const data = payload.data.data;
+        setClub(data.club);
+        setIsAdmin(data.isAdmin);
+        setUpcomingEvents(data.upcomingEvents || []);
+        setPastEvents(data.pastEvents || []);
+        setPastEventCount(data.pastEventCount ?? 0);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.error(err);
+        const status = err.response?.status;
+        setLoadError(status === 404 || status === 400 ? "notFound" : "failed");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [clubId, reloadKey]);
+
+  const fetchAnnouncements = useCallback(
+    async (fromOffset, append) => {
+      const requestedClub = clubId;
+      if (append) setLoadMoreLoading(true);
+      else setFeedLoading(true);
+      setFeedError(false);
+      try {
+        const res = await getAnnouncements("club", clubId, fromOffset);
+        if (activeClubRef.current !== requestedClub) return;
+        const { announcements: page = [], hasMore: more, nextOffset } =
+          res?.data?.data || {};
+        setAnnouncements((prev) => (append ? [...prev, ...page] : page));
+        setHasMore(more);
+        setOffset(nextOffset);
+      } catch (err) {
+        if (activeClubRef.current !== requestedClub) return;
+        console.error("Failed to load announcements:", err);
+        setFeedError(true);
+      } finally {
+        if (activeClubRef.current === requestedClub) {
+          setFeedLoading(false);
+          setLoadMoreLoading(false);
+        }
+      }
+    },
+    [clubId],
+  );
 
   useEffect(() => {
-    const fetchClub = async () => {
-      try {
-        const payload = await getClubDetails(clubId);
-        const {
-          club: fetchedClub,
-          events: fetchedEvents,
-          announcements: fetchedAnnouncements,
-          isAdmin: adminStatus,
-        } = payload.data.data;
+    activeClubRef.current = clubId;
+    setAnnouncements([]);
+    setHasMore(false);
+    fetchAnnouncements(0, false);
+  }, [clubId, fetchAnnouncements]);
 
-        setClub(fetchedClub);
-        setEvents(fetchedEvents || []);
-        setAnnouncements(fetchedAnnouncements || []);
-        setIsAdmin(adminStatus);
-
-        if (user) {
-          setIsFollowing(
-            user.followedClubs?.some(
-              (id) => id.toString() === clubId.toString(),
-            ),
-          );
-          setJoined(
-            fetchedClub.clubAdmins?.some(
-              (m) => m.toString() === user._id.toString(),
-            ),
-          );
-          setIsMuted(
-            user.mutedClubs?.some((c) => c.toString() === clubId.toString()),
-          );
-        }
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchClub();
-  }, [clubId, user]);
+  // Derived from the user in context, which the follow/mute handlers update.
+  const isFollowing = !!user?.followedClubs?.some((id) => idOf(id) === clubId);
+  const isMuted = !!user?.mutedClubs?.some((id) => idOf(id) === clubId);
 
   // Each control sends the desired state and stays disabled until its request
   // settles, so an older response can never land after a newer one.
@@ -244,9 +340,10 @@ const ClubDetail = () => {
     setFollowPending(true);
     try {
       const payload = await (isFollowing ? unfollowClub : followClub)(clubId);
-      setClub(payload.data.data.club);
-      setUser(payload.data.data.user);
-      setIsFollowing(payload.data.data.isFollowing);
+      const { club: updated, user: updatedUser } = payload.data.data;
+      // The response's club is unpopulated; keep ours and take the new count.
+      setClub((prev) => ({ ...prev, followerCount: updated.followerCount }));
+      setUser(updatedUser);
     } catch (error) {
       console.error(error);
     } finally {
@@ -260,7 +357,6 @@ const ClubDetail = () => {
     try {
       const payload = await (isMuted ? unmuteClub : muteClub)(clubId);
       const nowMuted = payload.data.data.isMuted;
-      setIsMuted(nowMuted);
       setUser((prev) => {
         const others = (prev.mutedClubs || []).filter((id) => id.toString() !== clubId);
         return { ...prev, mutedClubs: nowMuted ? [...others, clubId] : others };
@@ -276,299 +372,417 @@ const ClubDetail = () => {
     try {
       await deleteAnnouncement(id);
       setAnnouncements((prev) => prev.filter((a) => a._id !== id));
+      // Everything after it shifted up one; keep the next page from skipping an item.
+      setOffset((o) => Math.max(0, o - 1));
     } catch (error) {
       console.error(error);
     }
   };
 
+  const handleLoadMore = () => {
+    if (!loadMoreLoading && hasMore) fetchAnnouncements(offset, true);
+  };
 
   if (loading) return <Skeleton />;
-  if (!club)
+  if (loadError || !club)
     return (
-      <div className="max-w-4xl mx-auto text-center py-20">
-        <p className="text-xs text-slate-400 font-medium">
-          Club asset node missing.
+      <div className="max-w-md mx-auto text-center py-20 px-4 space-y-3">
+        <p className="text-sm font-semibold text-slate-700">
+          {loadError === "failed" ? "Couldn't load this club" : "Club not found"}
         </p>
+        <p className="text-xs text-slate-500">
+          {loadError === "failed"
+            ? "Check your connection and try again."
+            : "It may have been removed, or the link is incorrect."}
+        </p>
+        {loadError === "failed" ? (
+          <button
+            onClick={() => setReloadKey((k) => k + 1)}
+            className={`px-3.5 py-2 text-xs font-bold rounded-xl border border-slate-200 text-slate-600 bg-white hover:border-slate-400 hover:text-slate-900 transition-colors ${focusRing}`}
+          >
+            Try again
+          </button>
+        ) : (
+          <Link
+            to="/community/clubs"
+            className={`inline-block px-3.5 py-2 text-xs font-bold rounded-xl border border-slate-200 text-slate-600 bg-white hover:border-slate-400 hover:text-slate-900 transition-colors ${focusRing}`}
+          >
+            Back to clubs
+          </Link>
+        )}
       </div>
     );
 
+  const coreTeam = club.clubAdmins || [];
+  const isCoreMember = !!user && coreTeam.some((m) => idOf(m) === String(user._id));
+  const registeredIds = new Set((user?.registeredEvents || []).map(idOf));
   const now = new Date();
-  const upcomingEvents = events.filter((e) => new Date(e.endDateTime) >= now);
-  const pastEvents = events.filter((e) => new Date(e.endDateTime) < now);
   const bgClass = clubBg[club.clubName?.charCodeAt(0) % clubBg.length];
-  const initials = clubInitials(club.clubName);
+  const shownTeam = coreTeam.slice(0, 6);
+  const hiddenTeamCount = coreTeam.length - shownTeam.length;
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-2 space-y-5">
-      {/* Navigation Row */}
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-2 space-y-5">
       <button
         onClick={() => navigate(-1)}
-        className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-slate-700 transition-colors"
+        className={`inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-800 rounded transition-colors ${focusRing}`}
       >
-        <ArrowLeft size={13} /> Return to Hub
+        <ArrowLeft size={13} /> Back
       </button>
 
-      {/* ── Club Billboard Header ── */}
-      <div className="bg-white border border-slate-100 rounded-2xl overflow-hidden shadow-3xs">
-        <div className="h-36 sm:h-44 bg-slate-50 relative overflow-hidden border-b border-slate-100">
-          {club.banner ? (
+      {/* ── Header ── */}
+      <header className="bg-white border border-slate-100 rounded-2xl overflow-hidden">
+        <div
+          className={`${showClubBanner ? "h-28 sm:h-40" : "h-14 sm:h-16"} bg-slate-100 border-b border-slate-100`}
+        >
+          {showClubBanner && (
             <img
               src={club.banner}
               alt=""
+              onError={onClubBannerError}
               className="w-full h-full object-cover"
             />
-          ) : (
-            <div className="w-full h-full bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center opacity-90">
-              <Activity size={24} className="text-white/10" />
-            </div>
-          )}
-
-          {isAdmin && (
-            <div className="absolute top-3 right-3 flex flex-wrap items-center gap-2 max-w-[90%] justify-end">
-              <AdminBtn
-                to={`/clubs/${clubId}/create-notice`}
-                icon={Plus}
-                label="Notice"
-              />
-              <AdminBtn
-                to={`/community/club/${clubId}/announcements/create`}
-                icon={Plus}
-                label="Announcement"
-              />
-              <button
-                onClick={() =>
-                  navigate(`/community/clubs/${clubId}/edit`, {
-                    state: { club, isAdmin },
-                  })
-                }
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold border border-slate-200/80 text-slate-600 rounded-xl hover:border-slate-400 hover:text-slate-900 bg-white/90 backdrop-blur-xs transition shadow-3xs"
-              >
-                <Edit size={12} /> Customize Hub
-              </button>
-            </div>
           )}
         </div>
 
-        {/* Profile Details Bar */}
-        <div className="px-5 pb-5 pt-0 relative flex flex-col sm:flex-row sm:items-end justify-between gap-4 -mt-10 sm:-mt-12">
-          <div className="flex flex-col sm:flex-row sm:items-end gap-3.5">
+        <div className="px-4 sm:px-5 pb-4">
+          <div className="flex items-end justify-between gap-3">
+            {/* relative: without it the banner image paints over the logo's
+                border and backdrop where they overlap. */}
             <div
-              className={`w-20 h-20 sm:w-24 sm:h-24 rounded-2xl border-4 border-white ${bgClass} flex items-center justify-center text-white text-2xl font-black shadow-xs overflow-hidden flex-shrink-0 z-10`}
+              className={`relative w-16 h-16 sm:w-20 sm:h-20 -mt-8 sm:-mt-10 rounded-2xl border-4 border-white ${
+                showLogo ? "bg-white" : bgClass
+              } flex items-center justify-center text-white text-xl sm:text-2xl font-black overflow-hidden flex-shrink-0`}
             >
-              {club.logo ? (
+              {showLogo ? (
                 <img
                   src={club.logo}
-                  alt=""
-                  className="w-full h-full object-cover"
+                  alt={`${club.clubName} logo`}
+                  onError={onLogoError}
+                  className="w-full h-full object-contain"
                 />
               ) : (
-                initials
+                clubInitials(club.clubName)
               )}
             </div>
-            <div className="space-y-1 sm:mb-1">
-              <h1 className="text-base sm:text-lg font-bold text-slate-800 tracking-tight leading-tight">
-                {club.clubName}
-              </h1>
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-medium text-[11px] text-slate-400">
-                {club.category && (
-                  <span
-                    className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${categoryColor[club.category] || "bg-slate-50 text-slate-500"}`}
+
+            <div className="flex items-center gap-2 pt-3">
+              {isFollowing && (
+                <button
+                  onClick={handleMuteButton}
+                  disabled={mutePending}
+                  aria-label={isMuted ? "Unmute notifications from this club" : "Mute notifications from this club"}
+                  title={isMuted ? "Unmute notifications" : "Mute notifications"}
+                  className={`p-2 rounded-xl border border-slate-200 bg-white transition-colors hover:border-slate-400 hover:text-slate-900 disabled:opacity-60 disabled:cursor-wait ${
+                    isMuted ? "text-slate-400" : "text-slate-600"
+                  } ${focusRing}`}
+                >
+                  {isMuted ? <BellOff size={14} /> : <Bell size={14} />}
+                </button>
+              )}
+              <button
+                onClick={handleFollowButton}
+                disabled={followPending}
+                className={`group/follow min-w-[88px] px-3.5 py-2 text-xs font-bold rounded-xl border transition-colors disabled:opacity-60 disabled:cursor-wait ${focusRing} ${
+                  isFollowing
+                    ? "border-slate-200 text-slate-600 bg-white hover:border-red-200 hover:text-red-500 hover:bg-red-50/40"
+                    : "border-slate-900 bg-slate-900 text-white hover:bg-slate-800"
+                }`}
+              >
+                {isFollowing ? (
+                  <>
+                    <span className="group-hover/follow:hidden">Following</span>
+                    <span className="hidden group-hover/follow:inline">Unfollow</span>
+                  </>
+                ) : (
+                  "Follow"
+                )}
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-3 min-w-0">
+            <h1 className="text-lg sm:text-xl font-bold text-slate-800 tracking-tight leading-tight break-words">
+              {club.clubName}
+            </h1>
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs font-medium text-slate-500">
+              {club.category && (
+                <span
+                  className={`inline-flex ${chipBase} ${categoryColor[club.category] || "bg-slate-50 text-slate-600 border-slate-200"}`}
+                >
+                  {club.category}
+                </span>
+              )}
+              <span className="flex items-center gap-1">
+                <Users size={12} className="text-slate-400" />
+                {club.followerCount ?? 0} {club.followerCount === 1 ? "follower" : "followers"}
+              </span>
+              <span className="flex items-center gap-1">
+                <Shield size={12} className="text-slate-400" />
+                {coreTeam.length} core {coreTeam.length === 1 ? "member" : "members"}
+              </span>
+              {isCoreMember && (
+                <span className={`inline-flex ${chipBase} bg-slate-900 text-white border-slate-900`}>
+                  Core member
+                </span>
+              )}
+              {!club.isActive && (
+                <span className={`inline-flex ${chipBase} bg-amber-50 text-amber-700 border-amber-100`}>
+                  Pending approval
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {isAdmin && (
+          <div className="flex flex-wrap items-center gap-1 px-3 sm:px-4 py-2 border-t border-slate-100 bg-slate-50/60">
+            <span className="px-1.5 mr-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+              Manage
+            </span>
+            <ManageLink to={`/clubs/${clubId}/create-notice`} icon={Plus}>
+              Post notice
+            </ManageLink>
+            <ManageLink to={`/community/club/${clubId}/announcements/create`} icon={Plus}>
+              Post announcement
+            </ManageLink>
+            <ManageLink to={`/community/clubs/${clubId}/events/create`} icon={Plus}>
+              Create event
+            </ManageLink>
+            <ManageLink
+              to={`/community/clubs/${clubId}/edit`}
+              state={{ club, isAdmin }}
+              icon={Pencil}
+            >
+              Edit club
+            </ManageLink>
+          </div>
+        )}
+      </header>
+
+      {/* ── About ── */}
+      <section
+        aria-labelledby="club-about"
+        className="bg-white border border-slate-100 rounded-2xl p-4 sm:p-5"
+      >
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+          <div className="md:col-span-2 min-w-0">
+            <h2 id="club-about" className="text-sm font-semibold text-slate-800 mb-1.5">
+              About
+            </h2>
+            {club.description ? (
+              <>
+                <p
+                  ref={descriptionRef}
+                  className={`text-[13px] text-slate-600 leading-relaxed whitespace-pre-line break-words ${
+                    aboutExpanded ? "" : "line-clamp-4"
+                  }`}
+                >
+                  {club.description}
+                </p>
+                {descriptionClamped && (
+                  <button
+                    onClick={() => setAboutExpanded((v) => !v)}
+                    aria-expanded={aboutExpanded}
+                    className={`mt-1.5 flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-700 rounded transition-colors ${focusRing}`}
                   >
-                    {club.category}
+                    {aboutExpanded ? (
+                      <>
+                        Show less <ChevronUp size={12} />
+                      </>
+                    ) : (
+                      <>
+                        Show more <ChevronDown size={12} />
+                      </>
+                    )}
+                  </button>
+                )}
+              </>
+            ) : (
+              <p className="text-xs text-slate-400">No description yet.</p>
+            )}
+          </div>
+
+          <dl className="space-y-3 text-xs pt-4 border-t border-slate-100 md:pt-0 md:border-t-0 md:border-l md:pl-6">
+            {club.createdAt && (
+              <div className="flex items-center justify-between gap-3">
+                <dt className="font-medium text-slate-500">Created</dt>
+                <dd className="font-semibold text-slate-700">
+                  {new Date(club.createdAt).toLocaleDateString("en-IN", {
+                    month: "short",
+                    year: "numeric",
+                  })}
+                </dd>
+              </div>
+            )}
+            {coreTeam.length > 0 && (
+              <div>
+                <dt className="font-medium text-slate-500 mb-2">Core team</dt>
+                <dd>
+                  <ul className="grid grid-cols-2 gap-x-3 gap-y-2">
+                    {shownTeam.map((member, i) => (
+                      <li key={idOf(member)} className="flex items-center gap-2 min-w-0">
+                        <div
+                          className={`w-6 h-6 rounded-lg ${clubBg[i % clubBg.length]} flex items-center justify-center text-white text-[10px] font-bold overflow-hidden flex-shrink-0`}
+                        >
+                          {member.profilePicture ? (
+                            <img src={member.profilePicture} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            `${member.firstName?.[0] ?? ""}${member.lastName?.[0] ?? ""}`
+                          )}
+                        </div>
+                        <span className="font-semibold text-slate-700 truncate">
+                          {member.firstName} {member.lastName}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  {hiddenTeamCount > 0 && (
+                    <p className="mt-2 text-[11px] font-medium text-slate-500">
+                      +{hiddenTeamCount} more
+                    </p>
+                  )}
+                </dd>
+              </div>
+            )}
+          </dl>
+        </div>
+      </section>
+
+      {/* ── Notices ── can be urgent, so they sit above events and announcements
+          at every width, in the same highlighted card EventDetail uses. */}
+      <section
+        aria-label="Club noticeboard"
+        className="bg-amber-50/40 border border-amber-200/60 rounded-2xl p-4"
+      >
+        <NoticeFeed
+          targetType="clubs"
+          targetId={clubId}
+          title="Noticeboard"
+          canPost={isAdmin}
+          showActions={isAdmin}
+          compact={true}
+        />
+      </section>
+
+      <section
+        aria-labelledby="club-events"
+        className="min-w-0"
+      >
+        <SectionHeader
+          id="club-events"
+          icon={Calendar}
+          title="Events"
+          count={upcomingEvents.length}
+        />
+        <div className="bg-white border border-slate-100 rounded-2xl overflow-hidden">
+          {pastEvents.length > 0 && (
+            <h3 className="px-4 py-2 border-b border-slate-100 bg-slate-50/60 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+              Upcoming
+            </h3>
+          )}
+          {upcomingEvents.length > 0 ? (
+            <ul className="divide-y divide-slate-100">
+              {upcomingEvents.map((event) => (
+                <EventRow
+                  key={event._id}
+                  event={event}
+                  status={eventStatus(event, registeredIds.has(idOf(event._id)), now)}
+                />
+              ))}
+            </ul>
+          ) : (
+            <p className="px-4 py-4 text-xs text-slate-500">No upcoming events.</p>
+          )}
+
+          {pastEvents.length > 0 && (
+            <>
+              <div className="flex items-center justify-between gap-3 px-4 py-2 border-y border-slate-100 bg-slate-50/60">
+                <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  Past
+                </h3>
+                {pastEventCount > pastEvents.length && (
+                  <span className="text-[11px] font-medium text-slate-500">
+                    Latest {pastEvents.length} of {pastEventCount}
                   </span>
                 )}
-                <span className="flex items-center gap-1">
-                  <Users size={11} className="text-slate-300" />{" "}
-                  {club.followerCount ?? 0} followers
-                </span>
-                <span className="flex items-center gap-1">
-                  <Shield size={11} className="text-slate-300" />{" "}
-                  {club.clubAdmins?.length ?? 0} operators
-                </span>
               </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 self-start sm:self-end z-10">
-            <button
-              onClick={handleFollowButton}
-              disabled={followPending}
-              className={`px-3.5 py-1.5 text-xs font-bold rounded-xl border transition-all duration-150 shadow-3xs disabled:opacity-60 disabled:cursor-wait
-                ${
-                  isFollowing
-                    ? "border-slate-200 text-slate-400 bg-slate-50 hover:border-red-200 hover:text-red-500 hover:bg-red-50/30"
-                    : "border-slate-200 text-slate-600 bg-white hover:border-slate-400 hover:text-slate-900"
-                }`}
-            >
-              {isFollowing ? "Following" : "Follow"}
-            </button>
-            {isFollowing && (
-              <button
-                onClick={handleMuteButton}
-                disabled={mutePending}
-                title={isMuted ? "Unmute notifications" : "Mute notifications"}
-                className={`p-1.5 rounded-xl border transition-all duration-150 shadow-3xs disabled:opacity-60 disabled:cursor-wait
-                  ${
-                    isMuted
-                      ? "border-slate-200 text-slate-300 bg-slate-50 hover:border-slate-400 hover:text-slate-600"
-                      : "border-slate-200 text-slate-500 bg-white hover:border-slate-400 hover:text-slate-900"
-                  }`}
-              >
-                {isMuted ? <BellOff size={14} /> : <Bell size={14} />}
-              </button>
-            )}
-            <button
-              onClick={() => setJoined((p) => !p)}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-xl border transition-all duration-150 shadow-3xs
-                ${
-                  joined
-                    ? "bg-slate-50 border-slate-200 text-slate-400 hover:bg-red-50/30 hover:text-red-500 hover:border-red-200"
-                    : "bg-slate-900 text-white border-slate-900 hover:bg-slate-800"
-                }`}
-            >
-              {joined ? (
-                <>
-                  <UserMinus size={12} /> Leave Core
-                </>
-              ) : (
-                <>
-                  <UserPlus size={12} /> Join Core
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Primary Responsive Split Viewport Layout Grid ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
-        {/* LEFT COLUMN: Strategic Timeline Feeds */}
-        <div className="lg:col-span-2 space-y-5 order-2 lg:order-1">
-          {/* Announcements Section */}
-          <section>
-            <SectionHeader
-              title="Announcements"
-              icon={Megaphone}
-              count={announcements.length}
-            />
-            {announcements.length > 0 ? (
-              <div className="space-y-3">
-                {announcements.map((a) => (
-                  <AnnouncementCard
-                    key={a._id}
-                    announcement={a}
-                    variant="detail"
-                    avatarBg={bgClass}
-                    onDelete={handleDeleteAnnouncement}
+              <ul className="divide-y divide-slate-100">
+                {pastEvents.map((event) => (
+                  <EventRow
+                    key={event._id}
+                    event={event}
+                    status={eventStatus(event, false, now)}
+                    past
                   />
                 ))}
-              </div>
-            ) : (
-              <EmptyState message="No broadcast log files populated yet." />
-            )}
-          </section>
-
-          {/* Upcoming Events Section */}
-          
-          <section>
-            <div className="flex items-center justify-between mb-4">
-              <SectionHeader
-                title="Active Calendars"
-                icon={Calendar}
-                count={upcomingEvents.length}
-              />
-              <button
-                onClick={()=>{ navigate(`/community/clubs/${clubId}/events/create`) }} 
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg text-sm transition-colors"
-              >
-                <Plus className="w-4 h-4" />{" "}
-                {/* Optional icon using Lucide Icons */}
-                Create Event
-              </button>
-            </div>
-
-            {upcomingEvents.length > 0 ? (
-              <div className="space-y-3">
-                {upcomingEvents.map((event) => (
-                  <EventCard key={event._id} event={event} />
-                ))}
-              </div>
-            ) : (
-              <EmptyState message="No live entries mapped on active timelines." />
-            )}
-          </section>
-
-          {/* Historical Logs Section */}
-          {pastEvents.length > 0 && (
-            <section>
-              <SectionHeader
-                title="Historical Context"
-                icon={Calendar}
-                count={pastEvents.length}
-              />
-              <div className="space-y-3">
-                {pastEvents.map((event) => (
-                  <EventCard key={event._id} event={event} past />
-                ))}
-              </div>
-            </section>
+              </ul>
+            </>
           )}
         </div>
+      </section>
 
-        {/* RIGHT COLUMN: Static Information Sidebar Nodes */}
-        <div className="space-y-5 order-1 lg:order-2 lg:sticky lg:top-4">
-          {/* Description Block */}
-          {club.description && (
-            <div className="bg-white border border-slate-100 rounded-2xl p-4.5 shadow-3xs space-y-2">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400 uppercase tracking-wider">
-                <Info size={13} /> Portfolio Meta
-              </div>
-              <p className="text-xs text-slate-500 leading-relaxed font-medium whitespace-pre-line">
-                {club.description}
-              </p>
-            </div>
-          )}
-
-          {/* Notice Boards Feed Widget Integration */}
-          <div className="bg-white border border-slate-100 rounded-2xl p-4.5 shadow-3xs">
-            <NoticeFeed
-              targetType="clubs"
-              targetId={clubId}
-              title="Club Noticeboard"
-              canPost={user?.role === "superadmin"}
-              showActions={user?.role === "superadmin"}
-              compact={true}
-            />
+      <section
+        aria-labelledby="club-announcements"
+        className="min-w-0"
+      >
+        <SectionHeader id="club-announcements" icon={Megaphone} title="Announcements" />
+        {feedLoading && announcements.length === 0 ? (
+          <div className="space-y-3 animate-pulse">
+            <div className="h-24 bg-white border border-slate-100 rounded-2xl" />
+            <div className="h-24 bg-white border border-slate-100 rounded-2xl" />
           </div>
-
-          {/* Team Leadership Section */}
-          {club.clubAdmins?.length > 0 && (
-            <div className="bg-white border border-slate-100 rounded-2xl p-4.5 shadow-3xs space-y-3">
-              <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                Operational Registry Leads
-              </div>
-              <div className="grid grid-cols-1 gap-2">
-                {club.clubAdmins.map((admin, i) => (
-                  <div
-                    key={admin._id || i}
-                    className="flex items-center gap-2.5 p-2 bg-slate-50/50 border border-slate-100/60 rounded-xl"
-                  >
-                    <div
-                      className={`w-7 h-7 rounded-lg ${clubBg[i % clubBg.length]} flex items-center justify-center text-white text-[10px] font-bold border border-black/5`}
-                    >
-                      {admin.firstName?.[0]}
-                      {admin.lastName?.[0]}
-                    </div>
-                    <span className="text-xs font-bold text-slate-700">
-                      {admin.firstName} {admin.lastName}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+        ) : announcements.length > 0 ? (
+          <div className="space-y-3">
+            {announcements.map((a) => (
+              <AnnouncementCard
+                key={a._id}
+                announcement={a}
+                variant="detail"
+                avatarBg={bgClass}
+                isEligible={isAdmin}
+                onDelete={handleDeleteAnnouncement}
+              />
+            ))}
+            {feedError && (
+              <p className="text-center text-xs text-red-500">
+                Couldn't load more announcements.
+              </p>
+            )}
+            {hasMore && (
+              <button
+                onClick={handleLoadMore}
+                disabled={loadMoreLoading}
+                className={`flex items-center justify-center gap-2 w-full py-2.5 text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:border-slate-400 hover:text-slate-900 transition-colors disabled:opacity-60 ${focusRing}`}
+              >
+                {loadMoreLoading ? (
+                  <>
+                    <Loader2 size={13} className="animate-spin text-slate-400" /> Loading…
+                  </>
+                ) : feedError ? (
+                  "Try again"
+                ) : (
+                  "Load more"
+                )}
+              </button>
+            )}
+          </div>
+        ) : feedError ? (
+          <div className="flex items-center justify-between gap-3 px-4 py-4 bg-white border border-slate-100 rounded-2xl">
+            <p className="text-xs text-slate-500">Couldn't load announcements.</p>
+            <button
+              onClick={() => fetchAnnouncements(0, false)}
+              className={`px-3 py-1.5 text-xs font-bold rounded-xl border border-slate-200 text-slate-600 bg-white hover:border-slate-400 hover:text-slate-900 transition-colors ${focusRing}`}
+            >
+              Try again
+            </button>
+          </div>
+        ) : (
+          <p className="px-4 py-4 text-xs text-slate-500 bg-white border border-slate-100 rounded-2xl">
+            No announcements yet.
+          </p>
+        )}
+      </section>
     </div>
   );
 };

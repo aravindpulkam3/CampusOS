@@ -60,8 +60,6 @@ const eventSchema = new mongoose.Schema(
       },
     ]
     ,
-    // No stored registration count: User.registeredEvents is the single source
-    // of truth, and the count is derived from it (see event.controller.js).
     eligibleBranches: {
       type: [String],
       default: [], // empty array means open to all branches

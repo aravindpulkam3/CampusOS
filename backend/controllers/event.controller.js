@@ -8,6 +8,7 @@ import escapeRegex from "../utils/escapeRegex.js";
 import { notifyClubFollowers, notifyEventRegistrants } from "../services/notification.service.js";
 import { getJSON, setJSON, del } from "../utils/cache.js";
 import { assertClubAdmin } from "../middleware/clubAdminMiddleware.js";
+import { canManageEvent } from "../middleware/eventManagerMiddleware.js";
 
 const UPCOMING_EVENTS_CACHE_KEY = "cache:events:upcoming";
 const UPCOMING_EVENTS_TTL = 60 * 15; // 15m
@@ -211,16 +212,22 @@ export const getAllEvents = asyncHandler(async (req, res) => {
 export const getEventById = asyncHandler(async (req, res) => {
   const event = await Event.findById(req.params.id)
     .populate("organizerClub", "clubName logo")
-    .populate("createdBy", "firstName secondName");
+    .populate("createdBy", "firstName lastName");
   if (!event) {
     throw new ApiError(404, "Event not found.");
   }
-    const isOrganizer=event.eventOrganizers.some(organizer=> organizer.equals(req.user._id));
-  sendResponse(res, 200, "Events fetched Successfully",{
+  // isOrganizer = "may manage this event" (the eventManagerMiddleware rule), so
+  // club admins get the page's manage controls, not just listed organizers.
+  const [isOrganizer, registrationCount] = await Promise.all([
+    canManageEvent(req.user, event),
+    countRegistrations(event._id),
+  ]);
+  sendResponse(res, 200, "Events fetched Successfully", {
     event,
     isOrganizer,
-    registrationCount: await countRegistrations(event._id),
-  } );
+    isRegistered: req.user.registeredEvents.some((id) => id.equals(event._id)),
+    registrationCount,
+  });
 });
 
 // Registration state lives only on User.registeredEvents, so registering is
@@ -233,10 +240,6 @@ export const getEventById = asyncHandler(async (req, res) => {
 // can still take one registration. Harmless while events have no capacity; a
 // capacity limit would require a real transaction (utils/transaction.js) —
 // never withOptionalTransaction, which silently drops atomicity.
-//
-// (There is no unregister flow. If one is added it must mirror this:
-// User.updateOne({ _id, registeredEvents: id }, { $pull: { registeredEvents: id } })
-// and no counter write.)
 export const registerForEvent = asyncHandler(async (req, res) => {
   const event = await Event.findById(req.params.id);
   if (!event) {
@@ -262,16 +265,47 @@ export const registerForEvent = asyncHandler(async (req, res) => {
     throw new ApiError(403, "Your year is not eligible for this event");
   }
 
+  // The membership condition is in the filter, so matchedCount says whether
+  // anything changed (modifiedCount is unreliable with timestamps).
   const result = await User.updateOne(
     { _id: req.user._id, registeredEvents: { $ne: event._id } },
     { $push: { registeredEvents: event._id } },
   );
-  if (result.modifiedCount === 0) {
+  if (result.matchedCount === 0) {
     throw new ApiError(409, "Already registered");
   }
 
   sendResponse(res, 201, "Registered Successfully", {
     event,
+    isRegistered: true,
+    registrationCount: await countRegistrations(event._id),
+  });
+});
+
+// Mirror of registerForEvent: one conditional $pull, no counter. Desired-state
+// and idempotent — clearing a registration that isn't there succeeds too — so
+// repeated or parallel requests can never take the count below the truth.
+// Allowed only while registration is open, the same window as registering.
+export const unregisterFromEvent = asyncHandler(async (req, res) => {
+  const event = await Event.findById(req.params.id);
+  if (!event) {
+    throw new ApiError(404, "Event not found");
+  }
+
+  if (event.status === "Cancelled") {
+    throw new ApiError(400, "This event has been cancelled");
+  }
+  if (new Date() >= registrationCutoff(event)) {
+    throw new ApiError(400, "Registration is closed, so it can no longer be cancelled");
+  }
+
+  await User.updateOne(
+    { _id: req.user._id, registeredEvents: event._id },
+    { $pull: { registeredEvents: event._id } },
+  );
+
+  sendResponse(res, 200, "Registration cancelled", {
+    isRegistered: false,
     registrationCount: await countRegistrations(event._id),
   });
 });

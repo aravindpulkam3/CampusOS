@@ -4,8 +4,20 @@ import asyncHandler from "../utils/asyncHandler.js";
 import ApiError from "../utils/apiError.js";
 import { isClubAdmin } from "./clubAdminMiddleware.js";
 
-// Who may manage an event: Super Admin, a listed event organizer (the same rule
-// getEventById reports as isOrganizer), or an admin of its organizer club.
+// Who may manage an event: Super Admin, a listed event organizer, or an admin
+// of its organizer club. The one rule behind assertEventManager, getEventById's
+// isOrganizer and event-notice posting.
+export const canManageEvent = async (user, event) => {
+  if (user.role === "superadmin") return true;
+  if (event.eventOrganizers?.some((organizerId) => organizerId.equals(user._id))) {
+    return true;
+  }
+  // organizerClub may arrive populated.
+  const clubId = event.organizerClub?._id ?? event.organizerClub;
+  const club = await Club.findById(clubId).select("clubAdmins");
+  return !!club && isClubAdmin(club, user);
+};
+
 // Throws ApiError; returns the event document.
 export const assertEventManager = async (user, eventId) => {
   const event = await Event.findById(eventId);
@@ -14,14 +26,7 @@ export const assertEventManager = async (user, eventId) => {
     throw new ApiError(404, "Event not found.");
   }
 
-  if (user.role === "superadmin") return event;
-
-  if (event.eventOrganizers.some((organizerId) => organizerId.equals(user._id))) {
-    return event;
-  }
-
-  const club = await Club.findById(event.organizerClub).select("clubAdmins");
-  if (club && isClubAdmin(club, user)) return event;
+  if (await canManageEvent(user, event)) return event;
 
   throw new ApiError(403, "Access denied. You cannot manage this event.");
 };

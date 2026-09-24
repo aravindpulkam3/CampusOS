@@ -8,6 +8,7 @@ import sendResponse from "../utils/sendResponse.js";
 import ApiError from "../utils/apiError.js";
 import { notifyClubFollowers, notifyEventRegistrants } from "../services/notification.service.js";
 import { isClubAdmin } from "../middleware/clubAdminMiddleware.js";
+import { canManageEvent } from "../middleware/eventManagerMiddleware.js";
 // TODO: implement controller functions
 export const createAnnouncement = asyncHandler(async (req, res) => {
   const { targetType, targetId } = req.params;
@@ -275,13 +276,11 @@ export const deleteAnnouncement = asyncHandler(async (req, res) => {
     }
   }
 
-  // 4. Contextual Authority Check (Event Organizers array check)
+  // 4. Contextual Authority Check (event managers — same rule as posting)
   if (announcement.targetType === "event" && announcement.event) {
     const event = await Event.findById(announcement.event);
-    if (event && event.eventOrganizers) {
-      isAuthorizedManager = event.eventOrganizers.some(
-        (organizerId) => organizerId.toString() === user._id.toString(),
-      );
+    if (event) {
+      isAuthorizedManager = await canManageEvent(user, event);
     }
   }
 

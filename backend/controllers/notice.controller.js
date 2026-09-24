@@ -8,6 +8,7 @@ import mongoose from "mongoose";
 import Drive from "../models/Drive.js";
 import Application from "../models/Application.js";
 import ApiError from "../utils/apiError.js";
+import { canManageEvent } from "../middleware/eventManagerMiddleware.js";
 import {
   buildEligibilityFilter,
   getPlacementProfile,
@@ -42,11 +43,8 @@ const canPost = async (user, targetType, targetId) => {
       return !!club && club.clubAdmins.some((id) => id.toString() === user._id.toString());
     }
     case "events": {
-      if (user.role === "superadmin") return true;
-      const event = await Event.findById(targetId).select("organizerClub");
-      if (!event) return false;
-      const club = await Club.findById(event.organizerClub).select("clubAdmins");
-      return !!club && club.clubAdmins.some((id) => id.toString() === user._id.toString());
+      const event = await Event.findById(targetId).select("organizerClub eventOrganizers");
+      return !!event && canManageEvent(user, event);
     }
     default:
       return false;

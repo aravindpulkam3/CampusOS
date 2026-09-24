@@ -9,6 +9,15 @@ import ImageUploadZone from "../../components/forms/ImageUploadZone.jsx";
 
 const YEARS = [1, 2, 3, 4];
 
+// Date inputs work in LOCAL time, while toISOString() is UTC — slicing an ISO
+// string would shift the date for times between local midnight and the UTC
+// offset. These format a Date the way <input type="date|datetime-local"> expects.
+const pad = (n) => String(n).padStart(2, "0");
+const toLocalDate = (d) =>
+  `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const toLocalDateTime = (d) =>
+  `${toLocalDate(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
 // ─── Reusable Field Components ────────────────────────────────
 const Label = ({ children, required }) => (
   <label className="block text-xs font-medium text-gray-700 mb-1.5">
@@ -144,12 +153,12 @@ const EventForm = ({ mode = "create" }) => {
     setForm({
       eventName: eventData.eventName || "",
       description: eventData.description || "",
-      startDate: start.toISOString().split("T")[0],
+      startDate: toLocalDate(start),
       startTime: start.toTimeString().split(" ")[0].slice(0, 5),
-      endDate: end.toISOString().split("T")[0],
+      endDate: toLocalDate(end),
       endTime: end.toTimeString().split(" ")[0].slice(0, 5),
       registrationDeadline: eventData.registrationDeadline
-        ? new Date(eventData.registrationDeadline).toISOString().split("T")[0]
+        ? toLocalDateTime(new Date(eventData.registrationDeadline))
         : "",
       venue: eventData.venue || "",
       category: eventData.category || "",
@@ -211,6 +220,10 @@ const EventForm = ({ mode = "create" }) => {
       const end = new Date(`${form.endDate}T${form.endTime}`);
       if (end <= start) {
         e.endDate = "End date and time must be after start date and time";
+      }
+      // Mirrors the server rule (assertEventDates).
+      if (form.registrationDeadline && new Date(form.registrationDeadline) > start) {
+        e.registrationDeadline = "Registration must close on or before the event starts";
       }
     }
     return e;
@@ -397,14 +410,17 @@ const EventForm = ({ mode = "create" }) => {
           <div>
             <Label>Registration Deadline</Label>
             <p className="text-xs text-gray-400 mb-1.5">
-              Optional — students with this deadline closing today will see this event in their dashboard.
+              Optional. Registration closes at this time. Leave empty to close it when the event starts.
             </p>
+            {/* datetime-local is parsed as local time by new Date(), so the
+                stored instant is exactly the time the organizer picked. */}
             <Input
-              type="date"
+              type="datetime-local"
               value={form.registrationDeadline}
               onChange={set("registrationDeadline")}
-              min={new Date().toISOString().split("T")[0]}
+              min={isEditMode ? undefined : toLocalDateTime(new Date())}
             />
+            <FieldError message={errors.registrationDeadline} />
           </div>
         </Section>
 

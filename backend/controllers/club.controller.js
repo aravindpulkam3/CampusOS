@@ -3,7 +3,6 @@ import Event from "../models/Event.js";
 import ApiError from "../utils/apiError.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import sendResponse from "../utils/sendResponse.js";
-import { Announcement } from "../models/Announcement.js";
 import User from "../models/User.js";
 import { getJSON, setJSON, del } from "../utils/cache.js";
 import { withTransaction } from "../utils/transaction.js";
@@ -49,36 +48,54 @@ export const createClub = asyncHandler(async (req, res) => {
   sendResponse(res, 201, "Club created successfully.", club);
 });
 
+// Only what the club page's event rows render.
+const CLUB_EVENT_FIELDS =
+  "eventName startDateTime endDateTime registrationDeadline venue category status banner";
+// A club has few live events; the cap only guards against pathological data.
+const CLUB_UPCOMING_EVENTS_LIMIT = 50;
+const CLUB_PAST_EVENTS_LIMIT = 3;
+
+// Announcements are not included: the page pages through them via
+// GET /announcements/club/:clubId.
 export const getClubDetails = asyncHandler(async (req, res) => {
   const clubId = req.params.clubId;
-  const club = await Club.findById(clubId).lean();
+  const club = await Club.findById(clubId)
+    .populate("clubAdmins", "firstName lastName profilePicture")
+    .lean();
   if (!club) {
     throw new ApiError(404, "Club not found");
   }
   const isAdmin =
+    req.user.role === "superadmin" ||
     club.clubAdmins.some(
-      (adminId) => adminId.toString() === req.user._id.toString(),
-    ) || req.user.role === "superadmin";
+      (admin) => admin._id.toString() === req.user._id.toString(),
+    );
 
-  const events = await Event.find({
-    organizerClub: clubId,
-  })
-    .sort({ date: 1 })
-    .limit(5);
-
-  const announcements = await Announcement.find({
-    targetType: "club",
-    club: clubId,
-  })
-    .populate("postedBy", "firstName lastName")
-    .sort({ createdAt: -1 })
-    .limit(3);
+  // Upcoming includes ongoing events (not yet ended), nearest first; past is
+  // only the most recently finished few, plus a count for "latest N of M".
+  const now = new Date();
+  const upcomingFilter = { organizerClub: clubId, endDateTime: { $gte: now } };
+  const pastFilter = { organizerClub: clubId, endDateTime: { $lt: now } };
+  const [upcomingEvents, pastEvents, pastEventCount] = await Promise.all([
+    Event.find(upcomingFilter)
+      .select(CLUB_EVENT_FIELDS)
+      .sort({ startDateTime: 1, _id: 1 })
+      .limit(CLUB_UPCOMING_EVENTS_LIMIT)
+      .lean(),
+    Event.find(pastFilter)
+      .select(CLUB_EVENT_FIELDS)
+      .sort({ endDateTime: -1, _id: -1 })
+      .limit(CLUB_PAST_EVENTS_LIMIT)
+      .lean(),
+    Event.countDocuments(pastFilter),
+  ]);
 
   sendResponse(res, 200, "Club fetched Successfully", {
     club,
-    events,
-    announcements,
     isAdmin,
+    upcomingEvents,
+    pastEvents,
+    pastEventCount,
   });
 });
 
