@@ -306,6 +306,16 @@ npm run dev     # Vite dev server, proxies /api/* to localhost:5000
 Both servers need to run at the same time; there is no root-level script
 that starts both.
 
+### Tests
+
+```bash
+cd backend
+npm test        # Vitest + Supertest against an in-memory MongoDB replica set
+```
+
+The first run downloads a MongoDB 7.0 binary for the in-memory server. The
+frontend has no tests.
+
 ### Optional: local Redis
 
 ```bash
@@ -364,10 +374,52 @@ node scripts/reconcileFollowerCounts.js --dry-run   # must report 0 mismatches
   network, which then requires signing in again. This is deliberate: strict
   rotation with no grace window. Sessions end after 30 days regardless of
   activity.
+- **Password change and reset.** Changing the password (Profile) requires the
+  current one. *Forgot password?* on the login page emails a reset link (valid
+  30 minutes, single use); the response is the same whether or not the account
+  exists. Both write the new password and delete every refresh session in one
+  transaction. The current device signs in again right away; other devices keep
+  their current access token until it expires (`JWT_ACCESS_EXPIRY`, 15 minutes
+  by default), then their refresh fails and they must sign in again.
+- **Login rate limits.** Failed logins are limited per IP (one password tried
+  against many accounts) and per email address (one account guessed from many
+  IPs). A limit is a temporary `429`, never an account lockout.
 - **Deploy frontend and API on the same site** (same origin, or subdomains of
   one domain you control). Auth cookies are `SameSite=Strict`, which is the
   CSRF defence — never relax it to `None`. State-changing API requests from a
   foreign `Origin` are refused as defence in depth.
+
+### Deploying on one VM with Nginx
+
+Node listens on loopback only and trusts only the local Nginx, so the client
+IPs used by the login rate limits can't be forged:
+
+- Set `HOST=127.0.0.1` and `TRUST_PROXY=loopback`. In production the server
+  refuses to start without them. (A hop count such as `TRUST_PROXY=1` trusts
+  whatever connects to the port; `loopback` trusts only this machine.)
+- Open only ports 80 and 443 in the firewall.
+- Nginx forwards the client address and upgrades WebSockets:
+
+```nginx
+location /api/ {
+    proxy_pass http://127.0.0.1:5000;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+location /socket.io/ {
+    proxy_pass http://127.0.0.1:5000;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+}
+```
+
+- Run **one** Node process. Rate-limit counters live in memory (and reset on
+  restart); with PM2 cluster mode or several instances each process would count
+  separately, and a shared store such as Redis would be needed.
 
 ### Frontend response headers
 
@@ -412,11 +464,12 @@ invalid.
 | `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET`                               | **Required.** Independent random secrets, at least 32 characters each, and different from each other. Generate each with `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"` |
 | `JWT_ACCESS_EXPIRY` / `JWT_REFRESH_EXPIRY`                               | Optional token lifetimes like `15m`, `12h`, `7d` (defaults `15m` / `7d`). Sessions also end 30 days after sign-in regardless                                                                              |
 | `PORT`                                                                   | Port the Express + Socket.IO server listens on (default `5000`)                                                                                                                                           |
+| `HOST`                                                                   | Interface to listen on. Unset in development (all interfaces). **Required in production and must be `127.0.0.1`** (Node sits behind Nginx on the same machine)                                            |
 | `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` | Cloudinary credentials — all three together; required in production                                                                                                                                       |
-| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `MAIL_FROM`      | Outgoing mail for account activation links — all five together; required in production. In development without them, links are printed to the server console                                              |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `MAIL_FROM`      | Outgoing mail for account activation and password reset links — all five together; required in production. In development without them, links are printed to the server console                           |
 | `REDIS_URL`                                                              | Redis connection string (optional; Redis errors are logged, not fatal)                                                                                                                                    |
-| `TRUST_PROXY`                                                            | Express `trust proxy` for real client IPs behind a proxy: a hop count (`1` for Nginx) or a subnet list. `true` is refused                                                                                 |
-| `RATE_LIMIT_*`                                                           | Optional auth rate-limit tuning (see `middleware/rateLimitMiddleware.js`)                                                                                                                                 |
+| `TRUST_PROXY`                                                            | Express `trust proxy` for real client IPs behind a proxy. Use `loopback` behind Nginx on the same machine (**required in production**); a hop count or subnet list is also accepted. `true` is refused     |
+| `RATE_LIMIT_*`                                                           | Optional auth rate-limit tuning (see `middleware/rateLimitMiddleware.js`): `RATE_LIMIT_LOGIN_MAX` / `_WINDOW_MINUTES` (failed logins per email, default 10 / 15 min), `RATE_LIMIT_LOGIN_IP_MAX` / `_WINDOW_MINUTES` (failed logins per IP, default 100 / 15 min), plus signup and refresh limits |
 | `TZ`                                                                     | Recommended: `Asia/Kolkata`. "Today" calculations use server-local time, so a UTC host would roll the dashboard over at 05:30 IST                                                                         |
 
 ### `frontend/.env`

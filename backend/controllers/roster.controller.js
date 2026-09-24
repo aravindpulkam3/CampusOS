@@ -14,7 +14,16 @@ import { withTransaction } from "../utils/transaction.js";
 // Identity/cohort fields (rollNumber, email, branch, batch, section) of a
 // CLAIMED entry are never editable here.
 
-const REQUIRED_COLUMNS = ["rollNumber", "email", "firstName", "lastName", "branch", "batch", "section", "year"];
+const REQUIRED_COLUMNS = [
+  "rollNumber",
+  "email",
+  "firstName",
+  "lastName",
+  "branch",
+  "batch",
+  "section",
+  "year",
+];
 const OPTIONAL_COLUMNS = ["cgpa", "backlogs"];
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -39,7 +48,12 @@ const parseBacklogs = (raw) => {
 };
 const parseYear = (raw) => {
   const n = Number(raw);
-  if (typeof raw === "boolean" || raw === "" || raw === null || ![1, 2, 3, 4].includes(n)) {
+  if (
+    typeof raw === "boolean" ||
+    raw === "" ||
+    raw === null ||
+    ![1, 2, 3, 4].includes(n)
+  ) {
     return { error: "year must be 1, 2, 3 or 4" };
   }
   return { value: n };
@@ -86,7 +100,12 @@ const normalizeRow = (record) => {
 const parseRosterCsv = (buffer) => {
   let records;
   try {
-    records = parse(buffer, { columns: true, trim: true, skip_empty_lines: true, bom: true });
+    records = parse(buffer, {
+      columns: true,
+      trim: true,
+      skip_empty_lines: true,
+      bom: true,
+    });
   } catch {
     throw new ApiError(400, "Could not parse the uploaded CSV file.");
   }
@@ -101,14 +120,20 @@ const parseRosterCsv = (buffer) => {
     const name = canonical.get(header.trim().toLowerCase());
     if (name) headerMap[header] = name;
   }
-  const missing = REQUIRED_COLUMNS.filter((c) => !Object.values(headerMap).includes(c));
+  const missing = REQUIRED_COLUMNS.filter(
+    (c) => !Object.values(headerMap).includes(c),
+  );
   if (missing.length) {
-    throw new ApiError(400, `CSV is missing required column(s): ${missing.join(", ")}.`);
+    throw new ApiError(
+      400,
+      `CSV is missing required column(s): ${missing.join(", ")}.`,
+    );
   }
 
   return records.map((record) => {
     const mapped = {};
-    for (const [header, name] of Object.entries(headerMap)) mapped[name] = record[header];
+    for (const [header, name] of Object.entries(headerMap))
+      mapped[name] = record[header];
     return mapped;
   });
 };
@@ -119,8 +144,11 @@ const parseRosterCsv = (buffer) => {
 // (which aborts it) when either side does not match.
 const applyAcademicUpdate = (rollNumber, fields) =>
   withTransaction(async (session) => {
-    const entry = await RosterEntry.findOne({ rollNumber }).session(session).lean();
-    if (!entry) throw new ApiError(404, "No roster entry with that roll number.");
+    const entry = await RosterEntry.findOne({ rollNumber })
+      .session(session)
+      .lean();
+    if (!entry)
+      throw new ApiError(404, "No roster entry with that roll number.");
 
     const rosterResult = await RosterEntry.updateOne(
       { _id: entry._id, claimedBy: entry.claimedBy },
@@ -128,7 +156,10 @@ const applyAcademicUpdate = (rollNumber, fields) =>
       { session, runValidators: true },
     );
     if (rosterResult.matchedCount !== 1) {
-      throw new ApiError(409, "The roster entry changed during the update. Try again.");
+      throw new ApiError(
+        409,
+        "The roster entry changed during the update. Try again.",
+      );
     }
 
     if (entry.claimedBy) {
@@ -138,7 +169,10 @@ const applyAcademicUpdate = (rollNumber, fields) =>
         { session, runValidators: true },
       );
       if (userResult.matchedCount !== 1) {
-        throw new ApiError(409, "The linked account no longer exists. Contact an administrator.");
+        throw new ApiError(
+          409,
+          "The linked account no longer exists. Contact an administrator.",
+        );
       }
     }
 
@@ -154,13 +188,15 @@ export const importRoster = asyncHandler(async (req, res) => {
   const records = parseRosterCsv(req.file.buffer);
 
   const rejected = [];
-  const reject = (row, rollNumber, reason) => rejected.push({ row, rollNumber, reason });
+  const reject = (row, rollNumber, reason) =>
+    rejected.push({ row, rollNumber, reason });
 
   // 1. Per-row validation. `row` is the spreadsheet line (header is line 1).
   let rows = [];
   records.forEach((record, i) => {
     const { fields, error } = normalizeRow(record);
-    if (error) reject(i + 2, (record.rollNumber ?? "").toString().trim(), error);
+    if (error)
+      reject(i + 2, (record.rollNumber ?? "").toString().trim(), error);
     else rows.push({ row: i + 2, fields });
   });
 
@@ -168,18 +204,27 @@ export const importRoster = asyncHandler(async (req, res) => {
   //    which one is right.
   const count = (key) => {
     const counts = new Map();
-    for (const { fields } of rows) counts.set(fields[key], (counts.get(fields[key]) ?? 0) + 1);
+    for (const { fields } of rows)
+      counts.set(fields[key], (counts.get(fields[key]) ?? 0) + 1);
     return counts;
   };
   const rollCounts = count("rollNumber");
   const emailCounts = count("email");
   rows = rows.filter(({ row, fields }) => {
     if (rollCounts.get(fields.rollNumber) > 1) {
-      reject(row, fields.rollNumber, "rollNumber appears more than once in this file");
+      reject(
+        row,
+        fields.rollNumber,
+        "rollNumber appears more than once in this file",
+      );
       return false;
     }
     if (emailCounts.get(fields.email) > 1) {
-      reject(row, fields.rollNumber, "email appears more than once in this file");
+      reject(
+        row,
+        fields.rollNumber,
+        "email appears more than once in this file",
+      );
       return false;
     }
     return true;
@@ -189,8 +234,12 @@ export const importRoster = asyncHandler(async (req, res) => {
   const rolls = rows.map((r) => r.fields.rollNumber);
   const emails = rows.map((r) => r.fields.email);
   const [entries, users] = await Promise.all([
-    RosterEntry.find({ $or: [{ rollNumber: { $in: rolls } }, { email: { $in: emails } }] }).lean(),
-    User.find({ $or: [{ rollNumber: { $in: rolls } }, { email: { $in: emails } }] })
+    RosterEntry.find({
+      $or: [{ rollNumber: { $in: rolls } }, { email: { $in: emails } }],
+    }).lean(),
+    User.find({
+      $or: [{ rollNumber: { $in: rolls } }, { email: { $in: emails } }],
+    })
       .select("_id rollNumber email")
       .lean(),
   ]);
@@ -206,7 +255,11 @@ export const importRoster = asyncHandler(async (req, res) => {
     const existing = entryByRoll.get(fields.rollNumber);
     const emailOwner = entryByEmail.get(fields.email);
     if (emailOwner && emailOwner.rollNumber !== fields.rollNumber) {
-      reject(row, fields.rollNumber, `email already belongs to roster entry ${emailOwner.rollNumber}`);
+      reject(
+        row,
+        fields.rollNumber,
+        `email already belongs to roster entry ${emailOwner.rollNumber}`,
+      );
       continue;
     }
 
@@ -214,7 +267,10 @@ export const importRoster = asyncHandler(async (req, res) => {
     // belongs to: its linked user, or — before migration — a legacy account
     // with the SAME roll number and email (the migration links those).
     const linkedId = existing?.claimedBy ? String(existing.claimedBy) : null;
-    const conflictingUser = [userByEmail.get(fields.email), userByRoll.get(fields.rollNumber)].find(
+    const conflictingUser = [
+      userByEmail.get(fields.email),
+      userByRoll.get(fields.rollNumber),
+    ].find(
       (u) =>
         u &&
         (linkedId
@@ -222,7 +278,11 @@ export const importRoster = asyncHandler(async (req, res) => {
           : u.rollNumber !== fields.rollNumber || u.email !== fields.email),
     );
     if (conflictingUser) {
-      reject(row, fields.rollNumber, "email or rollNumber is already used by a different account");
+      reject(
+        row,
+        fields.rollNumber,
+        "email or rollNumber is already used by a different account",
+      );
       continue;
     }
 
@@ -231,7 +291,11 @@ export const importRoster = asyncHandler(async (req, res) => {
         (key) => existing[key] !== fields[key],
       );
       if (identityChanged) {
-        reject(row, fields.rollNumber, "entry is claimed: email and cohort (branch/batch/section) cannot change");
+        reject(
+          row,
+          fields.rollNumber,
+          "entry is claimed: email and cohort (branch/batch/section) cannot change",
+        );
         continue;
       }
       claimedUpdates.push({ row, fields });
@@ -259,13 +323,18 @@ export const importRoster = asyncHandler(async (req, res) => {
       updated = result.matchedCount;
     } catch (err) {
       // Unordered: everything else was written; report the failed rows.
-      const writeErrors = err.writeErrors ?? err.result?.getWriteErrors?.() ?? [];
+      const writeErrors =
+        err.writeErrors ?? err.result?.getWriteErrors?.() ?? [];
       if (!writeErrors.length) throw err;
       for (const we of writeErrors) {
         const { row, fields } = upserts[we.index];
-        reject(row, fields.rollNumber, we.code === 11000
-          ? "rollNumber or email was taken while importing"
-          : "could not be saved");
+        reject(
+          row,
+          fields.rollNumber,
+          we.code === 11000
+            ? "rollNumber or email was taken while importing"
+            : "could not be saved",
+        );
       }
       created = err.result?.upsertedCount ?? err.result?.nUpserted ?? 0;
       updated = err.result?.matchedCount ?? err.result?.nMatched ?? 0;
@@ -282,13 +351,22 @@ export const importRoster = asyncHandler(async (req, res) => {
       });
       updated += 1;
     } catch (err) {
-      reject(row, fields.rollNumber, err instanceof ApiError ? err.message : "could not be updated");
-      if (!(err instanceof ApiError)) console.error("[ROSTER] claimed-row update failed:", err);
+      reject(
+        row,
+        fields.rollNumber,
+        err instanceof ApiError ? err.message : "could not be updated",
+      );
+      if (!(err instanceof ApiError))
+        console.error("[ROSTER] claimed-row update failed:", err);
     }
   }
 
   rejected.sort((a, b) => a.row - b.row);
-  sendResponse(res, 200, "Roster import processed.", { created, updated, rejected });
+  sendResponse(res, 200, "Roster import processed.", {
+    created,
+    updated,
+    rejected,
+  });
 });
 
 // ─── GET /api/admin/roster  (superadmin) ──────────────────────────────────────
@@ -299,8 +377,10 @@ export const listRoster = asyncHandler(async (req, res) => {
   const query = {};
   const { branch, section, batch, search, claimed } = req.query;
   if (typeof branch === "string" && branch) query.branch = branch;
-  if (typeof section === "string" && section) query.section = section.toUpperCase();
-  if (typeof batch === "string" && Number.isInteger(Number(batch))) query.batch = Number(batch);
+  if (typeof section === "string" && section)
+    query.section = section.toUpperCase();
+  if (typeof batch === "string" && Number.isInteger(Number(batch)))
+    query.batch = Number(batch);
   if (claimed === "true") query.claimedBy = { $ne: null };
   if (claimed === "false") query.claimedBy = null;
   if (typeof search === "string" && search.trim()) {
@@ -333,7 +413,8 @@ const pickBody = (body, allowed) => {
     throw new ApiError(400, `Not allowed to change: ${extra.join(", ")}.`);
   }
   const present = allowed.filter((k) => body[k] !== undefined);
-  if (!present.length) throw new ApiError(400, `Provide ${allowed.join(" or ")}.`);
+  if (!present.length)
+    throw new ApiError(400, `Provide ${allowed.join(" or ")}.`);
   return present;
 };
 
@@ -342,12 +423,17 @@ const pickBody = (body, allowed) => {
 export const updateAcademics = asyncHandler(async (req, res) => {
   const fields = {};
   for (const key of pickBody(req.body, ["cgpa", "backlogs"])) {
-    const { value, error } = (key === "cgpa" ? parseCgpa : parseBacklogs)(req.body[key]);
+    const { value, error } = (key === "cgpa" ? parseCgpa : parseBacklogs)(
+      req.body[key],
+    );
     if (error) throw new ApiError(400, error);
     fields[key] = value;
   }
 
-  const entry = await applyAcademicUpdate(req.params.rollNumber.toUpperCase(), fields);
+  const entry = await applyAcademicUpdate(
+    req.params.rollNumber.toUpperCase(),
+    fields,
+  );
   sendResponse(res, 200, "Academic record updated.", entry);
 });
 
@@ -358,6 +444,8 @@ export const updateYear = asyncHandler(async (req, res) => {
   const { value, error } = parseYear(req.body.year);
   if (error) throw new ApiError(400, error);
 
-  const entry = await applyAcademicUpdate(req.params.rollNumber.toUpperCase(), { year: value });
+  const entry = await applyAcademicUpdate(req.params.rollNumber.toUpperCase(), {
+    year: value,
+  });
   sendResponse(res, 200, "Year updated.", entry);
 });

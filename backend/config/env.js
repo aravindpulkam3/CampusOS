@@ -113,6 +113,22 @@ if (rawTrustProxy !== undefined && rawTrustProxy.toLowerCase() !== "false") {
   }
 }
 
+// Interface the server binds to. Unset (development default): all interfaces.
+// Production runs behind Nginx on the same VM, so Node must listen on loopback
+// only (so X-Forwarded-For can't be forged by connecting to it directly) and
+// must trust that proxy (otherwise every client appears as 127.0.0.1 and
+// shares one rate-limit bucket).
+const LOOPBACK_HOSTS = ["127.0.0.1", "::1", "localhost"];
+const host = raw("HOST");
+if (isProduction) {
+  if (host === undefined || !LOOPBACK_HOSTS.includes(host)) {
+    problems.push("HOST must be 127.0.0.1 in production (Node listens behind Nginx on the same machine)");
+  }
+  if (trustProxy === false) {
+    problems.push("TRUST_PROXY is required in production (use TRUST_PROXY=loopback behind Nginx)");
+  }
+}
+
 // Groups of settings that only make sense together: all set, or none set.
 // `requiredInProduction` makes "none" an error in production.
 const group = (names, { requiredInProduction }) => {
@@ -168,8 +184,12 @@ const positiveInt = (name, fallback) => {
 };
 
 const rateLimits = {
+  // Failed logins per email address (from any IP).
   loginMax: positiveInt("RATE_LIMIT_LOGIN_MAX", 10),
   loginWindowMinutes: positiveInt("RATE_LIMIT_LOGIN_WINDOW_MINUTES", 15),
+  // Failed logins per IP (across all email addresses).
+  loginIpMax: positiveInt("RATE_LIMIT_LOGIN_IP_MAX", 100),
+  loginIpWindowMinutes: positiveInt("RATE_LIMIT_LOGIN_IP_WINDOW_MINUTES", 15),
   signupMax: positiveInt("RATE_LIMIT_SIGNUP_MAX", 100),
   signupWindowMinutes: positiveInt("RATE_LIMIT_SIGNUP_WINDOW_MINUTES", 60),
   refreshMax: positiveInt("RATE_LIMIT_REFRESH_MAX", 30),
@@ -188,6 +208,7 @@ export const env = Object.freeze({
   isProduction,
   isDevelopment,
   port,
+  host,
   mongoUri,
   clientUrl,
   redisUrl,

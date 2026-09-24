@@ -23,9 +23,21 @@ const rosterEntrySchema = new mongoose.Schema(
       trim: true,
       lowercase: true,
     },
-    firstName: { type: String, required: [true, "First name is required"], trim: true },
-    lastName: { type: String, required: [true, "Last name is required"], trim: true },
-    branch: { type: String, required: [true, "Branch is required"], trim: true },
+    firstName: {
+      type: String,
+      required: [true, "First name is required"],
+      trim: true,
+    },
+    lastName: {
+      type: String,
+      required: [true, "Last name is required"],
+      trim: true,
+    },
+    branch: {
+      type: String,
+      required: [true, "Branch is required"],
+      trim: true,
+    },
     batch: { type: Number, required: [true, "Batch is required"] },
     section: {
       type: String,
@@ -33,7 +45,11 @@ const rosterEntrySchema = new mongoose.Schema(
       trim: true,
       uppercase: true,
     },
-    year: { type: Number, required: [true, "Year is required"], enum: [1, 2, 3, 4] },
+    year: {
+      type: Number,
+      required: [true, "Year is required"],
+      enum: [1, 2, 3, 4],
+    },
     // Placement-owned academic data. null = not on file (distinct from 0).
     cgpa: { type: Number, min: 0, max: 10, default: null },
     backlogs: { type: Number, min: 0, default: null },

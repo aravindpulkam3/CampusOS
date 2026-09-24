@@ -4,7 +4,11 @@ import User from "../models/User.js";
 import Session from "../models/Session.js";
 import RosterEntry from "../models/RosterEntry.js";
 import EmailVerification from "../models/EmailVerification.js";
-import { sendAccountClaimEmail } from "../utils/mailer.js";
+import PasswordReset from "../models/PasswordReset.js";
+import {
+  sendAccountClaimEmail,
+  sendPasswordResetEmail,
+} from "../utils/mailer.js";
 import {
   generateAccessToken,
   generateRefreshToken,
@@ -15,6 +19,7 @@ import Discussion from "../models/Discussion.js";
 import Application from "../models/Application.js";
 import { findClassroomForUser } from "./classroom.service.js";
 import ApiError from "../utils/apiError.js";
+import { withTransaction } from "../utils/transaction.js";
 import { env } from "../config/env.js";
 import { getIO } from "../sockets/socketHandler.js";
 
@@ -209,83 +214,119 @@ export const requestAccountClaim = async (email) => {
   );
 };
 
-// Step 2 of signup: the emailed token proves the caller owns the roster
-// email. `token` and `password` must be strings, and the password must be
-// 8-72 bytes (checked by the controller).
-export const verifyAccountClaim = async (token, password) => {
-  const now = new Date();
-
-  // Consume the token first, atomically: only one request can ever get it.
-  const verification = await EmailVerification.findOneAndDelete({
-    tokenHash: sha256(token),
-    expiresAt: { $gt: now },
-  }).lean();
-  if (!verification) {
+// The one password rule, shared by activation, password change and reset.
+// bcrypt only reads the first 72 bytes, so longer is refused rather than
+// silently truncated. `owner` is the account's roster identity.
+const validateNewPassword = (password, owner) => {
+  if (typeof password !== "string") {
+    throw new ApiError(400, "Password is required.");
+  }
+  const bytes = Buffer.byteLength(password, "utf8");
+  if (bytes < 8 || bytes > 72) {
+    throw new ApiError(400, "Password must be 8 to 72 characters.");
+  }
+  const identity = [owner.email, owner.email?.split("@")[0], owner.rollNumber]
+    .filter(Boolean)
+    .map((value) => value.toLowerCase());
+  if (identity.includes(password.toLowerCase())) {
     throw new ApiError(
       400,
-      "This link is invalid or has expired. Request a new one.",
+      "Your password can't be your email or roll number.",
     );
   }
+};
 
-  const entry = await RosterEntry.findById(verification.rosterEntry).lean();
-  // The roster email may have changed since the link was sent.
-  if (!entry || entry.email !== verification.email) {
-    throw new ApiError(400, "This link is no longer valid. Request a new one.");
-  }
+// Step 2 of signup: the emailed token proves the caller owns the roster
+// email. `token` must be a string (checked by the controller); the password
+// is checked here, against the roster identity it belongs to.
+//
+// One transaction: consuming the token, claiming the roster entry and
+// creating (or activating) the user succeed or fail together. If any step
+// fails, nothing is saved — the link stays usable until it expires.
+export const verifyAccountClaim = (token, password) =>
+  withTransaction(async (session) => {
+    const now = new Date();
 
-  // PASSWORDS: always assign on a User document and save(), so the pre("save")
-  // bcrypt hook hashes it. Never updateOne / findByIdAndUpdate / $set a
-  // password — those bypass the hook and would store plaintext.
-
-  if (entry.claimedBy) {
-    // Legacy account, linked to this entry by the migration and never verified.
-    const user = await User.findById(entry.claimedBy).select("+password");
-    if (!user) {
+    // Consume the token first, atomically: only one request can ever get it.
+    const verification = await EmailVerification.findOneAndDelete(
+      { tokenHash: sha256(token), expiresAt: { $gt: now } },
+      { session },
+    ).lean();
+    if (!verification) {
       throw new ApiError(
-        409,
-        "This roster entry is linked to a missing account. Contact an administrator.",
+        400,
+        "This link is invalid or has expired. Request a new one.",
       );
     }
-    if (user.emailVerifiedAt) {
+
+    const entry = await RosterEntry.findById(verification.rosterEntry)
+      .session(session)
+      .lean();
+    // The roster email may have changed since the link was sent.
+    if (!entry || entry.email !== verification.email) {
       throw new ApiError(
-        409,
-        "This account is already active. Sign in instead.",
+        400,
+        "This link is no longer valid. Request a new one.",
       );
     }
-    user.password = password;
-    user.emailVerifiedAt = now;
-    // Re-sync roster-owned data. Cohort (branch/batch/section) already matches:
-    // the migration links only when it does.
-    user.firstName = entry.firstName;
-    user.lastName = entry.lastName;
-    user.year = entry.year;
-    user.cgpa = entry.cgpa;
-    user.backlogs = entry.backlogs;
-    if (!user.classroom) {
-      const classroom = await findClassroomForUser(entry);
-      if (classroom) user.classroom = classroom._id;
-    }
-    // On failure this just rethrows. claimedBy is NOT touched: the
-    // roster<->user link was legitimate before this request and must survive it.
-    await user.save();
-    return user;
-  }
+    // A rejected password aborts the transaction, so the link stays usable.
+    validateNewPassword(password, entry);
 
-  // New account: claim the entry atomically before creating the user, so two
-  // requests can never both create an account for it.
-  const newUserId = new mongoose.Types.ObjectId();
-  const claimed = await RosterEntry.findOneAndUpdate(
-    { _id: entry._id, claimedBy: null },
-    { $set: { claimedBy: newUserId } },
-  );
-  if (!claimed) {
-    throw new ApiError(
-      409,
-      "This account has already been activated. Sign in instead.",
+    // PASSWORDS: always assign on a User document and save(), so the pre("save")
+    // bcrypt hook hashes it. Never updateOne / findByIdAndUpdate / $set a
+    // password — those bypass the hook and would store plaintext.
+
+    if (entry.claimedBy) {
+      // Legacy account, linked to this entry by the migration and never verified.
+      const user = await User.findById(entry.claimedBy)
+        .select("+password")
+        .session(session);
+      if (!user) {
+        throw new ApiError(
+          409,
+          "This roster entry is linked to a missing account. Contact an administrator.",
+        );
+      }
+      if (user.emailVerifiedAt) {
+        throw new ApiError(
+          409,
+          "This account is already active. Sign in instead.",
+        );
+      }
+      user.password = password;
+      user.emailVerifiedAt = now;
+      // Re-sync roster-owned data. Cohort (branch/batch/section) already matches:
+      // the migration links only when it does.
+      user.firstName = entry.firstName;
+      user.lastName = entry.lastName;
+      user.year = entry.year;
+      user.cgpa = entry.cgpa;
+      user.backlogs = entry.backlogs;
+      if (!user.classroom) {
+        const classroom = await findClassroomForUser(entry, session);
+        if (classroom) user.classroom = classroom._id;
+      }
+      await user.save({ session });
+      return user;
+    }
+
+    // New account: claim the entry (conditional on claimedBy: null, so two
+    // requests can never both create an account for it), then create the user.
+    // The id is generated inside the callback: withTransaction may run it again
+    // after a transient error.
+    const newUserId = new mongoose.Types.ObjectId();
+    const claimed = await RosterEntry.findOneAndUpdate(
+      { _id: entry._id, claimedBy: null },
+      { $set: { claimedBy: newUserId } },
+      { session },
     );
-  }
+    if (!claimed) {
+      throw new ApiError(
+        409,
+        "This account has already been activated. Sign in instead.",
+      );
+    }
 
-  try {
     const user = new User({
       _id: newUserId,
       ...rosterIdentity(entry),
@@ -295,19 +336,11 @@ export const verifyAccountClaim = async (token, password) => {
     });
     // A Classroom must already exist (admin-created) for this cohort; no match
     // leaves the student unassigned until an admin creates it (which backfills).
-    const classroom = await findClassroomForUser(entry);
+    const classroom = await findClassroomForUser(entry, session);
     if (classroom) user.classroom = classroom._id;
-    await user.save();
+    await user.save({ session });
     return user;
-  } catch (err) {
-    // Release only the claim THIS request made, then surface the error.
-    await RosterEntry.updateOne(
-      { _id: entry._id, claimedBy: newUserId },
-      { $set: { claimedBy: null } },
-    );
-    throw err;
-  }
-};
+  });
 
 // Callers must pass strings: an operator object such as {"$regex": "."} would
 // otherwise reach the query (the controller rejects non-strings with 400).
@@ -450,6 +483,120 @@ export const logoutSession = async (incomingRefreshToken) => {
 export const logoutAllSessions = async (userId) => {
   await Session.deleteMany({ user: userId });
   // Drop live sockets too; their reconnect needs a refresh, which now fails.
+  getIO()?.in(`user:${userId}`).disconnectSockets(true);
+};
+
+// ─── password change / reset ──────────────────────────────────────────────────
+// Both write the new password and delete EVERY refresh session in one
+// transaction, so no session opened with the old password survives.
+//
+// Other devices are NOT logged out instantly: an access token they already hold
+// stays valid until it expires (JWT_ACCESS_EXPIRY, 15 min by default). Their
+// next refresh fails, and then they must sign in again. That is the accepted
+// trade-off of stateless access tokens.
+const RESET_TOKEN_TTL_MS = 30 * 60 * 1000;
+
+// The caller is logged in; only the current password authorizes a new one.
+// This device's session is revoked with the others (the controller clears its
+// cookies), so every device signs in again with the new password.
+export const changeUserPassword = async (
+  userId,
+  currentPassword,
+  newPassword,
+) => {
+  if (typeof currentPassword !== "string" || typeof newPassword !== "string") {
+    throw new ApiError(400, "Enter your current and new password.");
+  }
+  const user = await User.findById(userId).select("+password");
+  if (!user) throw new ApiError(404, "User not found");
+
+  // 400, not 401: a 401 would make the frontend refresh the token and retry.
+  if (!(await user.comparePassword(currentPassword))) {
+    throw new ApiError(400, "Current password is incorrect.");
+  }
+  validateNewPassword(newPassword, user);
+  if (await user.comparePassword(newPassword)) {
+    throw new ApiError(
+      400,
+      "Choose a password different from your current one.",
+    );
+  }
+
+  await withTransaction(async (session) => {
+    user.password = newPassword; // hashed by the pre("save") hook
+    await user.save({ session });
+    await Session.deleteMany({ user: user._id }, { session });
+  });
+  getIO()?.in(`user:${user._id}`).disconnectSockets(true);
+};
+
+// Always resolves without revealing anything: the controller answers every
+// request with the same message. Only an existing, activated account gets a
+// link. `email` must be a string (checked by the controller).
+export const requestPasswordReset = async (email) => {
+  const normalized = email.trim().toLowerCase();
+  const user = await User.findOne({
+    email: normalized,
+    emailVerifiedAt: { $ne: null },
+  })
+    .select("_id email")
+    .lean();
+  if (!user) return;
+
+  const token = crypto.randomBytes(32).toString("base64url");
+  try {
+    // One document per user: a new request replaces the previous link.
+    await PasswordReset.findOneAndUpdate(
+      { user: user._id },
+      {
+        $set: {
+          tokenHash: sha256(token),
+          expiresAt: new Date(Date.now() + RESET_TOKEN_TTL_MS),
+        },
+      },
+      { upsert: true },
+    );
+  } catch (err) {
+    // A concurrent request inserted first; its link stands.
+    if (err.code === 11000) return;
+    throw err;
+  }
+
+  // Not awaited: a mail failure must not change the response.
+  sendPasswordResetEmail(user.email, token).catch((err) =>
+    console.error(`[MAIL] password reset email failed: ${err.message}`),
+  );
+};
+
+// One transaction: using the token, writing the new password and revoking
+// every refresh session succeed or fail together — a rejected password rolls
+// back, so the link stays usable until it expires. `token` must be a string
+// (checked by the controller).
+export const resetUserPassword = async (token, newPassword) => {
+  const invalidLink = () =>
+    new ApiError(
+      400,
+      "This link is invalid or has expired. Request a new one.",
+    );
+
+  const userId = await withTransaction(async (session) => {
+    const reset = await PasswordReset.findOneAndDelete(
+      { tokenHash: sha256(token), expiresAt: { $gt: new Date() } },
+      { session },
+    ).lean();
+    if (!reset) throw invalidLink();
+
+    const user = await User.findById(reset.user)
+      .select("+password")
+      .session(session);
+    if (!user?.emailVerifiedAt) throw invalidLink();
+
+    validateNewPassword(newPassword, user);
+    user.password = newPassword; // hashed by the pre("save") hook
+    await user.save({ session });
+    await Session.deleteMany({ user: user._id }, { session });
+    return user._id;
+  });
   getIO()?.in(`user:${userId}`).disconnectSockets(true);
 };
 

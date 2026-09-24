@@ -8,5 +8,13 @@ export const loginApi = (data) => api.post("/auth/login", data);
 export const logoutApi = () => api.post("/auth/logout");
 export const getMeApi = () => api.get("/auth/me");
 export const refreshTokenApi = () => refreshAccessToken(); // shared single-flight refresh
-export const getProfile=()=>api.get("/auth/profile");
-export const updateProfile=(data)=>api.patch("/auth/profile",data);
+export const getProfile = () => api.get("/auth/profile");
+export const updateProfile = (data) => api.patch("/auth/profile", data);
+// { currentPassword, newPassword } — ends every session, this one included.
+export const changePasswordApi = (data) => api.patch("/auth/password", data);
+// { email } — the server answers every address with the same message.
+export const forgotPasswordApi = (data) =>
+  api.post("/auth/forgot-password", data);
+// { token, password } — the token comes from the reset link's URL fragment.
+export const resetPasswordApi = (data) =>
+  api.post("/auth/reset-password", data);

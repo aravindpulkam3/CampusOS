@@ -8,6 +8,8 @@ export default function Login() {
   const location = useLocation();
   const { setUser } = useAuth();
   const justActivated = location.state?.activated === true;
+  // Set by the password change / reset flows.
+  const notice = location.state?.notice;
 
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
@@ -30,7 +32,6 @@ export default function Login() {
       setError(
         err.response?.data?.message || "Login failed. Please try again.",
       );
-      console.log(err);
     } finally {
       setLoading(false);
     }
@@ -82,7 +83,15 @@ export default function Login() {
 
           {justActivated && !error && (
             <div className="mb-5 px-4 py-3 bg-green-50 border border-green-200 rounded-lg">
-              <p className="text-sm text-green-800">Account activated. Sign in with your new password.</p>
+              <p className="text-sm text-green-800">
+                Account activated. Sign in with your new password.
+              </p>
+            </div>
+          )}
+
+          {notice && !error && (
+            <div className="mb-5 px-4 py-3 bg-green-50 border border-green-200 rounded-lg">
+              <p className="text-sm text-green-800">{notice}</p>
             </div>
           )}
 
@@ -113,6 +122,12 @@ export default function Login() {
                 <label className="block text-xs font-medium text-gray-700">
                   Password
                 </label>
+                <Link
+                  to="/forgot-password"
+                  className="text-xs text-gray-500 hover:text-gray-900 hover:underline underline-offset-2"
+                >
+                  Forgot password?
+                </Link>
               </div>
               <input
                 type="password"

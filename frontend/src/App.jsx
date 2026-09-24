@@ -9,6 +9,8 @@ import ProtectedRoute from "./components/common/ProtectedRoute"; // 1. IMPORT YO
 import Login from "./pages/auth/Login";
 import Signup from "./pages/auth/Signup";
 import VerifyEmail from "./pages/auth/VerifyEmail.jsx";
+import ForgotPassword from "./pages/auth/ForgotPassword.jsx";
+import ResetPassword from "./pages/auth/ResetPassword.jsx";
 
 // Dashboard
 import Dashboard from "./pages/dashboard/Dashboard";
@@ -82,6 +84,8 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/verify-email" element={<VerifyEmail />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
 
         {/* 3. WRAP THE MASTER LAYOUT ROUTE IN PROTECTEDROUTE */}
         <Route

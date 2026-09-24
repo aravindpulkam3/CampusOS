@@ -53,6 +53,14 @@ const canPost = async (user, targetType, targetId) => {
   }
 };
 
+// What a notice listing may be for: the two personalized feeds, or one of the
+// stored target types (taken from the schema, so the lists can't drift).
+const READABLE_TARGET_TYPES = new Set([
+  "community",
+  "career",
+  ...Notice.schema.path("targetType").enumValues,
+]);
+
 // Classroom notices are for that classroom: its students, its CR, superadmin.
 const canReadClassroom = async (user, classroomId) => {
   if (user.role === "superadmin") return true;
@@ -163,6 +171,11 @@ export const getNotices = asyncHandler(async (req, res) => {
   const targetId = typeof req.query.targetId === "string" ? req.query.targetId : undefined;
   if ((req.query.targetType !== undefined && targetType === undefined) ||
       (req.query.targetId !== undefined && targetId === undefined)) {
+    throw new ApiError(400, "Invalid notice filter.");
+  }
+  // A listing must name what it lists. Without a targetType the query below
+  // would span every target, including every classroom's notices.
+  if (!READABLE_TARGET_TYPES.has(targetType)) {
     throw new ApiError(400, "Invalid notice filter.");
   }
   const user = req.user;

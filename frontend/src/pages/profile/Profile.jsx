@@ -27,8 +27,7 @@ import {
 } from "lucide-react";
 import useAuth from "../../hooks/useAuth";
 import useIsClassRep from "../../hooks/useIsClassRep";
-import axios from "../../api/axios";
-import { getProfile, logoutApi, updateProfile } from "../../api/auth.api";
+import { changePasswordApi, getProfile, logoutApi, updateProfile } from "../../api/auth.api";
 import ImageUploadZone from "../../components/forms/ImageUploadZone.jsx";
 import safeHref from "../../utils/safeHref";
 
@@ -364,6 +363,8 @@ const EditProfileModal = ({ user, onClose, onSave }) => {
 
 // ─── Change Password Modal ────────────────────────────────────
 const ChangePasswordModal = ({ onClose }) => {
+  const { setUser } = useAuth();
+  const navigate = useNavigate();
   const [form, setForm] = useState({ current: "", newPw: "", confirm: "" });
   const [show, setShow] = useState({
     current: false,
@@ -393,12 +394,19 @@ const ChangePasswordModal = ({ onClose }) => {
     setLoading(true);
     setError("");
     try {
-      await axios.patch("/profile/password", {
+      await changePasswordApi({
         currentPassword: form.current,
         newPassword: form.newPw,
       });
       setSuccess(true);
-      setTimeout(onClose, 1500);
+      // The server ended every session, this one included: sign in again.
+      setTimeout(() => {
+        setUser(null);
+        navigate("/login", {
+          replace: true,
+          state: { notice: "Password changed. Sign in with your new password." },
+        });
+      }, 1500);
     } catch (err) {
       setError(err.response?.data?.message || "Failed to change password");
     } finally {
@@ -453,7 +461,7 @@ const ChangePasswordModal = ({ onClose }) => {
                 className="text-green-600 flex-shrink-0"
               />
               <p className="text-xs text-green-700">
-                Password changed successfully
+                Password changed. Signing you out…
               </p>
             </div>
           )}

@@ -9,6 +9,9 @@ import {
   refreshSession,
   logoutSession,
   logoutAllSessions,
+  changeUserPassword,
+  requestPasswordReset,
+  resetUserPassword,
   setAuthCookies,
   clearAuthCookies,
   getProfileData
@@ -32,19 +35,11 @@ export const signup = asyncHandler(async (req, res) => {
 });
 
 // Step 2: the emailed token proves ownership of the roster email; the user
-// sets their password here.
+// sets their password here (the service checks it against the password rule).
 export const verifyEmail = asyncHandler(async (req, res) => {
   const { token, password } = req.body ?? {};
   if (typeof token !== "string" || !token) {
     throw new ApiError(400, "This link is invalid or has expired. Request a new one.");
-  }
-  if (typeof password !== "string") {
-    throw new ApiError(400, "Password is required.");
-  }
-  // bcrypt only reads the first 72 bytes; refuse longer rather than silently truncate.
-  const bytes = Buffer.byteLength(password, "utf8");
-  if (bytes < 8 || bytes > 72) {
-    throw new ApiError(400, "Password must be 8 to 72 characters.");
   }
 
   await verifyAccountClaim(token, password);
@@ -114,6 +109,39 @@ export const logoutAll = asyncHandler(async (req, res) => {
   await logoutAllSessions(req.user._id);
   clearAuthCookies(res);
   sendResponse(res, 200, "Logged out of all devices.");
+});
+
+// Revokes every refresh session, this device's included, so this device signs
+// in again now; other devices once their current access token expires.
+export const changePassword = asyncHandler(async (req, res) => {
+  const { currentPassword, newPassword } = req.body ?? {};
+  await changeUserPassword(req.user._id, currentPassword, newPassword);
+  clearAuthCookies(res);
+  sendResponse(res, 200, "Password changed. Please sign in again.");
+});
+
+const RESET_SENT_MESSAGE =
+  "If an account exists for this address, a password reset link has been sent to it.";
+
+// Same response for every address, so it reveals nothing about accounts.
+export const forgotPassword = asyncHandler(async (req, res) => {
+  const { email } = req.body ?? {};
+  if (typeof email !== "string" || !email.trim()) {
+    throw new ApiError(400, "Enter your college email address.");
+  }
+
+  await requestPasswordReset(email);
+  sendResponse(res, 200, RESET_SENT_MESSAGE);
+});
+
+export const resetPassword = asyncHandler(async (req, res) => {
+  const { token, password } = req.body ?? {};
+  if (typeof token !== "string" || !token) {
+    throw new ApiError(400, "This link is invalid or has expired. Request a new one.");
+  }
+
+  await resetUserPassword(token, password);
+  sendResponse(res, 200, "Password reset. You can now sign in.");
 });
 
 export const getMe = asyncHandler(async (req, res) => {

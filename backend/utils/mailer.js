@@ -36,3 +36,14 @@ export const sendAccountClaimEmail = (to, token) =>
       `${env.clientUrl}/verify-email#token=${token}\n\n` +
       "The link expires in 24 hours and can be used once. If you did not request it, ignore this email.",
   });
+
+// Same fragment-token scheme as the activation link (ResetPassword.jsx reads it).
+export const sendPasswordResetEmail = (to, token) =>
+  sendMail({
+    to,
+    subject: "Reset your CampusOS password",
+    text:
+      "Use the link below to choose a new CampusOS password.\n\n" +
+      `${env.clientUrl}/reset-password#token=${token}\n\n` +
+      "The link expires in 30 minutes and can be used once. If you did not request it, ignore this email; your password has not changed.",
+  });
