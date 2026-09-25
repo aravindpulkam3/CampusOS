@@ -3,13 +3,9 @@ import Event       from "../models/Event.js";
 import Drive       from "../models/Drive.js";
 import Discussion  from "../models/Discussion.js";
 import Application from "../models/Application.js";
-import Classroom   from "../models/Classroom.js";
-// Imported for its side effect of registering the schema: we populate
-// classroom.curriculum below, and without this the model is only registered if
-// some other module happened to be imported first.
-import "../models/Curriculum.js";
 import Deadline    from "../models/Deadline.js";
 import Notice      from "../models/Notice.js";
+import { getAcademicClassroom } from "./classroom.service.js";
 import { getJSON, setJSON } from "../utils/cache.js";
 import escapeRegex from "../utils/escapeRegex.js";
 import { getReachableRoundIndexes } from "../utils/roundState.js";
@@ -454,11 +450,7 @@ export const buildStudentDashboard = async (user) => {
   // need no extra query.
   const [applications, classroom] = await Promise.all([
     Application.find({ student: user._id }).select("drive status").lean(),
-    user.classroom
-      ? Classroom.findById(user.classroom)
-          .populate("curriculum", "subjects")
-          .lean()
-      : null,
+    user.classroom ? getAcademicClassroom(user.classroom) : null,
   ]);
 
   const appliedDriveIds = applications.map((a) => a.drive);

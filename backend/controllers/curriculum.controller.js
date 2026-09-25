@@ -3,6 +3,7 @@ import Classroom from "../models/Classroom.js";
 import Deadline from "../models/Deadline.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import sendResponse from "../utils/sendResponse.js";
+import { invalidateAcademicClassroomsForCurriculum } from "../services/classroom.service.js";
 
 // All routes here are superadmin-only (roleMiddleware) — curriculum is
 // centrally-managed academic data, never owned by any one classroom's CR.
@@ -67,6 +68,7 @@ export const addSubject = asyncHandler(async (req, res) => {
 
   curriculum.subjects.push({ name: name.trim(), code });
   await curriculum.save();
+  await invalidateAcademicClassroomsForCurriculum(curriculum._id);
 
   sendResponse(
     res,
@@ -98,6 +100,7 @@ export const updateSubject = asyncHandler(async (req, res) => {
   if (code !== undefined) subject.code = code;
 
   await curriculum.save();
+  await invalidateAcademicClassroomsForCurriculum(curriculum._id);
   sendResponse(res, 200, "Subject updated.", subject);
 });
 
@@ -142,6 +145,7 @@ export const deleteSubject = asyncHandler(async (req, res) => {
 
   subject.deleteOne();
   await curriculum.save();
+  await invalidateAcademicClassroomsForCurriculum(curriculum._id);
   sendResponse(res, 200, "Subject deleted.");
 });
 
