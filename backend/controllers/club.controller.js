@@ -7,18 +7,23 @@ import User from "../models/User.js";
 import { getJSON, setJSON, del } from "../utils/cache.js";
 import { withTransaction } from "../utils/transaction.js";
 
-const ALL_CLUBS_CACHE_KEY = "cache:clubs:all";
+const ALL_CLUBS_CACHE_KEY = "cache:clubs:active";
 const ALL_CLUBS_TTL = 60 * 60 * 24; // 24h
-const POPULAR_CLUBS_CACHE_KEY = "cache:clubs:popular";
+const POPULAR_CLUBS_CACHE_KEY = "cache:clubs:popular:active";
 const POPULAR_CLUBS_TTL = 60 * 60; // 1h
 
 export const getAllClubs = asyncHandler(async (req, res) => {
+  // Superadmins still need inactive clubs for approval and management.
+  if (req.user.role === "superadmin") {
+    const clubs = await Club.find().lean();
+    return sendResponse(res, 200, "Clubs fetched successfully", clubs);
+  }
   const cached = await getJSON(ALL_CLUBS_CACHE_KEY);
   if (cached) {
     return sendResponse(res, 200, "Clubs fetched successfully", cached);
   }
 
-  const data = await Club.find().lean();
+  const data = await Club.find({ isActive: true }).lean();
   await setJSON(ALL_CLUBS_CACHE_KEY, data, ALL_CLUBS_TTL);
   sendResponse(res, 200, "Clubs fetched successfully", data);
 });
@@ -70,6 +75,9 @@ export const getClubDetails = asyncHandler(async (req, res) => {
     club.clubAdmins.some(
       (admin) => admin._id.toString() === req.user._id.toString(),
     );
+  if (!club.isActive && !isAdmin) {
+    throw new ApiError(404, "Club not found");
+  }
 
   // Upcoming includes ongoing events (not yet ended), nearest first; past is
   // only the most recently finished few, plus a count for "latest N of M".
@@ -186,7 +194,7 @@ export const getPopularClubs = asyncHandler(async (req, res) => {
     return sendResponse(res, 200, "Popular clubs fetched", cached);
   }
 
-  const clubs = await Club.find().sort({ followerCount: -1 }).limit(5).lean();
+  const clubs = await Club.find({ isActive: true }).sort({ followerCount: -1 }).limit(5).lean();
 
   await setJSON(POPULAR_CLUBS_CACHE_KEY, clubs, POPULAR_CLUBS_TTL);
   sendResponse(res, 200, "Popular clubs fetched", clubs);

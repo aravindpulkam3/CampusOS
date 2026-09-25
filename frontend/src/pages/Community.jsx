@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Search,
   X,
@@ -15,6 +15,7 @@ import { getCommunityFeed } from "../api/announcement.api";
 import { getPopularClubs } from "../api/club.api";
 import { getUpcomingEvents } from "../api/event.api";
 import useAuth from "../hooks/useAuth";
+import useDebounce from "../hooks/useDebounce";
 import AnnouncementCard from "./announcements/AnnouncementCard";
 import NoticeFeed from "../components/cards/NoticeFeed";
 
@@ -186,6 +187,7 @@ const Community = () => {
   const navigate = useNavigate();
 
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search, 400);
   const [activeType, setActiveType] = useState("All");
   const [feedItems, setFeedItems] = useState([]);
   const [upcomingEvents, setUpcomingEvents] = useState([]);
@@ -201,6 +203,18 @@ const Community = () => {
   const [feedLoading, setFeedLoading] = useState(true);
   const [loadMoreLoading, setLoadMoreLoading] = useState(false);
   const [widgetLoading, setWidgetLoading] = useState(true);
+  const feedRequestRef = useRef(0);
+  const searchRef = useRef(search);
+
+  const resetFeed = () => {
+    // Invalidate an in-flight page immediately, including during debounce.
+    feedRequestRef.current += 1;
+    setFeedItems([]);
+    setOffsets({ eventOffset: 0, clubOffset: 0, generalOffset: 0 });
+    setHasMore(false);
+    setFeedLoading(true);
+    setLoadMoreLoading(false);
+  };
 
   // Core Request dynamic loader method
   const fetchFeed = useCallback(
@@ -208,11 +222,17 @@ const Community = () => {
       currentOffsets = { eventOffset: 0, clubOffset: 0, generalOffset: 0 },
       append = false,
     ) => {
+      if (debouncedSearch !== searchRef.current) return;
+      const request = ++feedRequestRef.current;
       try {
         if (append) setLoadMoreLoading(true);
         else setFeedLoading(true);
 
-        const res = await getCommunityFeed(currentOffsets);
+        const res = await getCommunityFeed(currentOffsets, {
+          search: debouncedSearch.trim(),
+          type: activeType,
+        });
+        if (request !== feedRequestRef.current) return;
         const {
           feed = [],
           hasMore: nextHasMore,
@@ -223,13 +243,15 @@ const Community = () => {
         setHasMore(nextHasMore);
         setOffsets(nextOffsets);
       } catch (err) {
-        console.error(err);
+        if (request === feedRequestRef.current) console.error(err);
       } finally {
-        setFeedLoading(false);
-        setLoadMoreLoading(false);
+        if (request === feedRequestRef.current) {
+          setFeedLoading(false);
+          setLoadMoreLoading(false);
+        }
       }
     },
-    [],
+    [activeType, debouncedSearch],
   );
 
   useEffect(() => {
@@ -250,7 +272,12 @@ const Community = () => {
     };
 
     fetchWidgets();
+  }, [user]);
+
+  useEffect(() => {
+    resetFeed();
     fetchFeed({ eventOffset: 0, clubOffset: 0, generalOffset: 0 }, false);
+    return () => { feedRequestRef.current += 1; };
   }, [user, fetchFeed]);
 
   const handleLoadMore = () => {
@@ -266,19 +293,6 @@ const Community = () => {
     event: "Events Only",
   };
 
-  const filtered = feedItems.filter((item) => {
-    const matchesType = activeType === "All" || item.targetType === activeType;
-    const sourceName =
-      item.targetType === "club" ? item.club?.clubName : item.event?.eventName;
-    return (
-      matchesType &&
-      (!search ||
-        item.title?.toLowerCase().includes(search.toLowerCase()) ||
-        item.body?.toLowerCase().includes(search.toLowerCase()) ||
-        sourceName?.toLowerCase().includes(search.toLowerCase()))
-    );
-  });
-
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-2">
       {/* Search Header Action Panels */}
@@ -292,12 +306,12 @@ const Community = () => {
             type="text"
             placeholder="Search matching feed keywords..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { searchRef.current = e.target.value; resetFeed(); setSearch(e.target.value); }}
             className="w-full pl-9 pr-8 py-2 text-xs bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:border-slate-300 placeholder:text-slate-400 transition-colors"
           />
           {search && (
             <button
-              onClick={() => setSearch("")}
+              onClick={() => { searchRef.current = ""; resetFeed(); setSearch(""); }}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
             >
               <X size={13} />
@@ -309,7 +323,7 @@ const Community = () => {
           {types.map((type) => (
             <button
               key={type}
-              onClick={() => setActiveType(type)}
+              onClick={() => { if (type !== activeType) { resetFeed(); setActiveType(type); } }}
               className={`px-3.5 py-1.5 text-xs font-semibold rounded-full border whitespace-nowrap transition-all duration-150 shadow-3xs
                 ${
                   activeType === type
@@ -333,7 +347,7 @@ const Community = () => {
             </h2>
             {!feedLoading && (
               <span className="text-xs text-slate-400 font-medium">
-                {filtered.length} entries shown
+                {feedItems.length} entries shown
               </span>
             )}
           </div>
@@ -343,9 +357,9 @@ const Community = () => {
               <div className="h-32 bg-gray-50 border border-gray-100 animate-pulse rounded-2xl" />
               <div className="h-32 bg-gray-100 animate-pulse rounded-2xl" />
             </div>
-          ) : filtered.length > 0 ? (
+          ) : feedItems.length > 0 ? (
             <div className="space-y-3.5">
-              {filtered.map((item) => (
+              {feedItems.map((item) => (
                 <AnnouncementCard
                   key={item._id}
                   announcement={item}
@@ -359,27 +373,6 @@ const Community = () => {
                   }
                 />
               ))}
-
-              {/* Load More Trigger Handle Footer */}
-              {hasMore && (
-                <button
-                  onClick={handleLoadMore}
-                  disabled={loadMoreLoading}
-                  className="flex items-center justify-center gap-2 w-full py-3 mt-4 text-xs font-bold text-slate-700 bg-white border border-slate-200/80 rounded-xl hover:border-slate-400 hover:bg-slate-50/50 active:bg-slate-50 transition-all disabled:opacity-50"
-                >
-                  {loadMoreLoading ? (
-                    <>
-                      <Loader2
-                        size={13}
-                        className="animate-spin text-slate-400"
-                      />{" "}
-                      Synchronizing Pipeline...
-                    </>
-                  ) : (
-                    "Load More Activity Updates"
-                  )}
-                </button>
-              )}
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-20 bg-white border border-slate-100 rounded-2xl text-center shadow-3xs">
@@ -395,6 +388,19 @@ const Community = () => {
                   : "Follow extra campus networks to inflate timelines."}
               </p>
             </div>
+          )}
+          {!feedLoading && hasMore && (
+            <button
+              onClick={handleLoadMore}
+              disabled={loadMoreLoading}
+              className="flex items-center justify-center gap-2 w-full py-3 mt-4 text-xs font-bold text-slate-700 bg-white border border-slate-200/80 rounded-xl hover:border-slate-400 hover:bg-slate-50/50 active:bg-slate-50 transition-all disabled:opacity-50"
+            >
+              {loadMoreLoading ? (
+                <><Loader2 size={13} className="animate-spin text-slate-400" />{" "}Synchronizing Pipeline...</>
+              ) : (
+                "Load More Activity Updates"
+              )}
+            </button>
           )}
         </div>
 

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Calendar,
@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { getAllEvents, registerForEvent } from "../../api/event.api";
 import useAuth from "../../hooks/useAuth";
+import useDebounce from "../../hooks/useDebounce";
 
 const CATEGORIES = [
   "All",
@@ -75,7 +76,7 @@ export default function Events() {
   const { user, setUser } = useAuth();
 
   const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const debouncedSearch = useDebounce(search, 400);
   const [activeCategory, setActiveCategory] = useState("All");
   const [feedItems, setFeedItems] = useState([]);
 
@@ -83,6 +84,17 @@ export default function Events() {
   const [hasMore, setHasMore] = useState(false);
   const [feedLoading, setFeedLoading] = useState(true);
   const [loadMoreLoading, setLoadMoreLoading] = useState(false);
+  const requestRef = useRef(0);
+  const searchRef = useRef(search);
+
+  const invalidateFeed = () => {
+    requestRef.current += 1;
+    setFeedItems([]);
+    setOffset(0);
+    setHasMore(false);
+    setFeedLoading(true);
+    setLoadMoreLoading(false);
+  };
 
   const handleRegister = async (e, eventId) => {
     e.stopPropagation();
@@ -101,17 +113,10 @@ export default function Events() {
     }
   };
 
-  useEffect(() => {
-    const handler = setTimeout(() => setSearch(search), 300);
-    return () => clearTimeout(handler);
-  }, [search]);
-
-  useEffect(() => {
-    setDebouncedSearch(search);
-  }, [search]);
-
   const fetchFeed = useCallback(
     async (currentOffset = 0, append = false) => {
+      if (debouncedSearch !== searchRef.current) return;
+      const request = ++requestRef.current;
       try {
         if (append) setLoadMoreLoading(true);
         else setFeedLoading(true);
@@ -121,6 +126,7 @@ export default function Events() {
           search: debouncedSearch,
           offset: currentOffset,
         });
+        if (request !== requestRef.current) return;
 
         const {
           events = [],
@@ -132,17 +138,21 @@ export default function Events() {
         setHasMore(nextHasMore);
         setOffset(nextOffset);
       } catch (err) {
-        console.error("Events sync error:", err);
+        if (request === requestRef.current) console.error("Events sync error:", err);
       } finally {
-        setFeedLoading(false);
-        setLoadMoreLoading(false);
+        if (request === requestRef.current) {
+          setFeedLoading(false);
+          setLoadMoreLoading(false);
+        }
       }
     },
     [activeCategory, debouncedSearch],
   );
 
   useEffect(() => {
+    invalidateFeed();
     fetchFeed(0, false);
+    return () => { requestRef.current += 1; };
   }, [activeCategory, debouncedSearch, fetchFeed]);
 
   const handleLoadMore = () => {
@@ -172,12 +182,12 @@ export default function Events() {
             type="text"
             placeholder="Search matching events..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { searchRef.current = e.target.value; invalidateFeed(); setSearch(e.target.value); }}
             className="w-full pl-9 pr-8 py-2 text-xs bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:border-slate-300 placeholder:text-slate-400 transition-colors"
           />
           {search && (
             <button
-              onClick={() => setSearch("")}
+              onClick={() => { searchRef.current = ""; invalidateFeed(); setSearch(""); }}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
             >
               <X size={13} />
@@ -191,7 +201,7 @@ export default function Events() {
         {CATEGORIES.map((cat) => (
           <button
             key={cat}
-            onClick={() => setActiveCategory(cat)}
+            onClick={() => { if (cat !== activeCategory) { invalidateFeed(); setActiveCategory(cat); } }}
             className={`px-3.5 py-1.5 text-xs font-semibold rounded-full border whitespace-nowrap transition-all duration-150 shadow-3xs
               ${
                 activeCategory === cat

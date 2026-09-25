@@ -1,33 +1,40 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Plus, Megaphone, Trash2, Pin, Calendar, AlertTriangle } from "lucide-react";
-import { getNotices, deleteNotice, togglePinNotice } from "../../api/notice.api";
+import { listPlatformNotices, deleteNotice, togglePinNotice } from "../../api/notice.api";
 
 const ManageNotices = () => {
   const [notices, setNotices] = useState([]);
   const [loading, setLoading] = useState(true);
-
-  const fetchNotices = async () => {
-    try {
-      setLoading(true);
-      const { data } = await getNotices({ targetType: "platform" });
-      setNotices(data.data.notices);
-    } catch (err) {
-      console.error("Failed to fetch platform notices", err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({ total: 0, page: 1, pages: 0 });
+  const [reload, setReload] = useState(0);
 
   useEffect(() => {
+    let cancelled = false;
+    const fetchNotices = async () => {
+      try {
+        setLoading(true);
+        const { data } = await listPlatformNotices(page);
+        if (cancelled) return;
+        setNotices(data.data.notices);
+        setPagination(data.data.pagination);
+      } catch (err) {
+        if (!cancelled) console.error("Failed to fetch platform notices", err);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
     fetchNotices();
-  }, []);
+    return () => { cancelled = true; };
+  }, [page, reload]);
 
   const handleDelete = async (id) => {
     if (!confirm("Are you sure you want to delete this notice?")) return;
     try {
       await deleteNotice(id);
-      setNotices(notices.filter((n) => n._id !== id));
+      if (notices.length === 1 && page > 1) setPage(page - 1);
+      else setReload((value) => value + 1);
     } catch (err) {
       console.error(err);
     }
@@ -35,12 +42,8 @@ const ManageNotices = () => {
 
   const handlePin = async (id) => {
     try {
-      const { data } = await togglePinNotice(id);
-      setNotices(
-        notices.map((n) =>
-          n._id === id ? { ...n, isPinned: data.data.isPinned } : n
-        )
-      );
+      await togglePinNotice(id);
+      setReload((value) => value + 1);
     } catch (err) {
       console.error(err);
     }
@@ -138,6 +141,13 @@ const ManageNotices = () => {
               </div>
             </div>
           ))}
+        </div>
+      )}
+      {pagination.pages > 1 && (
+        <div className="flex items-center justify-center gap-3 text-xs text-gray-600">
+          <button disabled={page <= 1} onClick={() => setPage(page - 1)} className="px-3 py-1.5 border border-gray-200 rounded-lg disabled:opacity-40">Previous</button>
+          <span>Page {pagination.page} of {pagination.pages}</span>
+          <button disabled={page >= pagination.pages} onClick={() => setPage(page + 1)} className="px-3 py-1.5 border border-gray-200 rounded-lg disabled:opacity-40">Next</button>
         </div>
       )}
     </div>

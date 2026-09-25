@@ -738,21 +738,31 @@ const RoundsTab = ({ drive, application, isCoordinator, onRefresh }) => {
 const ApplicantsTab = ({ driveId }) => {
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({ total: 0, page: 1, pages: 0 });
 
   useEffect(() => {
-    getDriveApplications(driveId, { limit: 200 })
-      .then((res) => setApplications(res.data.data.applications || []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [driveId]);
+    let cancelled = false;
+    setLoading(true);
+    getDriveApplications(driveId, { page, limit: 50 })
+      .then((res) => {
+        if (cancelled) return;
+        setApplications(res.data.data.applications || []);
+        setPagination(res.data.data.pagination);
+      })
+      .catch(() => { if (!cancelled) setApplications([]); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [driveId, page]);
 
   if (loading) return <p className="text-xs text-gray-400 py-8 text-center">Loading applicants...</p>;
   if (!applications.length)
     return <p className="text-xs text-gray-400 py-8 text-center">No applicants yet.</p>;
 
   return (
-    <div className="bg-white border border-gray-100 rounded-xl overflow-x-auto">
-      <table className="w-full text-xs">
+    <div>
+      <div className="bg-white border border-gray-100 rounded-xl overflow-x-auto">
+        <table className="w-full text-xs">
         <thead>
           <tr className="border-b border-gray-100 text-gray-400">
             <th className="text-left font-medium px-4 py-2.5">Name</th>
@@ -783,7 +793,15 @@ const ApplicantsTab = ({ driveId }) => {
             </tr>
           ))}
         </tbody>
-      </table>
+        </table>
+      </div>
+      {pagination.pages > 1 && (
+        <div className="flex items-center justify-center gap-3 mt-4 text-xs text-gray-600">
+          <button disabled={page <= 1} onClick={() => setPage(page - 1)} className="px-3 py-1.5 border border-gray-200 rounded-lg disabled:opacity-40">Previous</button>
+          <span>Page {pagination.page} of {pagination.pages}</span>
+          <button disabled={page >= pagination.pages} onClick={() => setPage(page + 1)} className="px-3 py-1.5 border border-gray-200 rounded-lg disabled:opacity-40">Next</button>
+        </div>
+      )}
     </div>
   );
 };
@@ -1277,7 +1295,7 @@ const DriveDetail = () => {
         />
       )}
 
-      {tab === "applicants" && isCoordinator && <ApplicantsTab driveId={drive._id} />}
+      {tab === "applicants" && isCoordinator && <ApplicantsTab key={drive._id} driveId={drive._id} />}
 
       {tab === "settings" && isCoordinator && (
         <SettingsTab drive={drive} onSaved={fetchData} />

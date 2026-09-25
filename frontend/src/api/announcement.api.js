@@ -8,12 +8,14 @@ export const getAnnouncements = (targetType, targetId, offset = 0) => {
     params: { offset },
   });
 };
-export const getCommunityFeed = (offsets = {}) => {
+export const getCommunityFeed = (offsets = {}, filters = {}) => {
   return api.get(`announcements/community`, {
     params: {
       eventOffset: offsets.eventOffset ?? 0,
       clubOffset: offsets.clubOffset ?? 0,
       generalOffset: offsets.generalOffset ?? 0,
+      search: filters.search || "",
+      type: filters.type || "All",
     },
   });
 };

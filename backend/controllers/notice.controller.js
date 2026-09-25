@@ -172,6 +172,26 @@ export const createNotice = asyncHandler(async (req, res) => {
   sendResponse(res, 201, "Notice posted.", notice);
 });
 
+// Management is separate from the compact, audience-scoped notice feeds.
+export const listPlatformNotices = asyncHandler(async (req, res) => {
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = 20;
+  const query = { targetType: "platform" };
+  const [notices, total] = await Promise.all([
+    Notice.find(query)
+      .populate("createdBy", "firstName lastName role")
+      .sort({ isPinned: -1, createdAt: -1, _id: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean(),
+    Notice.countDocuments(query),
+  ]);
+  sendResponse(res, 200, "Platform notices fetched.", {
+    notices,
+    pagination: { total, page, pages: Math.ceil(total / limit) },
+  });
+});
+
 export const getNotices = asyncHandler(async (req, res) => {
   // Express 4 parses `?targetType[$ne]=x` into an operator object; only plain
   // strings may reach the query.

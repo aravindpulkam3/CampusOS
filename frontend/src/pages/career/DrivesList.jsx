@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Link } from "react-router-dom";
 import { Search, X, Briefcase, ChevronRight, Plus, Clock } from "lucide-react";
 import useAuth from "../../hooks/useAuth";
@@ -206,11 +206,20 @@ const DrivesList = () => {
   const [status, setStatus] = useState("all");
   const [jobType, setJobType] = useState("all");
   const [eligible, setEligible] = useState(false);
+  const requestRef = useRef(0);
+  const searchRef = useRef(search);
+
+  const invalidateRequest = () => {
+    requestRef.current += 1;
+    setLoading(true);
+  };
 
   const debouncedSearch = useDebounce(search, 400);
 
   const fetchDrives = useCallback(
     async (pageNumber = 1) => {
+      if (debouncedSearch !== searchRef.current) return;
+      const request = ++requestRef.current;
       setLoading(true);
       try {
         const res = await getAllDrives({
@@ -221,15 +230,16 @@ const DrivesList = () => {
           page: pageNumber,
           limit: 20,
         });
+        if (request !== requestRef.current) return;
 
         const rawDrives = res.data.data.drives || [];
 
         setDrives(rawDrives);
         setPagination(res.data.data.pagination);
       } catch (err) {
-        console.error(err);
+        if (request === requestRef.current) console.error(err);
       } finally {
-        setLoading(false);
+        if (request === requestRef.current) setLoading(false);
       }
     },
     [status, jobType, eligible, debouncedSearch],
@@ -237,6 +247,7 @@ const DrivesList = () => {
 
   useEffect(() => {
     fetchDrives(1);
+    return () => { requestRef.current += 1; };
   }, [fetchDrives]);
 
   const isAdmin = ["superadmin", "placementCoordinator"].includes(user?.role);
@@ -273,13 +284,13 @@ const DrivesList = () => {
           type="text"
           placeholder="Search company or role..."
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => { searchRef.current = e.target.value; invalidateRequest(); setSearch(e.target.value); }}
           className="w-full pl-9 pr-8 py-2 text-sm bg-white border border-gray-200 rounded-lg
             focus:outline-none focus:border-gray-400 placeholder:text-gray-300 transition-colors"
         />
         {search && (
           <button
-            onClick={() => setSearch("")}
+            onClick={() => { searchRef.current = ""; invalidateRequest(); setSearch(""); }}
             className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
           >
             <X size={13} />
@@ -292,38 +303,34 @@ const DrivesList = () => {
         <FilterPill
           label="All"
           active={status === "all"}
-          onClick={() => setStatus("all")}
+          onClick={() => { if (status !== "all") { invalidateRequest(); setStatus("all"); } }}
         />
         <FilterPill
           label="Open"
           active={status === "open"}
-          onClick={() => setStatus(status === "open" ? "all" : "open")}
+          onClick={() => { invalidateRequest(); setStatus(status === "open" ? "all" : "open"); }}
         />
         <FilterPill
           label="Closed"
           active={status === "closed"}
-          onClick={() => setStatus(status === "closed" ? "all" : "closed")}
+          onClick={() => { invalidateRequest(); setStatus(status === "closed" ? "all" : "closed"); }}
         />
         <span className="w-px bg-gray-200 self-stretch mx-1" />
         <FilterPill
           label="Internship"
           active={jobType === "internship"}
-          onClick={() =>
-            setJobType(jobType === "internship" ? "all" : "internship")
-          }
+          onClick={() => { invalidateRequest(); setJobType(jobType === "internship" ? "all" : "internship"); }}
         />
         <FilterPill
           label="Full Time"
           active={jobType === "fulltime"}
-          onClick={() =>
-            setJobType(jobType === "fulltime" ? "all" : "fulltime")
-          }
+          onClick={() => { invalidateRequest(); setJobType(jobType === "fulltime" ? "all" : "fulltime"); }}
         />
         <span className="w-px bg-gray-200 self-stretch mx-1" />
         <FilterPill
           label="Eligible Only"
           active={eligible}
-          onClick={() => setEligible((p) => !p)}
+          onClick={() => { invalidateRequest(); setEligible((p) => !p); }}
         />
       </div>
 

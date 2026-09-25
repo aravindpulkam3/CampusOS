@@ -159,11 +159,9 @@ export const getDiscussions = asyncHandler(async (req, res) => {
   if (typeof search === "string" && search) query.$text = { $search: search };
 
   // _id breaks ties, so skip/limit pages can't overlap or skip equal rows.
-  // (Known issue, deliberately unchanged here: "upvotes.length" is not a real
-  // field, so "popular" effectively sorts by views.)
   const sortMap = {
     newest:     { isPinned: -1, createdAt: -1, _id: -1 },
-    popular:    { isPinned: -1, "upvotes.length": -1, views: -1, _id: -1 },
+    popular:    { isPinned: -1, views: -1, _id: -1 },
     unanswered: { isPinned: -1, commentCount: 1, createdAt: -1, _id: -1 },
     active:     { isPinned: -1, lastActivityAt: -1, _id: -1 },
   };

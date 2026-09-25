@@ -41,7 +41,7 @@ const CATEGORIES = [
 
 const SORTS = [
   { value: "newest", label: "Newest", Icon: Clock },
-  { value: "popular", label: "Popular", Icon: TrendingUp },
+  { value: "popular", label: "Most viewed", Icon: TrendingUp },
   { value: "active", label: "Active", Icon: Activity },
 ];
 

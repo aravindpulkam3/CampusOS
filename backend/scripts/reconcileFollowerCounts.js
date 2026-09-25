@@ -17,7 +17,7 @@ import User from "../models/User.js";
 import redisClient, { connectRedis } from "../config/redis.js";
 
 const DRY_RUN = process.argv.includes("--dry-run");
-const CLUB_CACHE_KEYS = ["cache:clubs:all", "cache:clubs:popular"];
+const CLUB_CACHE_KEYS = ["cache:clubs:active", "cache:clubs:popular:active"];
 
 const log = (...args) => console.log(DRY_RUN ? "[dry-run]" : "[reconcile]", ...args);
 
