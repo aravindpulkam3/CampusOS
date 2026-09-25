@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { Search, X, Users, Plus } from "lucide-react";
 import { getAllClubs, followClub, unfollowClub } from "../../api/club.api";
@@ -129,6 +129,7 @@ const EmptyState = ({ search, category }) => (
 const Clubs = () => {
   const [clubs, setClubs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState("All");
   const { user, setUser } = useAuth();
@@ -136,19 +137,21 @@ const Clubs = () => {
   // disabled until it settles, so responses can't arrive out of order.
   const [pendingIds, setPendingIds] = useState(() => new Set());
 
-  useEffect(() => {
-    const fetchAllClubs = async () => {
-      try {
-        const payload = await getAllClubs();
-        setClubs(payload.data.data || []);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchAllClubs();
+  const fetchAllClubs = useCallback(async () => {
+    setLoading(true);
+    setLoadError(false);
+    try {
+      const payload = await getAllClubs();
+      setClubs(payload.data.data || []);
+    } catch (err) {
+      console.error(err);
+      setLoadError(true);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => { fetchAllClubs(); }, [fetchAllClubs]);
 
   const handleFollow = async (clubId, followed) => {
     if (pendingIds.has(clubId)) return;
@@ -191,6 +194,8 @@ const Clubs = () => {
           <p className="text-xs font-semibold text-slate-800 mt-0.5">
             {loading
               ? "Synchronizing registry..."
+              : loadError
+                ? "Could not load clubs"
               : `${clubs.length} registered clubs online`}
           </p>
         </div>
@@ -213,6 +218,7 @@ const Clubs = () => {
           />
           <input
             type="text"
+            aria-label="Search clubs"
             placeholder="Search operational hubs..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -220,6 +226,7 @@ const Clubs = () => {
           />
           {search && (
             <button
+              aria-label="Clear club search"
               onClick={() => setSearch("")}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
             >
@@ -267,6 +274,11 @@ const Clubs = () => {
               <div className="h-8 bg-slate-100 rounded-xl pt-2" />
             </div>
           ))}
+        </div>
+      ) : loadError ? (
+        <div role="alert" className="rounded-xl border border-red-100 bg-red-50 px-5 py-8 text-center text-sm text-red-700">
+          Could not load clubs. Please try again.
+          <button onClick={fetchAllClubs} className="ml-2 font-semibold underline">Try again</button>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">

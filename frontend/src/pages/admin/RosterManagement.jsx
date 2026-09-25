@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Upload, Search } from "lucide-react";
 import {
   importRosterApi,
@@ -22,27 +22,36 @@ const RosterManagement = () => {
   const [pagination, setPagination] = useState({ total: 0, page: 1, pages: 1 });
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const [listErrorPage, setListErrorPage] = useState(null);
+  const requestRef = useRef(0);
 
   const [edits, setEdits] = useState({});
   const [rowError, setRowError] = useState({});
   const [rowBusy, setRowBusy] = useState({});
 
   const fetchRoster = async (page = 1) => {
+    const request = ++requestRef.current;
     setLoading(true);
+    setListErrorPage(null);
     try {
       const { data } = await listRosterApi({ page, search: search.trim() || undefined });
+      if (request !== requestRef.current) return;
       setEntries(data.data.entries);
       setPagination(data.data.pagination);
       setEdits({});
     } catch (err) {
-      console.error(err);
+      if (request === requestRef.current) {
+        console.error(err);
+        setListErrorPage(page);
+      }
     } finally {
-      setLoading(false);
+      if (request === requestRef.current) setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchRoster(1);
+    return () => { requestRef.current += 1; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -167,7 +176,7 @@ const RosterManagement = () => {
       <div className="bg-white border border-gray-100 rounded-xl p-5">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
           <h3 className="text-sm font-semibold text-gray-900">
-            Roster <span className="text-gray-400 font-normal">({pagination.total})</span>
+            Roster {listErrorPage === null && <span className="text-gray-400 font-normal">({pagination.total})</span>}
           </h3>
           <form
             onSubmit={(e) => {
@@ -178,6 +187,7 @@ const RosterManagement = () => {
           >
             <input
               type="text"
+              aria-label="Search roster by roll number or email"
               placeholder="Roll number or email"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -194,6 +204,11 @@ const RosterManagement = () => {
 
         {loading ? (
           <p className="text-xs text-gray-400">Loading…</p>
+        ) : listErrorPage !== null ? (
+          <div role="alert" className="rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-xs text-red-700">
+            Could not load roster entries. Please try again.
+            <button onClick={() => fetchRoster(listErrorPage)} className="ml-2 font-semibold underline">Try again</button>
+          </div>
         ) : entries.length === 0 ? (
           <p className="text-xs text-gray-400">No roster entries.</p>
         ) : (
@@ -287,7 +302,7 @@ const RosterManagement = () => {
           </div>
         )}
 
-        {pagination.pages > 1 && (
+        {!loading && listErrorPage === null && pagination.pages > 1 && (
           <div className="flex items-center justify-end gap-2 mt-4 text-xs">
             <button
               type="button"

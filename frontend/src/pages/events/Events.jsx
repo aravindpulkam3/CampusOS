@@ -84,6 +84,7 @@ export default function Events() {
   const [hasMore, setHasMore] = useState(false);
   const [feedLoading, setFeedLoading] = useState(true);
   const [loadMoreLoading, setLoadMoreLoading] = useState(false);
+  const [feedError, setFeedError] = useState(false);
   const requestRef = useRef(0);
   const searchRef = useRef(search);
 
@@ -94,6 +95,7 @@ export default function Events() {
     setHasMore(false);
     setFeedLoading(true);
     setLoadMoreLoading(false);
+    setFeedError(false);
   };
 
   const handleRegister = async (e, eventId) => {
@@ -118,6 +120,7 @@ export default function Events() {
       if (debouncedSearch !== searchRef.current) return;
       const request = ++requestRef.current;
       try {
+        setFeedError(false);
         if (append) setLoadMoreLoading(true);
         else setFeedLoading(true);
 
@@ -138,7 +141,10 @@ export default function Events() {
         setHasMore(nextHasMore);
         setOffset(nextOffset);
       } catch (err) {
-        if (request === requestRef.current) console.error("Events sync error:", err);
+        if (request === requestRef.current) {
+          console.error("Events sync error:", err);
+          setFeedError(true);
+        }
       } finally {
         if (request === requestRef.current) {
           setFeedLoading(false);
@@ -161,6 +167,8 @@ export default function Events() {
     }
   };
 
+  const retryFeed = () => fetchFeed(offset, offset > 0);
+
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-2 space-y-5">
       {/* Search Header Action Container */}
@@ -180,6 +188,7 @@ export default function Events() {
           />
           <input
             type="text"
+            aria-label="Search events"
             placeholder="Search matching events..."
             value={search}
             onChange={(e) => { searchRef.current = e.target.value; invalidateFeed(); setSearch(e.target.value); }}
@@ -187,6 +196,7 @@ export default function Events() {
           />
           {search && (
             <button
+              aria-label="Clear event search"
               onClick={() => { searchRef.current = ""; invalidateFeed(); setSearch(""); }}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
             >
@@ -215,13 +225,19 @@ export default function Events() {
       </div>
 
       {/* Content Rendering Layout */}
+      {!feedLoading && feedError && (
+        <div role="alert" className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-xs text-red-700">
+          Could not load events. Please try again.
+          <button onClick={retryFeed} className="ml-3 font-semibold underline">Try again</button>
+        </div>
+      )}
       {feedLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {Array.from({ length: 6 }).map((_, i) => (
             <CardSkeleton key={i} />
           ))}
         </div>
-      ) : feedItems.length === 0 ? (
+      ) : feedError && feedItems.length === 0 ? null : feedItems.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 bg-white border border-slate-100 rounded-2xl text-center shadow-3xs">
           <div className="w-10 h-10 bg-slate-50 border border-slate-100 rounded-full flex items-center justify-center mb-3 shadow-3xs">
             <Calendar size={15} className="text-slate-400" />
@@ -345,7 +361,7 @@ export default function Events() {
           </div>
 
           {/* Consistent Load More Button */}
-          {hasMore && (
+          {!feedError && hasMore && (
             <button
               onClick={handleLoadMore}
               disabled={loadMoreLoading}

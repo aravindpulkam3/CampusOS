@@ -202,9 +202,17 @@ const Community = () => {
   const [hasMore, setHasMore] = useState(false);
   const [feedLoading, setFeedLoading] = useState(true);
   const [loadMoreLoading, setLoadMoreLoading] = useState(false);
+  const [feedError, setFeedError] = useState(false);
   const [widgetLoading, setWidgetLoading] = useState(true);
+  const [widgetError, setWidgetError] = useState(false);
+  const [widgetReload, setWidgetReload] = useState(0);
   const feedRequestRef = useRef(0);
   const searchRef = useRef(search);
+  const userId = user?._id?.toString() ?? "";
+  const followedClubsKey = user?.followedClubs
+    ?.map((club) => String(club?._id ?? club)).sort().join(",") ?? "";
+  const registeredEventsKey = user?.registeredEvents
+    ?.map((event) => String(event?._id ?? event)).sort().join(",") ?? "";
 
   const resetFeed = () => {
     // Invalidate an in-flight page immediately, including during debounce.
@@ -214,6 +222,7 @@ const Community = () => {
     setHasMore(false);
     setFeedLoading(true);
     setLoadMoreLoading(false);
+    setFeedError(false);
   };
 
   // Core Request dynamic loader method
@@ -225,6 +234,7 @@ const Community = () => {
       if (debouncedSearch !== searchRef.current) return;
       const request = ++feedRequestRef.current;
       try {
+        setFeedError(false);
         if (append) setLoadMoreLoading(true);
         else setFeedLoading(true);
 
@@ -243,7 +253,10 @@ const Community = () => {
         setHasMore(nextHasMore);
         setOffsets(nextOffsets);
       } catch (err) {
-        if (request === feedRequestRef.current) console.error(err);
+        if (request === feedRequestRef.current) {
+          console.error(err);
+          setFeedError(true);
+        }
       } finally {
         if (request === feedRequestRef.current) {
           setFeedLoading(false);
@@ -255,35 +268,47 @@ const Community = () => {
   );
 
   useEffect(() => {
+    let cancelled = false;
     const fetchWidgets = async () => {
       try {
         setWidgetLoading(true);
+        setWidgetError(false);
         const [clubsRes, eventsRes] = await Promise.all([
           getPopularClubs(),
           getUpcomingEvents(),
         ]);
+        if (cancelled) return;
         setTrendingClubs(clubsRes?.data?.data || []);
         setUpcomingEvents(eventsRes?.data?.data || []);
       } catch (err) {
-        console.error(err);
+        if (!cancelled) {
+          console.error(err);
+          setWidgetError(true);
+        }
       } finally {
-        setWidgetLoading(false);
+        if (!cancelled) setWidgetLoading(false);
       }
     };
 
     fetchWidgets();
-  }, [user]);
+    return () => { cancelled = true; };
+  }, [userId, followedClubsKey, widgetReload]);
 
   useEffect(() => {
     resetFeed();
     fetchFeed({ eventOffset: 0, clubOffset: 0, generalOffset: 0 }, false);
     return () => { feedRequestRef.current += 1; };
-  }, [user, fetchFeed]);
+  }, [userId, followedClubsKey, registeredEventsKey, fetchFeed]);
 
   const handleLoadMore = () => {
     if (!loadMoreLoading && hasMore) {
       fetchFeed(offsets, true);
     }
+  };
+
+  const retryFeed = () => {
+    const append = offsets.eventOffset + offsets.clubOffset + offsets.generalOffset > 0;
+    fetchFeed(offsets, append);
   };
 
   const types = ["All", "club", "event"];
@@ -304,6 +329,7 @@ const Community = () => {
           />
           <input
             type="text"
+            aria-label="Search community updates"
             placeholder="Search matching feed keywords..."
             value={search}
             onChange={(e) => { searchRef.current = e.target.value; resetFeed(); setSearch(e.target.value); }}
@@ -311,6 +337,7 @@ const Community = () => {
           />
           {search && (
             <button
+              aria-label="Clear community search"
               onClick={() => { searchRef.current = ""; resetFeed(); setSearch(""); }}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
             >
@@ -345,19 +372,25 @@ const Community = () => {
             <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
               Timeline Activity Stream
             </h2>
-            {!feedLoading && (
+            {!feedLoading && !feedError && (
               <span className="text-xs text-slate-400 font-medium">
                 {feedItems.length} entries shown
               </span>
             )}
           </div>
 
+          {!feedLoading && feedError && (
+            <div role="alert" className="mb-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-xs text-red-700">
+              Could not load community updates. Please try again.
+              <button onClick={retryFeed} className="ml-3 font-semibold underline">Try again</button>
+            </div>
+          )}
           {feedLoading ? (
             <div className="space-y-4">
               <div className="h-32 bg-gray-50 border border-gray-100 animate-pulse rounded-2xl" />
               <div className="h-32 bg-gray-100 animate-pulse rounded-2xl" />
             </div>
-          ) : feedItems.length > 0 ? (
+          ) : feedError && feedItems.length === 0 ? null : feedItems.length > 0 ? (
             <div className="space-y-3.5">
               {feedItems.map((item) => (
                 <AnnouncementCard
@@ -389,7 +422,7 @@ const Community = () => {
               </p>
             </div>
           )}
-          {!feedLoading && hasMore && (
+          {!feedLoading && !feedError && hasMore && (
             <button
               onClick={handleLoadMore}
               disabled={loadMoreLoading}
@@ -415,11 +448,17 @@ const Community = () => {
               showActions={false}
             />
           </div>
-          <UpcomingEventsWidget
-            events={upcomingEvents}
-            loading={widgetLoading}
-          />
-          <TrendingClubsWidget clubs={trendingClubs} loading={widgetLoading} />
+          {widgetError ? (
+            <div role="alert" className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-xs text-red-700">
+              Could not load community highlights.
+              <button onClick={() => setWidgetReload((value) => value + 1)} className="ml-2 font-semibold underline">Try again</button>
+            </div>
+          ) : (
+            <>
+              <UpcomingEventsWidget events={upcomingEvents} loading={widgetLoading} />
+              <TrendingClubsWidget clubs={trendingClubs} loading={widgetLoading} />
+            </>
+          )}
         </div>
       </div>
     </div>

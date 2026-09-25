@@ -264,13 +264,14 @@ const CompetitivePrep = () => {
         <LuSearch size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
         <input
           type="text"
+          aria-label="Search competitive prep resources"
           placeholder="Search resources..."
           value={search}
           onChange={e => setSearch(e.target.value)}
           className="w-full pl-9 pr-8 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 placeholder:text-gray-300"
         />
         {search && (
-          <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+          <button onClick={() => setSearch("")} aria-label="Clear resource search" className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
             <LuX size={13} />
           </button>
         )}

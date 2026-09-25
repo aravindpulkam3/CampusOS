@@ -201,6 +201,7 @@ const DrivesList = () => {
   const { user } = useAuth();
   const [drives, setDrives] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadErrorPage, setLoadErrorPage] = useState(null);
   const [search, setSearch] = useState("");
   const [pagination, setPagination] = useState({ total: 0, page: 1, pages: 1 });
   const [status, setStatus] = useState("all");
@@ -212,6 +213,7 @@ const DrivesList = () => {
   const invalidateRequest = () => {
     requestRef.current += 1;
     setLoading(true);
+    setLoadErrorPage(null);
   };
 
   const debouncedSearch = useDebounce(search, 400);
@@ -221,6 +223,7 @@ const DrivesList = () => {
       if (debouncedSearch !== searchRef.current) return;
       const request = ++requestRef.current;
       setLoading(true);
+      setLoadErrorPage(null);
       try {
         const res = await getAllDrives({
           ...(status !== "all" && { status }),
@@ -237,7 +240,10 @@ const DrivesList = () => {
         setDrives(rawDrives);
         setPagination(res.data.data.pagination);
       } catch (err) {
-        if (request === requestRef.current) console.error(err);
+        if (request === requestRef.current) {
+          console.error(err);
+          setLoadErrorPage(pageNumber);
+        }
       } finally {
         if (request === requestRef.current) setLoading(false);
       }
@@ -261,7 +267,7 @@ const DrivesList = () => {
             Placement Drives
           </h2>
           <p className="text-xs text-gray-400 mt-0.5">
-            {loading ? "Loading..." : `${pagination.total} drives available`}
+            {loading ? "Loading..." : loadErrorPage !== null ? "Could not load drives" : `${pagination.total} drives available`}
           </p>
         </div>
         {isAdmin && (
@@ -282,6 +288,7 @@ const DrivesList = () => {
         />
         <input
           type="text"
+          aria-label="Search placement drives"
           placeholder="Search company or role..."
           value={search}
           onChange={(e) => { searchRef.current = e.target.value; invalidateRequest(); setSearch(e.target.value); }}
@@ -290,6 +297,7 @@ const DrivesList = () => {
         />
         {search && (
           <button
+            aria-label="Clear drive search"
             onClick={() => { searchRef.current = ""; invalidateRequest(); setSearch(""); }}
             className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
           >
@@ -337,6 +345,11 @@ const DrivesList = () => {
       {/* List */}
       {loading ? (
         <Skeleton />
+      ) : loadErrorPage !== null ? (
+        <div role="alert" className="rounded-xl border border-red-100 bg-red-50 px-5 py-8 text-center text-sm text-red-700">
+          Could not load drives. Please try again.
+          <button onClick={() => fetchDrives(loadErrorPage)} className="ml-2 font-semibold underline">Try again</button>
+        </div>
       ) : drives.length > 0 ? (
         <>
           <div className="space-y-2.5">
@@ -351,6 +364,8 @@ const DrivesList = () => {
                   <button
                     key={p}
                     onClick={() => fetchDrives(p)}
+                    aria-label={`Go to page ${p}`}
+                    aria-current={p === pagination.page ? "page" : undefined}
                     className={`w-8 h-8 text-xs font-semibold rounded-lg border transition-all
                     ${
                       p === pagination.page

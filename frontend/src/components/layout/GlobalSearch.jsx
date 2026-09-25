@@ -99,13 +99,13 @@ const GlobalSearch = () => {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState(-1);
 
   const inputRef = useRef(null);
   const containerRef = useRef(null);
   const abortRef = useRef(null);
-  const debounceRef = useRef(null);
 
   // ── Click outside ──────────────────────────────────────────
   useEffect(() => {
@@ -131,37 +131,44 @@ const GlobalSearch = () => {
 
   // ── Debounced search ───────────────────────────────────────
   useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
+    const controller = new AbortController();
+    abortRef.current?.abort();
+    abortRef.current = controller;
+    setError(false);
+    setFocusedIndex(-1);
 
     if (query.trim().length < 2) {
       setResults([]);
       setLoading(false);
       if (query.length === 0) setIsOpen(false);
-      return;
+      return () => controller.abort();
     }
 
     setLoading(true);
     setIsOpen(true);
 
-    debounceRef.current = setTimeout(async () => {
-      if (abortRef.current) abortRef.current.abort();
-      abortRef.current = new AbortController();
-
+    const timer = setTimeout(async () => {
+      if (controller.signal.aborted) return;
       try {
-        const res = await globalSearchApi(
-          query.trim(),
-          abortRef.current.signal,
-        );
+        const res = await globalSearchApi(query.trim(), controller.signal);
+        if (controller.signal.aborted) return;
         setResults(res.data.data || []);
         setFocusedIndex(-1);
       } catch (err) {
-        if (err.code !== "ERR_CANCELED") setResults([]);
+        if (!controller.signal.aborted && err.code !== "ERR_CANCELED") {
+          setResults([]);
+          setFocusedIndex(-1);
+          setError(true);
+        }
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
     }, 300);
 
-    return () => clearTimeout(debounceRef.current);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
   }, [query]);
 
   // ── Group + flatten ────────────────────────────────────────
@@ -177,6 +184,7 @@ const GlobalSearch = () => {
 
   // ── Navigation ─────────────────────────────────────────────
   const handleNavigate = (url) => {
+    abortRef.current?.abort();
     navigate(url);
     setIsOpen(false);
     setQuery("");
@@ -185,6 +193,7 @@ const GlobalSearch = () => {
   };
 
   const handleClear = () => {
+    abortRef.current?.abort();
     setQuery("");
     setResults([]);
     setIsOpen(false);
@@ -224,8 +233,9 @@ const GlobalSearch = () => {
         <input
           ref={inputRef}
           type="text"
+          aria-label="Search clubs, events, drives, and discussions"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => { abortRef.current?.abort(); setQuery(e.target.value); }}
           onFocus={() => {
             if (query.trim().length >= 2) setIsOpen(true);
           }}
@@ -240,7 +250,7 @@ const GlobalSearch = () => {
           />
         )}
         {!loading && query && (
-          <button onClick={handleClear} className="flex-shrink-0">
+          <button onClick={handleClear} aria-label="Clear global search" className="flex-shrink-0">
             <X
               size={12}
               className="text-gray-400 hover:text-gray-700 transition-colors"
@@ -267,6 +277,11 @@ const GlobalSearch = () => {
                   </div>
                 </div>
               ))}
+            </div>
+          ) : error ? (
+            <div className="py-10 px-4 text-center">
+              <p className="text-xs font-medium text-gray-500">Search is unavailable</p>
+              <p className="text-[10px] text-gray-400 mt-0.5">Try again in a moment</p>
             </div>
           ) : flatResults.length === 0 ? (
             // Empty state
