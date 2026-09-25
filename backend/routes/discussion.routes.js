@@ -11,11 +11,13 @@ import {
   bookmarkDiscussion,
   removeBookmark,
   addComment,
+  getComments,
   upvoteComment,
   removeCommentUpvote,
   acceptAnswer,
   deleteComment,
   addReply,
+  getReplies,
   upvoteReply,
   removeReplyUpvote,
   deleteReply,
@@ -36,6 +38,8 @@ discussionRouter.put("/:id/bookmark", authMiddleware, bookmarkDiscussion);
 discussionRouter.delete("/:id/bookmark", authMiddleware, removeBookmark);
 
 // ── Comments ─────────────────────────────────────────────────
+// Paged (cursor) — replies are fetched separately, per comment.
+discussionRouter.get("/:id/comments", authMiddleware, getComments);
 discussionRouter.post("/:id/comments", authMiddleware, contentLimiter, addComment);
 discussionRouter.put(
   "/:id/comments/:commentId/upvote",
@@ -59,6 +63,8 @@ discussionRouter.delete(
 );
 
 // ── Replies ──────────────────────────────────────────────────
+// Paged (cursor), one comment's flat thread at a time.
+discussionRouter.get("/:id/comments/:commentId/replies", authMiddleware, getReplies);
 discussionRouter.post(
   "/:id/comments/:commentId/replies",
   authMiddleware,

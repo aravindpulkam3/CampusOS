@@ -12,6 +12,12 @@ export const bookmarkDiscussion = (id) =>
 export const unbookmarkDiscussion = (id) =>
   api.delete(`/discussions/${id}/bookmark`);
 
+// Cursor-paged, oldest first: pass { cursor } from the previous page's nextCursor.
+export const getComments = (id, params) =>
+  api.get(`/discussions/${id}/comments`, { params });
+export const getReplies = (id, cid, params) =>
+  api.get(`/discussions/${id}/comments/${cid}/replies`, { params });
+
 export const addComment = (id, data) =>
   api.post(`/discussions/${id}/comments`, data);
 export const upvoteComment = (id, cid) =>

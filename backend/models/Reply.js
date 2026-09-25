@@ -6,14 +6,13 @@ const replySchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Comment",
       required: true,
-      index: true,
     },
-    // If set → nested reply (reply to a reply). If null → direct reply to comment.
+    // If set → reply to a reply (shown as "@Name" in the flat thread).
+    // If null → direct reply to the comment. Never queried on its own.
     parentReply: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Reply",
       default: null,
-      index: true,
     },
     // Populated from parentReply.author — used to render "@FirstName" mention
     replyingTo: {
@@ -32,11 +31,14 @@ const replySchema = new mongoose.Schema(
       trim: true,
       maxlength: 5000,
     },
-    upvotes:   [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
-    isEdited:  { type: Boolean, default: false },
+    upvotes: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+    isEdited: { type: Boolean, default: false },
     isDeleted: { type: Boolean, default: false },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
+
+// Reply pages: equality on comment, then the {createdAt, _id} keyset.
+replySchema.index({ comment: 1, createdAt: 1, _id: 1 });
 
 export default mongoose.model("Reply", replySchema);

@@ -1,8 +1,10 @@
+import mongoose from "mongoose";
 import Discussion from "../models/Discussion.js";
 import Comment from "../models/Comment.js";
 import Reply from "../models/Reply.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import sendResponse from "../utils/sendResponse.js";
+import ApiError from "../utils/apiError.js";
 import { createNotification } from "../services/notification.service.js";
 
 // Who upvoted or bookmarked what is not public: responses carry counts plus the
@@ -60,6 +62,72 @@ const bookmarkHandler = (member) =>
     });
   });
 
+// ── Comment / reply pagination ───────────────
+// Both are paged oldest-first by the keyset { createdAt: 1, _id: 1 } — _id only
+// breaks createdAt ties, so equal timestamps can't duplicate or skip rows across
+// pages. The cursor is the last RETURNED row's pair as one plain string,
+// "<ISO date>_<id>" (ISO dates never contain "_"). Malformed input is a 400;
+// malformed URL ids already are (errorMiddleware maps CastError to 400).
+const PAGE_SORT = { createdAt: 1, _id: 1 };
+const COMMENT_PAGE_SIZE = 20;
+const REPLY_PAGE_SIZE = 10;
+const MAX_PAGE_SIZE = 50;
+
+const AUTHOR_FIELDS = "firstName lastName role";
+const COMMENT_FIELDS = "content author upvotes replyCount isEdited createdAt";
+const REPLY_FIELDS = "content author parentReply replyingTo upvotes isEdited createdAt";
+
+const parseLimit = (raw, fallback) =>
+  Math.min(MAX_PAGE_SIZE, Math.max(1, parseInt(raw, 10) || fallback));
+
+const encodeCursor = (row) => `${row.createdAt.toISOString()}_${row._id}`;
+
+// Absent → first page (null).
+const parseCursor = (raw) => {
+  if (raw === undefined) return null;
+  const split = typeof raw === "string" ? raw.lastIndexOf("_") : -1;
+  const createdAt = split > 0 ? new Date(raw.slice(0, split)) : null;
+  const id = split > 0 ? raw.slice(split + 1) : "";
+  if (!createdAt || Number.isNaN(createdAt.getTime()) || !/^[a-f\d]{24}$/i.test(id)) {
+    throw new ApiError(400, "Invalid cursor.");
+  }
+  return { createdAt, _id: new mongoose.Types.ObjectId(id) };
+};
+
+// Rows strictly after the cursor in { createdAt, _id } order.
+const afterCursor = (cursor) =>
+  cursor
+    ? {
+        $or: [
+          { createdAt: { $gt: cursor.createdAt } },
+          { createdAt: cursor.createdAt, _id: { $gt: cursor._id } },
+        ],
+      }
+    : {};
+
+// Fetches limit + 1 rows to learn whether another page exists, returns only
+// `limit`, and takes nextCursor from the last row actually returned — so the
+// extra row is neither shown nor skipped.
+const fetchPage = async (query, limit) => {
+  const rows = await query.sort(PAGE_SORT).limit(limit + 1).lean();
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+  return { page, hasMore, nextCursor: hasMore ? encodeCursor(page[page.length - 1]) : null };
+};
+
+// Moves a stored counter and returns its new value, so mutation responses carry
+// the authoritative count instead of the client guessing.
+const incCount = async (Model, id, field, delta) => {
+  const doc = await Model.findByIdAndUpdate(
+    id,
+    { $inc: { [field]: delta } },
+    { new: true, projection: { [field]: 1 } },
+  ).lean();
+  return doc?.[field] ?? 0;
+};
+const readCount = async (Model, id, field) =>
+  (await Model.findById(id).select(field).lean())?.[field] ?? 0;
+
 const discussionFilter = (req) => ({ _id: req.params.id });
 const commentFilter = (req) => ({
   _id: req.params.commentId,
@@ -90,11 +158,14 @@ export const getDiscussions = asyncHandler(async (req, res) => {
   if (category && category !== "all") query.category = category;
   if (typeof search === "string" && search) query.$text = { $search: search };
 
+  // _id breaks ties, so skip/limit pages can't overlap or skip equal rows.
+  // (Known issue, deliberately unchanged here: "upvotes.length" is not a real
+  // field, so "popular" effectively sorts by views.)
   const sortMap = {
-    newest:     { isPinned: -1, createdAt: -1 },
-    popular:    { isPinned: -1, "upvotes.length": -1, views: -1 },
-    unanswered: { isPinned: -1, commentCount: 1, createdAt: -1 },
-    active:     { isPinned: -1, lastActivityAt: -1 },
+    newest:     { isPinned: -1, createdAt: -1, _id: -1 },
+    popular:    { isPinned: -1, "upvotes.length": -1, views: -1, _id: -1 },
+    unanswered: { isPinned: -1, commentCount: 1, createdAt: -1, _id: -1 },
+    active:     { isPinned: -1, lastActivityAt: -1, _id: -1 },
   };
 
   const skip = (page - 1) * limit;
@@ -116,6 +187,9 @@ export const getDiscussions = asyncHandler(async (req, res) => {
 });
 
 // GET /api/discussions/:id
+// The discussion plus its accepted answer (pinned above the feed). Comments and
+// replies are NOT included — they page through getComments / getReplies.
+// Counts a view, so the client calls this once per page open, never to refresh.
 export const getDiscussionById = asyncHandler(async (req, res) => {
   const discussion = await Discussion.findOneAndUpdate(
     { _id: req.params.id, isDeleted: false },
@@ -127,52 +201,74 @@ export const getDiscussionById = asyncHandler(async (req, res) => {
     return res.status(404).json({ success: false, message: "Discussion not found." });
   }
 
-  // Fetch comments (not deleted), accepted answer floats to top
-  const comments = await Comment.find({ discussion: req.params.id, isDeleted: false })
-    .populate("author", "firstName lastName branch year role")
-    .sort({ isAcceptedAnswer: -1, createdAt: 1 })
+  const acceptedAnswer = await Comment.findOne({
+    discussion: discussion._id,
+    isDeleted: false,
+    isAcceptedAnswer: true,
+  })
+    .select(COMMENT_FIELDS)
+    .populate("author", AUTHOR_FIELDS)
     .lean();
-
-  // Fetch ALL replies for these comments in one query (flat, includes nested)
-  const commentIds = comments.map((c) => c._id);
-  const allReplies = await Reply.find({ comment: { $in: commentIds }, isDeleted: false })
-    .populate("author", "firstName lastName branch year role")
-    .populate("replyingTo", "firstName lastName")
-    .sort({ createdAt: 1 })
-    .lean();
-
-  // Build nested reply tree per comment
-  // Direct replies (parentReply: null) = roots
-  // Nested replies (parentReply set)   = children of their parent
-  const buildReplyTree = (commentId) => {
-    const flat = allReplies.filter(
-      (r) => r.comment.toString() === commentId.toString()
-    );
-    const map = {};
-    flat.forEach((r) => { map[r._id.toString()] = { ...shapeVotes(r, req.user._id), children: [] }; });
-
-    const roots = [];
-    flat.forEach((r) => {
-      if (r.parentReply) {
-        const parent = map[r.parentReply.toString()];
-        // If parent exists attach as child; otherwise promote to root
-        if (parent) parent.children.push(map[r._id.toString()]);
-        else roots.push(map[r._id.toString()]);
-      } else {
-        roots.push(map[r._id.toString()]);
-      }
-    });
-    return roots;
-  };
-
-  const commentsWithReplies = comments.map((c) => ({
-    ...shapeVotes(c, req.user._id),
-    replies: buildReplyTree(c._id),
-  }));
 
   sendResponse(res, 200, "Discussion fetched.", {
     discussion: shapeVotes(discussion.toObject(), req.user._id),
-    comments: commentsWithReplies,
+    acceptedAnswer: acceptedAnswer ? shapeVotes(acceptedAnswer, req.user._id) : null,
+  });
+});
+
+// GET /api/discussions/:id/comments?cursor=&limit=
+// One page of comments, oldest first. Each carries its stored replyCount; the
+// replies themselves are fetched per comment, on demand.
+export const getComments = asyncHandler(async (req, res) => {
+  const cursor = parseCursor(req.query.cursor);
+  const limit = parseLimit(req.query.limit, COMMENT_PAGE_SIZE);
+
+  if (!(await Discussion.exists({ _id: req.params.id, isDeleted: false }))) {
+    return res.status(404).json({ success: false, message: "Discussion not found." });
+  }
+
+  const { page, hasMore, nextCursor } = await fetchPage(
+    Comment.find({ discussion: req.params.id, isDeleted: false, ...afterCursor(cursor) })
+      .select(COMMENT_FIELDS)
+      .populate("author", AUTHOR_FIELDS),
+    limit,
+  );
+
+  sendResponse(res, 200, "Comments fetched.", {
+    comments: page.map((c) => shapeVotes(c, req.user._id)),
+    nextCursor,
+    hasMore,
+  });
+});
+
+// GET /api/discussions/:id/comments/:commentId/replies?cursor=&limit=
+// One page of a single comment's replies, oldest first, as a flat list; the
+// client nests them by parentReply (replyingTo is the parent's author, for "@Name").
+export const getReplies = asyncHandler(async (req, res) => {
+  const cursor = parseCursor(req.query.cursor);
+  const limit = parseLimit(req.query.limit, REPLY_PAGE_SIZE);
+
+  // The comment must be live and belong to the (live) discussion in the URL.
+  const [comment, discussion] = await Promise.all([
+    Comment.exists({ _id: req.params.commentId, discussion: req.params.id, isDeleted: false }),
+    Discussion.exists({ _id: req.params.id, isDeleted: false }),
+  ]);
+  if (!comment || !discussion) {
+    return res.status(404).json({ success: false, message: "Comment not found." });
+  }
+
+  const { page, hasMore, nextCursor } = await fetchPage(
+    Reply.find({ comment: req.params.commentId, isDeleted: false, ...afterCursor(cursor) })
+      .select(REPLY_FIELDS)
+      .populate("author", AUTHOR_FIELDS)
+      .populate("replyingTo", "firstName lastName"),
+    limit,
+  );
+
+  sendResponse(res, 200, "Replies fetched.", {
+    replies: page.map((r) => shapeVotes(r, req.user._id)),
+    nextCursor,
+    hasMore,
   });
 });
 
@@ -251,10 +347,11 @@ export const addComment = asyncHandler(async (req, res) => {
     content: content.trim(),
   });
 
-  await Discussion.findByIdAndUpdate(req.params.id, {
-    $inc: { commentCount: 1 },
-    lastActivityAt: new Date(),
-  });
+  const updated = await Discussion.findByIdAndUpdate(
+    req.params.id,
+    { $inc: { commentCount: 1 }, lastActivityAt: new Date() },
+    { new: true, projection: { commentCount: 1 } },
+  ).lean();
 
   if (discussion.author.toString() !== req.user._id.toString()) {
     createNotification({
@@ -268,10 +365,10 @@ export const addComment = asyncHandler(async (req, res) => {
     });
   }
 
-  await comment.populate("author", "firstName lastName branch year role");
+  await comment.populate("author", AUTHOR_FIELDS);
   sendResponse(res, 201, "Comment added.", {
-    ...shapeVotes(comment.toObject(), req.user._id),
-    replies: [],
+    comment: shapeVotes(comment.toObject(), req.user._id),
+    commentCount: updated?.commentCount ?? 0,
   });
 });
 
@@ -309,7 +406,7 @@ export const acceptAnswer = asyncHandler(async (req, res) => {
 
 // DELETE /api/discussions/:id/comments/:commentId  (soft delete)
 export const deleteComment = asyncHandler(async (req, res) => {
-  const comment = await Comment.findById(req.params.commentId);
+  const comment = await Comment.findOne({ _id: req.params.commentId, discussion: req.params.id });
   if (!comment) return res.status(404).json({ success: false, message: "Not found." });
 
   const isOwner = comment.author.toString() === req.user._id.toString();
@@ -317,16 +414,18 @@ export const deleteComment = asyncHandler(async (req, res) => {
     return res.status(403).json({ success: false, message: "Not authorised." });
   }
 
-  // Flip isDeleted conditionally so a repeated delete is a no-op, and decrement
-  // the comment's REAL parent — never whatever :id the URL names.
+  // Flip isDeleted conditionally so a repeated delete is a no-op (the
+  // membership condition is in the filter, so matchedCount says whether it
+  // changed), and decrement the comment's REAL parent.
   const flipped = await Comment.updateOne(
     { _id: comment._id, isDeleted: false },
     { $set: { isDeleted: true } },
   );
-  if (flipped.modifiedCount === 1) {
-    await Discussion.updateOne({ _id: comment.discussion }, { $inc: { commentCount: -1 } });
-  }
-  sendResponse(res, 200, "Comment deleted.");
+  const commentCount =
+    flipped.matchedCount === 1
+      ? await incCount(Discussion, comment.discussion, "commentCount", -1)
+      : await readCount(Discussion, comment.discussion, "commentCount");
+  sendResponse(res, 200, "Comment deleted.", { commentCount });
 });
 
 // ─────────────────────────────────────────────
@@ -383,7 +482,7 @@ export const addReply = asyncHandler(async (req, res) => {
     content:     content.trim(),
   });
 
-  await Comment.findByIdAndUpdate(comment._id, { $inc: { replyCount: 1 } });
+  const replyCount = await incCount(Comment, comment._id, "replyCount", 1);
   await Discussion.findByIdAndUpdate(comment.discussion, { lastActivityAt: new Date() });
 
   const replyRecipient = replyingTo || comment.author;
@@ -399,12 +498,12 @@ export const addReply = asyncHandler(async (req, res) => {
     });
   }
 
-  await reply.populate("author", "firstName lastName branch year role");
+  await reply.populate("author", AUTHOR_FIELDS);
   await reply.populate("replyingTo", "firstName lastName");
 
   sendResponse(res, 201, "Reply added.", {
-    ...shapeVotes(reply.toObject(), req.user._id),
-    children: [],
+    reply: shapeVotes(reply.toObject(), req.user._id),
+    replyCount,
   });
 });
 
@@ -414,7 +513,7 @@ export const removeReplyUpvote = upvoteHandler(Reply, replyFilter, false);
 
 // DELETE /api/discussions/:id/comments/:commentId/replies/:replyId
 export const deleteReply = asyncHandler(async (req, res) => {
-  const reply = await Reply.findById(req.params.replyId);
+  const reply = await Reply.findOne({ _id: req.params.replyId, comment: req.params.commentId });
   if (!reply) return res.status(404).json({ success: false, message: "Not found." });
 
   const isOwner = reply.author.toString() === req.user._id.toString();
@@ -423,13 +522,15 @@ export const deleteReply = asyncHandler(async (req, res) => {
   }
 
   // Same rules as deleteComment: idempotent, and the counter belongs to the
-  // reply's real parent comment.
+  // reply's real parent comment. replyCount therefore always counts the
+  // visible (non-deleted) replies.
   const flipped = await Reply.updateOne(
     { _id: reply._id, isDeleted: false },
     { $set: { isDeleted: true } },
   );
-  if (flipped.modifiedCount === 1) {
-    await Comment.updateOne({ _id: reply.comment }, { $inc: { replyCount: -1 } });
-  }
-  sendResponse(res, 200, "Reply deleted.");
+  const replyCount =
+    flipped.matchedCount === 1
+      ? await incCount(Comment, reply.comment, "replyCount", -1)
+      : await readCount(Comment, reply.comment, "replyCount");
+  sendResponse(res, 200, "Reply deleted.", { replyCount });
 });

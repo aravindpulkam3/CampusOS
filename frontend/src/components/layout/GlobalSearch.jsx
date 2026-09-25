@@ -210,10 +210,10 @@ const GlobalSearch = () => {
   const showDropdown = isOpen && query.trim().length >= 2;
 
   return (
-    <div ref={containerRef} className="relative">
-      {/* ── Input ── */}
+    <div ref={containerRef} className="relative min-w-0">
+      {/* ── Input ── (max-w-full: shrinks on narrow screens, w-56/w-72 otherwise) */}
       <div
-        className={`flex items-center gap-2 px-3 py-1.5 border rounded-xl transition-all duration-200 w-56
+        className={`flex items-center gap-2 px-3 py-1.5 border rounded-xl transition-all duration-200 w-56 max-w-full
         ${
           isOpen && query
             ? "bg-white border-gray-300 shadow-sm w-72"
@@ -231,7 +231,7 @@ const GlobalSearch = () => {
           }}
           onKeyDown={handleKeyDown}
           placeholder="Search everything..."
-          className="text-xs text-gray-700 placeholder:text-gray-400 outline-none bg-transparent w-full"
+          className="text-xs text-gray-700 placeholder:text-gray-400 outline-none bg-transparent w-full min-w-0"
         />
         {loading && (
           <Loader2
@@ -249,9 +249,9 @@ const GlobalSearch = () => {
         )}
       </div>
 
-      {/* ── Dropdown ── */}
+      {/* ── Dropdown ── (phones: pinned full-width under the header) */}
       {showDropdown && (
-        <div className="absolute top-[calc(100%+8px)] right-0 w-80 bg-white border border-gray-100 rounded-2xl shadow-xl overflow-hidden z-50 flex flex-col max-h-[520px]">
+        <div className="absolute top-[calc(100%+8px)] right-0 w-80 max-sm:fixed max-sm:top-16 max-sm:inset-x-4 max-sm:w-auto bg-white border border-gray-100 rounded-2xl shadow-xl overflow-hidden z-50 flex flex-col max-h-[520px]">
           {loading ? (
             // Loading skeleton
             <div className="p-4 space-y-3">
