@@ -21,6 +21,28 @@ import {
   checkDriveEligibility as checkEligibility,
   getPlacementProfile,
 } from "../services/eligibility.service.js";
+import { getJSON, setJSON, del } from "../utils/cache.js";
+
+const DRIVE_CATALOGUE_CACHE_KEY = "cache:drives:catalog:default";
+const DRIVE_CATALOGUE_TTL = 60;
+// Only fields needed before the default list is personalized, sorted and
+// paginated. The full response documents are read live for the final page.
+const CATALOGUE_FIELDS = [
+  "_id",
+  "registrationDeadline",
+  "createdAt",
+  "minCGPA",
+  "minYear",
+  "maxYear",
+  "eligibleBranches",
+  "batch",
+  "maxBacklogs",
+];
+const toCatalogueRow = (drive) =>
+  Object.fromEntries(
+    CATALOGUE_FIELDS.filter((field) => drive[field] !== undefined)
+      .map((field) => [field, drive[field]]),
+  );
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -121,9 +143,25 @@ export const getDrives = asyncHandler(async (req, res) => {
     }
   }
 
-  const allDrives = await Drive.find(query)
-    .select("-rounds")
-    .lean();
+  // Only the initial, unfiltered catalogue is shared. Other combinations
+  // retain the existing Mongo query and never create per-filter cache keys.
+  const useDefaultCatalogue = !status && !jobType && !search && eligibleOnly !== "true";
+  let catalogueCacheHit = false;
+  let allDrives;
+  if (useDefaultCatalogue) {
+    allDrives = await getJSON(DRIVE_CATALOGUE_CACHE_KEY);
+    catalogueCacheHit = allDrives !== null;
+  }
+  if (!catalogueCacheHit) {
+    allDrives = await Drive.find(query).select("-rounds").lean();
+    if (useDefaultCatalogue) {
+      await setJSON(
+        DRIVE_CATALOGUE_CACHE_KEY,
+        allDrives.map(toCatalogueRow),
+        DRIVE_CATALOGUE_TTL,
+      );
+    }
+  }
 
   let appliedDriveIdsSet = new Set();
   if (req.user) {
@@ -168,7 +206,26 @@ export const getDrives = asyncHandler(async (req, res) => {
 
   const total = processedDrives.length;
   const skip = (page - 1) * limit;
-  const paginatedDrives = processedDrives.slice(skip, skip + limit);
+  let paginatedDrives = processedDrives.slice(skip, skip + limit);
+
+  if (catalogueCacheHit && paginatedDrives.length) {
+    // Rehydrate the final page so GET /api/drives keeps its existing document
+    // fields, including live applicationCount/currentRoundId/updatedAt.
+    const liveRows = await Drive.find({
+      _id: { $in: paginatedDrives.map((drive) => drive._id) },
+    }).select("-rounds").lean();
+    const liveById = new Map(liveRows.map((drive) => [String(drive._id), drive]));
+    paginatedDrives = paginatedDrives.flatMap((drive) => {
+      const live = liveById.get(String(drive._id));
+      if (!live) return [];
+      return [{
+        ...live,
+        hasApplied: drive.hasApplied,
+        sortWeight: drive.sortWeight,
+        ...(req.user ? { eligibility: checkEligibility(live, req.user) } : {}),
+      }];
+    });
+  }
 
   sendResponse(res, 200, "Drives fetched.", {
     drives: paginatedDrives,
@@ -221,6 +278,7 @@ export const createDrive = asyncHandler(async (req, res) => {
   }
   assertDriveUrls(fields);
   const drive = await Drive.create({ ...fields, postedBy: req.user._id });
+  await del(DRIVE_CATALOGUE_CACHE_KEY);
 
   notifyEligibleStudents(drive, req.user._id, {
     type: "drive_new",
@@ -255,6 +313,7 @@ export const updateDrive = asyncHandler(async (req, res) => {
     }
     throw new ApiError(404, "Drive not found.");
   }
+  await del(DRIVE_CATALOGUE_CACHE_KEY);
   sendResponse(res, 200, "Drive updated.", drive);
 });
 
@@ -262,6 +321,7 @@ export const updateDrive = asyncHandler(async (req, res) => {
 export const deleteDrive = asyncHandler(async (req, res) => {
   const drive = await Drive.findByIdAndDelete(req.params.id);
   if (!drive) throw new ApiError(404, "Drive not found.");
+  await del(DRIVE_CATALOGUE_CACHE_KEY);
   sendResponse(res, 200, "Drive deleted.");
 });
 
@@ -695,6 +755,7 @@ export const finishDrive = asyncHandler(async (req, res) => {
     drive.currentRoundId,
     req.user._id,
   );
+  await del(DRIVE_CATALOGUE_CACHE_KEY);
 
   notifyApplicationOutcome(
     selectedStudentIds,
@@ -720,5 +781,6 @@ export const cancelDrive = asyncHandler(async (req, res) => {
     if (!exists) throw new ApiError(404, "Drive not found.");
     throw new ApiError(400, "This drive is not active.");
   }
+  await del(DRIVE_CATALOGUE_CACHE_KEY);
   sendResponse(res, 200, "Drive cancelled.");
 });

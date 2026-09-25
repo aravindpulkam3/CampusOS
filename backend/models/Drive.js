@@ -156,5 +156,7 @@ const driveSchema = new mongoose.Schema(
 );
 driveSchema.index({ status: 1, registrationDeadline: 1 });
 driveSchema.index({ eligibleBranches: 1, minCGPA: 1 });
+// GET /api/drives uses $text for the list's company/role search.
+driveSchema.index({ companyName: "text", role: "text" });
 
 export default mongoose.model("Drive", driveSchema);

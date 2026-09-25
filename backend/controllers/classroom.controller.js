@@ -5,7 +5,12 @@ import Deadline from "../models/Deadline.js";
 import User from "../models/User.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import sendResponse from "../utils/sendResponse.js";
+import { del } from "../utils/cache.js";
 import { notifyClassroomStudents } from "../services/notification.service.js";
+import {
+  getAcademicClassroom,
+  invalidateAcademicClassroom,
+} from "../services/classroom.service.js";
 
 const MAX_SEMESTERS = 8;
 const DAYS = [
@@ -35,9 +40,7 @@ export const getClassroom = asyncHandler(async (req, res) => {
     return unassignedResponse(res);
   }
 
-  const classroom = await Classroom.findById(req.user.classroom)
-    .populate("classRepresentative", "firstName lastName")
-    .populate("curriculum");
+  const classroom = await getAcademicClassroom(req.user.classroom);
 
   if (!classroom) {
     return unassignedResponse(res);
@@ -46,7 +49,14 @@ export const getClassroom = asyncHandler(async (req, res) => {
   const isClassRep =
     req.user.role === "superadmin" ||
     (classroom.classRepresentative &&
-      classroom.classRepresentative._id.toString() === req.user._id.toString());
+      classroom.classRepresentative.toString() === req.user._id.toString());
+
+  // The representative's name is mutable user data, so populate it live rather
+  // than storing a User document inside the shared classroom cache.
+  if (classroom.classRepresentative) {
+    classroom.classRepresentative = await User.findById(classroom.classRepresentative)
+      .select("firstName lastName");
+  }
 
   const upcomingDeadlines = classroom.currentSemesterNumber
     ? await Deadline.find({
@@ -108,6 +118,8 @@ const applySemesterTransition = async (
   classroom.curriculum = curriculum._id;
   classroom.periods = [];
   await classroom.save();
+  await invalidateAcademicClassroom(classroom._id);
+  await del(`cache:notices:classroom:${classroom._id}`);
   await classroom.populate("curriculum");
   return classroom;
 };
@@ -221,6 +233,7 @@ export const addPeriod = asyncHandler(async (req, res) => {
 
   classroom.periods.push({ day, subject, faculty, room, startTime, endTime });
   await classroom.save();
+  await invalidateAcademicClassroom(classroom._id);
 
   sendResponse(
     res,
@@ -288,6 +301,7 @@ export const updatePeriod = asyncHandler(async (req, res) => {
   if (req.body.room !== undefined) period.room = req.body.room;
 
   await classroom.save();
+  await invalidateAcademicClassroom(classroom._id);
   sendResponse(res, 200, "Period updated.", period);
 });
 
@@ -303,6 +317,7 @@ export const deletePeriod = asyncHandler(async (req, res) => {
 
   period.deleteOne();
   await classroom.save();
+  await invalidateAcademicClassroom(classroom._id);
   sendResponse(res, 200, "Period deleted.");
 });
 
@@ -549,6 +564,7 @@ export const updateClassroomAdmin = asyncHandler(async (req, res) => {
   }
 
   await classroom.save();
+  await invalidateAcademicClassroom(classroom._id);
   sendResponse(res, 200, "Classroom updated.", classroom);
 });
 
