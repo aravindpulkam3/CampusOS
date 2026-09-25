@@ -124,7 +124,7 @@ const Sidebar = ({ isOpen, onClose }) => {
   return (
     <aside
       className={`fixed top-0 left-0 h-full bg-white border-r border-gray-100 z-40 flex flex-col transition-all duration-300
-        ${isOpen ? "w-64" : "w-16"}
+        ${isOpen ? "w-64" : "w-16 -translate-x-full invisible lg:translate-x-0 lg:visible"}
       `}
     >
       {/* ── Logo + close (mobile) ── */}

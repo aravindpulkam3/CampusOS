@@ -1,4 +1,5 @@
 import multer from "multer";
+import ApiError from "../utils/apiError.js";
 
 // CSV shortlist uploads are parsed once and discarded — they never need a
 // permanent Cloudinary URL, so this deliberately does NOT reuse
@@ -11,7 +12,7 @@ const fileFilter = (req, file, cb) => {
     file.mimetype === "application/vnd.ms-excel" ||
     file.originalname.toLowerCase().endsWith(".csv");
   if (!isCsv) {
-    return cb(new Error("Only CSV files are allowed."));
+    return cb(new ApiError(400, "Only CSV files are allowed."));
   }
   cb(null, true);
 };

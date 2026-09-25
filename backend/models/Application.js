@@ -43,6 +43,9 @@ const applicationSchema = new mongoose.Schema(
       default: Date.now,
     },
     resumeUrl: { type: String, default: "" },
+    // The student's private notes (PATCH /applications/:id/notes). Was missing
+    // from the schema, so strict mode silently dropped every write.
+    notes: { type: String, default: "", maxlength: 2000 },
 
     timeline: { type: [timelineEntrySchema], default: [] },
 

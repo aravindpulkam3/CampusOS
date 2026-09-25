@@ -27,9 +27,9 @@ import {
 } from "lucide-react";
 import useAuth from "../../hooks/useAuth";
 import useIsClassRep from "../../hooks/useIsClassRep";
-import axios from "../../api/axios";
-import { getProfile, logoutApi, updateProfile } from "../../api/auth.api";
+import { changePasswordApi, getProfile, logoutApi, updateProfile } from "../../api/auth.api";
 import ImageUploadZone from "../../components/forms/ImageUploadZone.jsx";
+import safeHref from "../../utils/safeHref";
 
 // ─── Helpers ──────────────────────────────────────────────────
 const formatDate = (d) =>
@@ -136,34 +136,24 @@ const Avatar = ({ user }) => {
 // ─── Edit Profile Modal ───────────────────────────────────────
 const EditProfileModal = ({ user, onClose, onSave }) => {
   const [form, setForm] = useState({
-    firstName: user?.firstName || "",
-    lastName: user?.lastName || "",
     profilePicture: user?.profilePicture || "",
     github: user?.github || "", // Double check these fallbacks are active
     linkedin: user?.linkedin || "",
     portfolio: user?.portfolio || "",
     resumeUrl: user?.resumeUrl || "",
     bio: user?.bio || "",
-    // `?? ""` not `|| ""` — a real 0 must survive into the form, and an empty
-    // string round-trips back to null ("not provided"), never to 0.
-    cgpa: user?.cgpa ?? "",
-    backlogs: user?.backlogs ?? "",
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.firstName.trim()) {
-      setError("First name is required");
-      return;
-    }
     setLoading(true);
     try {
       console.log(form);
       const res = await updateProfile({
-        firstName: form.firstName.trim(),
-        lastName: form.lastName.trim(),
+        // Names are not sent: they come from the college roster and the
+        // server rejects them here.
         profilePicture: form.profilePicture.trim(),
 
         // ─── FIXED: Changed keys to lowercase to match backend destructuring ───
@@ -173,11 +163,8 @@ const EditProfileModal = ({ user, onClose, onSave }) => {
         portfolio: form.portfolio.trim(),
         resumeUrl: form.resumeUrl.trim(),
         bio: form.bio.trim(),
-
-        // Blank clears the field back to null ("not provided"); the backend
-        // treats that as "can't evaluate", not as zero.
-        cgpa: form.cgpa === "" ? null : Number(form.cgpa),
-        backlogs: form.backlogs === "" ? null : Number(form.backlogs),
+        // CGPA/backlogs are not sent: they are maintained by the placement
+        // office (college roster) and the server rejects them here.
       });
       onSave(res.data.data);
       onClose();
@@ -231,35 +218,16 @@ const EditProfileModal = ({ user, onClose, onSave }) => {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1.5">
-                First Name <span className="text-red-400">*</span>
-              </label>
-              <input
-                type="text"
-                value={form.firstName}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, firstName: e.target.value }))
-                }
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400"
-                placeholder="First name"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1.5">
-                Last Name
-              </label>
-              <input
-                type="text"
-                value={form.lastName}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, lastName: e.target.value }))
-                }
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400"
-                placeholder="Last name"
-              />
-            </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1.5">
+              Name
+            </label>
+            <p className="w-full px-3 py-2 text-sm text-gray-600 bg-gray-50 border border-gray-100 rounded-lg">
+              {`${user?.firstName || ""} ${user?.lastName || ""}`.trim() || "—"}
+            </p>
+            <p className="mt-1 text-xs text-gray-400">
+              From the college roster — contact the administration to correct it.
+            </p>
           </div>
 
           <div>
@@ -282,44 +250,25 @@ const EditProfileModal = ({ user, onClose, onSave }) => {
                 Placement Profile
               </h4>
               <p className="text-xs text-gray-400 mt-0.5">
-                Used to work out which drives you're eligible for. Leave blank if
-                you'd rather not say.
+                Used to work out which drives you're eligible for. Maintained by
+                the placement office — contact them if something is wrong.
               </p>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1.5">
-                  CGPA
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  max="10"
-                  value={form.cgpa}
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, cgpa: e.target.value }))
-                  }
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400"
-                  placeholder="e.g. 8.4"
-                />
+                <p className="block text-xs font-medium text-gray-700 mb-1.5">CGPA</p>
+                <p className="w-full px-3 py-2 text-sm border border-gray-100 bg-gray-50 rounded-lg text-gray-700">
+                  {user?.cgpa ?? "Not on file"}
+                </p>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1.5">
+                <p className="block text-xs font-medium text-gray-700 mb-1.5">
                   Active Backlogs
-                </label>
-                <input
-                  type="number"
-                  step="1"
-                  min="0"
-                  value={form.backlogs}
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, backlogs: e.target.value }))
-                  }
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400"
-                  placeholder="e.g. 0"
-                />
+                </p>
+                <p className="w-full px-3 py-2 text-sm border border-gray-100 bg-gray-50 rounded-lg text-gray-700">
+                  {user?.backlogs ?? "Not on file"}
+                </p>
               </div>
             </div>
           </div>
@@ -414,6 +363,8 @@ const EditProfileModal = ({ user, onClose, onSave }) => {
 
 // ─── Change Password Modal ────────────────────────────────────
 const ChangePasswordModal = ({ onClose }) => {
+  const { setUser } = useAuth();
+  const navigate = useNavigate();
   const [form, setForm] = useState({ current: "", newPw: "", confirm: "" });
   const [show, setShow] = useState({
     current: false,
@@ -443,12 +394,19 @@ const ChangePasswordModal = ({ onClose }) => {
     setLoading(true);
     setError("");
     try {
-      await axios.patch("/profile/password", {
+      await changePasswordApi({
         currentPassword: form.current,
         newPassword: form.newPw,
       });
       setSuccess(true);
-      setTimeout(onClose, 1500);
+      // The server ended every session, this one included: sign in again.
+      setTimeout(() => {
+        setUser(null);
+        navigate("/login", {
+          replace: true,
+          state: { notice: "Password changed. Sign in with your new password." },
+        });
+      }, 1500);
     } catch (err) {
       setError(err.response?.data?.message || "Failed to change password");
     } finally {
@@ -503,7 +461,7 @@ const ChangePasswordModal = ({ onClose }) => {
                 className="text-green-600 flex-shrink-0"
               />
               <p className="text-xs text-green-700">
-                Password changed successfully
+                Password changed. Signing you out…
               </p>
             </div>
           )}
@@ -576,9 +534,9 @@ const InfoRow = ({ icon: Icon, label, value, isLink, url }) => (
   <div className="flex items-center gap-3 py-2.5 border-b border-gray-50 last:border-0">
     <Icon size={13} className="text-gray-400 flex-shrink-0" />
     <span className="text-xs text-gray-400 w-24 flex-shrink-0">{label}</span>
-    {isLink && url ? (
+    {isLink && safeHref(url) ? (
       <a
-        href={url}
+        href={safeHref(url)}
         target="_blank"
         rel="noopener noreferrer"
         className="text-xs font-medium text-blue-600 hover:underline truncate max-w-[180px] sm:max-w-none"

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Search, X, Users, Plus } from "lucide-react";
-import { getAllClubs, followClub } from "../../api/club.api";
+import { getAllClubs, followClub, unfollowClub } from "../../api/club.api";
 import useAuth from "../../hooks/useAuth";
 
 // ✅ Included Sports category cleanly in definition array
@@ -41,7 +41,7 @@ const clubInitials = (name) =>
     .toUpperCase() || "?";
 
 // ─── Club Card ────────────────────────────────────────────────
-const ClubCard = ({ club, index, followed, onFollow }) => {
+const ClubCard = ({ club, index, followed, pending, onFollow }) => {
   return (
     <div className="bg-white border border-slate-100 rounded-2xl p-5 hover:border-slate-300 hover:shadow-xs transition-all duration-200 flex flex-col gap-4 group relative overflow-hidden shadow-3xs">
       {/* Top row — avatar + category */}
@@ -88,8 +88,9 @@ const ClubCard = ({ club, index, followed, onFollow }) => {
       <div className="flex items-center gap-2 pt-3 border-t border-slate-50">
         <button
           type="button"
-          onClick={() => onFollow(club._id)}
-          className={`flex-1 py-1.5 text-xs font-bold rounded-xl border transition-all duration-150 shadow-3xs
+          onClick={() => onFollow(club._id, followed)}
+          disabled={pending}
+          className={`flex-1 py-1.5 text-xs font-bold rounded-xl border transition-all duration-150 shadow-3xs disabled:opacity-60 disabled:cursor-wait
             ${
               followed
                 ? "border-slate-200 text-slate-400 bg-slate-50 hover:border-red-200 hover:text-red-500 hover:bg-red-50/30"
@@ -131,6 +132,9 @@ const Clubs = () => {
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState("All");
   const { user, setUser } = useAuth();
+  // Clubs with a follow/unfollow request in flight: their button stays
+  // disabled until it settles, so responses can't arrive out of order.
+  const [pendingIds, setPendingIds] = useState(() => new Set());
 
   useEffect(() => {
     const fetchAllClubs = async () => {
@@ -146,15 +150,23 @@ const Clubs = () => {
     fetchAllClubs();
   }, []);
 
-  const handleFollow = async (clubId) => {
+  const handleFollow = async (clubId, followed) => {
+    if (pendingIds.has(clubId)) return;
+    setPendingIds((prev) => new Set(prev).add(clubId));
     try {
-      const payload = await followClub(clubId);
+      const payload = await (followed ? unfollowClub : followClub)(clubId);
       setClubs((prev) =>
         prev.map((c) => (c._id === clubId ? payload.data.data.club : c)),
       );
       setUser(payload.data.data.user);
     } catch (error) {
       console.error(error);
+    } finally {
+      setPendingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(clubId);
+        return next;
+      });
     }
   };
 
@@ -269,6 +281,7 @@ const Clubs = () => {
                     (id) => id.toString() === club._id.toString(),
                   ) ?? false
                 }
+                pending={pendingIds.has(club._id)}
                 onFollow={handleFollow}
               />
             ))

@@ -53,12 +53,16 @@ export const createCurriculum = asyncHandler(async (req, res) => {
 export const addSubject = asyncHandler(async (req, res) => {
   const curriculum = await Curriculum.findById(req.params.id);
   if (!curriculum) {
-    return res.status(404).json({ success: false, message: "Curriculum not found." });
+    return res
+      .status(404)
+      .json({ success: false, message: "Curriculum not found." });
   }
 
   const { name, code } = req.body;
   if (!name?.trim()) {
-    return res.status(400).json({ success: false, message: "Subject name is required." });
+    return res
+      .status(400)
+      .json({ success: false, message: "Subject name is required." });
   }
 
   curriculum.subjects.push({ name: name.trim(), code });
@@ -77,12 +81,16 @@ export const addSubject = asyncHandler(async (req, res) => {
 export const updateSubject = asyncHandler(async (req, res) => {
   const curriculum = await Curriculum.findById(req.params.id);
   if (!curriculum) {
-    return res.status(404).json({ success: false, message: "Curriculum not found." });
+    return res
+      .status(404)
+      .json({ success: false, message: "Curriculum not found." });
   }
 
   const subject = curriculum.subjects.id(req.params.subjectId);
   if (!subject) {
-    return res.status(404).json({ success: false, message: "Subject not found." });
+    return res
+      .status(404)
+      .json({ success: false, message: "Subject not found." });
   }
 
   const { name, code } = req.body;
@@ -98,12 +106,16 @@ export const updateSubject = asyncHandler(async (req, res) => {
 export const deleteSubject = asyncHandler(async (req, res) => {
   const curriculum = await Curriculum.findById(req.params.id);
   if (!curriculum) {
-    return res.status(404).json({ success: false, message: "Curriculum not found." });
+    return res
+      .status(404)
+      .json({ success: false, message: "Curriculum not found." });
   }
 
   const subject = curriculum.subjects.id(req.params.subjectId);
   if (!subject) {
-    return res.status(404).json({ success: false, message: "Subject not found." });
+    return res
+      .status(404)
+      .json({ success: false, message: "Subject not found." });
   }
 
   // Checks ALL deadlines referencing this subject, not just current-semester
@@ -121,7 +133,8 @@ export const deleteSubject = asyncHandler(async (req, res) => {
   if (periodCount > 0 || deadlineCount > 0) {
     return res.status(409).json({
       success: false,
-      message: "This subject is still referenced by existing periods or deadlines.",
+      message:
+        "This subject is still referenced by existing periods or deadlines.",
       periodCount,
       deadlineCount,
     });
@@ -135,7 +148,9 @@ export const deleteSubject = asyncHandler(async (req, res) => {
 export const deleteCurriculum = asyncHandler(async (req, res) => {
   const curriculum = await Curriculum.findById(req.params.id);
   if (!curriculum) {
-    return res.status(404).json({ success: false, message: "Curriculum not found." });
+    return res
+      .status(404)
+      .json({ success: false, message: "Curriculum not found." });
   }
 
   const referencedCount = await Classroom.countDocuments({

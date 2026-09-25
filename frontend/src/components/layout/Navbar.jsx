@@ -42,7 +42,7 @@ const Navbar = ({ onToggleSidebar, sidebarOpen }) => {
   return (
     <header className="h-14 bg-white border-b border-gray-100 flex items-center justify-between px-6 flex-shrink-0 z-30">
       {/* Left */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 min-w-0">
         <button
           onClick={onToggleSidebar}
           className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
@@ -53,13 +53,13 @@ const Navbar = ({ onToggleSidebar, sidebarOpen }) => {
             <PanelLeftOpen size={18} />
           )}
         </button>
-        <h1 className="text-sm font-semibold text-gray-900 tracking-tight">
+        <h1 className="text-sm font-semibold text-gray-900 tracking-tight truncate">
           {title}
         </h1>
       </div>
 
-      {/* Right */}
-      <div className="flex items-center gap-2">
+      {/* Right — on narrow screens the search box shrinks so the bell and avatar stay visible */}
+      <div className="flex items-center gap-2 min-w-0">
         <GlobalSearch />
 
         {user ? (
@@ -69,7 +69,7 @@ const Navbar = ({ onToggleSidebar, sidebarOpen }) => {
             {/* PROFILE IMAGE / INITIAL BUTTON */}
             <button
               onClick={() => navigate("/profile")}
-              className="w-8 h-8 rounded-full bg-gray-900 text-white text-xs font-bold flex items-center justify-center hover:bg-gray-700 transition-colors overflow-hidden border border-gray-100"
+              className="w-8 h-8 flex-shrink-0 rounded-full bg-gray-900 text-white text-xs font-bold flex items-center justify-center hover:bg-gray-700 transition-colors overflow-hidden border border-gray-100"
             >
               {/* ✅ 3. Only render image if a valid URL exists and it hasn't failed */}
               {avatarUrl && !imgError ? (

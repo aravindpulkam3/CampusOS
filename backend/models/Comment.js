@@ -6,7 +6,6 @@ const commentSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Discussion",
       required: true,
-      index: true,
     },
     author: {
       type: mongoose.Schema.Types.ObjectId,
@@ -17,15 +16,19 @@ const commentSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
+      maxlength: 5000,
     },
-    upvotes:          [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+    upvotes: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
     isAcceptedAnswer: { type: Boolean, default: false },
-    replyCount:       { type: Number, default: 0 },
-    isEdited:         { type: Boolean, default: false },
-    isDeleted:        { type: Boolean, default: false },
+    replyCount: { type: Number, default: 0 },
+    isEdited: { type: Boolean, default: false },
+    isDeleted: { type: Boolean, default: false },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
-commentSchema.index({ discussion: 1, isAcceptedAnswer: -1, createdAt: 1 });
+// Comment pages: equality on discussion, then the {createdAt, _id} keyset the
+// controller sorts and pages by. The discussion prefix also serves the
+// accepted-answer lookup (it scans that one discussion's comments).
+commentSchema.index({ discussion: 1, createdAt: 1, _id: 1 });
 
 export default mongoose.model("Comment", commentSchema);

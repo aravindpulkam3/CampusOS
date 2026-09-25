@@ -39,7 +39,7 @@ const NotificationBell = () => {
       </button>
 
       {isOpen && (
-        <div className="absolute top-[calc(100%+8px)] right-0 w-80 bg-white border border-gray-100 rounded-2xl shadow-xl overflow-hidden z-50 flex flex-col max-h-[520px]">
+        <div className="absolute top-[calc(100%+8px)] right-0 w-80 max-sm:fixed max-sm:top-16 max-sm:inset-x-4 max-sm:w-auto bg-white border border-gray-100 rounded-2xl shadow-xl overflow-hidden z-50 flex flex-col max-h-[520px]">
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-50 flex-shrink-0">
             <span className="text-xs font-semibold text-gray-900">Notifications</span>

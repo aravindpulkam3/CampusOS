@@ -11,7 +11,14 @@ export default defineConfig({
         target: 'http://localhost:5000', // ─── CHANGE THIS TO YOUR BACKEND PORT ───
         changeOrigin: true,
         secure: false,
-      }
+      },
+      // Socket.IO (polling + WebSocket upgrade), so a same-origin build
+      // (VITE_API_URL=/api) works under `vite` and `vite preview` the way it
+      // does behind the production reverse proxy.
+      '/socket.io': {
+        target: 'http://localhost:5000',
+        ws: true,
+      },
     }
 }
 })

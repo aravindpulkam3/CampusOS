@@ -14,5 +14,6 @@ export const getAllEvents = (filters = {}) => {
 };
 export const getEventById = (id) => api.get(`/events/${id}`);
 export const registerForEvent = (id) => api.put(`/events/${id}/register`);
+export const unregisterFromEvent = (id) => api.delete(`/events/${id}/register`);
 export const getUpcomingEvents = () => api.get(`events/upcoming`);
 export const getUserRegisteredEvents = () => api.get("events/registered");

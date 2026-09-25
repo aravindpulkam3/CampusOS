@@ -60,10 +60,6 @@ const eventSchema = new mongoose.Schema(
       },
     ]
     ,
-    registrationCount: {
-      type: Number,
-      default: 0,
-    },
     eligibleBranches: {
       type: [String],
       default: [], // empty array means open to all branches

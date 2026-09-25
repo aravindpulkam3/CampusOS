@@ -1,6 +1,7 @@
 import { Megaphone, Radio, Trash2, ChevronDown, ChevronUp } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import useAuth from "../../hooks/useAuth";
+import useIsClamped from "../../hooks/useIsClamped";
 
 // ─── Helpers ──────────────────────────────────────────────────
 const relativeTime = (d) => {
@@ -58,7 +59,9 @@ const AnnouncementCard = ({
 }) => {
   const isFeed = variant === "feed";
   const [isDeleting, setIsDeleting] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(false); // ✅ Added expand state tracker
+  const [isExpanded, setIsExpanded] = useState(false);
+  const bodyRef = useRef(null);
+  const isClamped = useIsClamped(bodyRef, !isExpanded, announcement.body);
   const { user } = useAuth();
 
   // ── Source info (feed variant) ──────────────────────────────
@@ -142,7 +145,8 @@ const AnnouncementCard = ({
               {(isEligible || user?.role === "superadmin") && (
                 <button
                   onClick={handleDeleteClick}
-                  className="text-slate-400 hover:text-red-500 p-1 rounded-xl hover:bg-red-50 transition-colors"
+                  aria-label="Delete announcement"
+                  className="text-slate-400 hover:text-red-500 p-1.5 rounded-xl hover:bg-red-50 transition-colors"
                 >
                   <Trash2 size={13} />
                 </button>
@@ -173,7 +177,7 @@ const AnnouncementCard = ({
                 <p className="text-xs font-bold text-slate-800 leading-tight">
                   {authorName}
                 </p>
-                <p className="text-[11px] text-slate-400 font-medium mt-px">
+                <p className="text-[11px] text-slate-500 font-medium mt-px">
                   {relativeTime(announcement.createdAt)}
                 </p>
               </div>
@@ -181,7 +185,8 @@ const AnnouncementCard = ({
             {(isEligible || user?.role === "superadmin") && (
               <button
                 onClick={handleDeleteClick}
-                className="text-slate-400 hover:text-red-500 p-1 rounded-xl hover:bg-red-50 transition-colors"
+                aria-label="Delete announcement"
+                className="text-slate-400 hover:text-red-500 p-1.5 rounded-xl hover:bg-red-50 transition-colors"
               >
                 <Trash2 size={13} />
               </button>
@@ -190,47 +195,39 @@ const AnnouncementCard = ({
         )}
 
         {/* Core content header title string block */}
-        <div className="space-y-1">
-          <h4 className="text-xs sm:text-sm font-bold text-slate-800 leading-snug tracking-tight">
+        <div className="space-y-1 min-w-0">
+          <h3 className="text-xs sm:text-sm font-bold text-slate-800 leading-snug tracking-tight break-words">
             {announcement.title}
-          </h4>
+          </h3>
 
-          {/* Announcement Body Content Frame with Show More Toggle Controls */}
+          {/* Body, clamped to 3 lines; the toggle appears only when text is cut off */}
           {announcement.body && (
             <div className="relative">
               <p
-                className={`text-xs text-slate-500 font-medium leading-relaxed whitespace-pre-line
+                ref={bodyRef}
+                className={`text-xs text-slate-500 font-medium leading-relaxed whitespace-pre-line break-words
         ${!isExpanded ? "line-clamp-3" : ""}`}
-                ref={(el) => {
-                  if (el && !isExpanded) {
-                    const hasOverflow = el.scrollHeight > el.clientHeight;
-                    if (hasOverflow && !el.dataset.hasTrigger) {
-                      el.dataset.hasTrigger = "true";
-                      // Forces a localized update to show the button only when text is actively clipped
-                      el.nextSibling &&
-                        el.nextSibling.classList.remove("hidden");
-                    }
-                  }
-                }}
               >
                 {announcement.body}
               </p>
 
-              
-              <button
-                onClick={toggleExpand}
-                className="hidden flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-700 mt-1.5 transition-colors"
-              >
-                {isExpanded ? (
-                  <>
-                    Show less <ChevronUp size={12} />
-                  </>
-                ) : (
-                  <>
-                    Show more <ChevronDown size={12} />
-                  </>
-                )}
-              </button>
+              {isClamped && (
+                <button
+                  onClick={toggleExpand}
+                  aria-expanded={isExpanded}
+                  className="flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-700 mt-1.5 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/15 transition-colors"
+                >
+                  {isExpanded ? (
+                    <>
+                      Show less <ChevronUp size={12} />
+                    </>
+                  ) : (
+                    <>
+                      Show more <ChevronDown size={12} />
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -241,7 +238,7 @@ const AnnouncementCard = ({
             <img
               src={announcement.image}
               alt=""
-              className="w-full h-auto max-h-[400px] object-contain mx-auto"
+              className="w-full h-auto max-h-80 object-contain mx-auto"
               loading="lazy"
             />
           </div>

@@ -3,6 +3,7 @@ import Application from "../models/Application.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import sendResponse from "../utils/sendResponse.js";
 import ApiError from "../utils/apiError.js";
+import { isHttpUrl } from "../utils/validateUrl.js";
 import Notice from "../models/Notice.js";
 import deriveRoundStates from "../utils/roundState.js";
 import {
@@ -52,6 +53,20 @@ const EDITABLE_DRIVE_FIELDS = [
   "brochureUrl",
 ];
 
+// These are rendered as links/images for every student, so they must be
+// http(s) URLs. applicationLink is required (schema), so it can't be blanked;
+// the optional two accept ""/null to mean "none".
+const assertDriveUrls = (fields) => {
+  for (const field of ["applicationLink", "brochureUrl", "companyLogo"]) {
+    const value = fields[field];
+    if (value === undefined) continue;
+    if (field !== "applicationLink" && (value === "" || value === null)) continue;
+    if (!isHttpUrl(value)) {
+      throw new ApiError(400, `${field} must be an http(s) URL.`);
+    }
+  }
+};
+
 // Preconditions shared by previewShortlist/confirmShortlist: only the live
 // current round, only once it's ended, only before it's been processed.
 const getShortlistableRound = (drive, roundId) => {
@@ -74,14 +89,14 @@ const getShortlistableRound = (drive, roundId) => {
 
 // ─── GET /api/drives  (list + filters + search + pagination) ──────────────────
 export const getDrives = asyncHandler(async (req, res) => {
-  const {
-    status,
-    jobType,
-    eligibleOnly,
-    search,
-    page = 1,
-    limit = 20,
-  } = req.query;
+  // Strings only: Express 4 turns `?jobType[$ne]=x` into an operator object.
+  const str = (v) => (typeof v === "string" ? v : undefined);
+  const status = str(req.query.status);
+  const jobType = str(req.query.jobType);
+  const eligibleOnly = str(req.query.eligibleOnly);
+  const search = str(req.query.search);
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
 
   const query = {};
   // NOTE: this "status" query param means registration open/closed (derived
@@ -152,15 +167,15 @@ export const getDrives = asyncHandler(async (req, res) => {
   });
 
   const total = processedDrives.length;
-  const skip = (Number(page) - 1) * Number(limit);
-  const paginatedDrives = processedDrives.slice(skip, skip + Number(limit));
+  const skip = (page - 1) * limit;
+  const paginatedDrives = processedDrives.slice(skip, skip + limit);
 
   sendResponse(res, 200, "Drives fetched.", {
     drives: paginatedDrives,
     pagination: {
       total,
-      page: Number(page),
-      pages: Math.ceil(total / Number(limit)),
+      page,
+      pages: Math.ceil(total / limit),
     },
   });
 });
@@ -197,7 +212,15 @@ export const getDriveById = asyncHandler(async (req, res) => {
 
 // ─── POST /api/drives  (placementCoordinator or superadmin only) ──────────────
 export const createDrive = asyncHandler(async (req, res) => {
-  const drive = await Drive.create({ ...req.body, postedBy: req.user._id });
+  // Same allow-list as updateDrive: lifecycle fields (status, rounds,
+  // currentRoundId, applicationCount) start at their schema defaults and only
+  // ever change through the dedicated lifecycle actions.
+  const fields = {};
+  for (const field of EDITABLE_DRIVE_FIELDS) {
+    if (req.body?.[field] !== undefined) fields[field] = req.body[field];
+  }
+  assertDriveUrls(fields);
+  const drive = await Drive.create({ ...fields, postedBy: req.user._id });
 
   notifyEligibleStudents(drive, req.user._id, {
     type: "drive_new",
@@ -217,13 +240,21 @@ export const updateDrive = asyncHandler(async (req, res) => {
   for (const field of EDITABLE_DRIVE_FIELDS) {
     if (req.body[field] !== undefined) updates[field] = req.body[field];
   }
+  assertDriveUrls(updates);
 
-  const drive = await Drive.findByIdAndUpdate(
-    req.params.id,
+  // Completed/cancelled drives are closed records: editing them (e.g.
+  // reopening registration or changing eligibility) would rewrite history.
+  const drive = await Drive.findOneAndUpdate(
+    { _id: req.params.id, status: "active" },
     { $set: updates },
     { new: true, runValidators: true },
   );
-  if (!drive) throw new ApiError(404, "Drive not found.");
+  if (!drive) {
+    if (await Drive.exists({ _id: req.params.id })) {
+      throw new ApiError(400, "Only active drives can be edited.");
+    }
+    throw new ApiError(404, "Drive not found.");
+  }
   sendResponse(res, 200, "Drive updated.", drive);
 });
 
@@ -236,16 +267,20 @@ export const deleteDrive = asyncHandler(async (req, res) => {
 
 // ─── GET /api/drives/:id/applications  (coordinator only) ─────────────────────
 export const getDriveApplications = asyncHandler(async (req, res) => {
-  const { status, page = 1, limit = 50 } = req.query;
+  const status = typeof req.query.status === "string" ? req.query.status : undefined;
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 50));
   const query = { drive: req.params.id };
   if (status) query.status = status;
 
-  const skip = (Number(page) - 1) * Number(limit);
+  const skip = (page - 1) * limit;
 
   const [applications, total] = await Promise.all([
     Application.find(query)
-      .populate("student", "firstName lastName email branch year cgpa rollNumber")
-      .sort({ appliedAt: 1 })
+      // cgpa/backlogs are what eligibility was evaluated against (roster-owned).
+      .populate("student", "firstName lastName email branch year cgpa backlogs rollNumber")
+      // _id breaks appliedAt ties, so skip/limit pages never overlap or skip rows.
+      .sort({ appliedAt: 1, _id: 1 })
       .skip(skip)
       .limit(Number(limit))
       .lean(),

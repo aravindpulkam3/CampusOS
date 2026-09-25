@@ -7,6 +7,8 @@ import { Announcement } from "../models/Announcement.js";
 import sendResponse from "../utils/sendResponse.js";
 import ApiError from "../utils/apiError.js";
 import { notifyClubFollowers, notifyEventRegistrants } from "../services/notification.service.js";
+import { isClubAdmin } from "../middleware/clubAdminMiddleware.js";
+import { canManageEvent } from "../middleware/eventManagerMiddleware.js";
 // TODO: implement controller functions
 export const createAnnouncement = asyncHandler(async (req, res) => {
   const { targetType, targetId } = req.params;
@@ -59,8 +61,8 @@ export const createAnnouncement = asyncHandler(async (req, res) => {
 
 export const getAnnouncements = asyncHandler(async (req, res) => {
   const { targetType, targetId } = req.params;
-  const offset = Number(req.query.offset) || 0;
-  const limitCount = 10; 
+  const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
+  const limitCount = 10;
   let queryFilter = { targetType };
 
   if (targetType === "club") {
@@ -95,9 +97,10 @@ export const getCommunityFeed = asyncHandler(async (req, res) => {
   const userId = req.user._id;
 
   // 1. Parse individual category page cursors/offsets
-  const eventOffset = Number(req.query.eventOffset) || 0;
-  const clubOffset = Number(req.query.clubOffset) || 0;
-  const generalOffset = Number(req.query.generalOffset) || 0;
+  const offsetParam = (value) => Math.max(0, parseInt(value, 10) || 0);
+  const eventOffset = offsetParam(req.query.eventOffset);
+  const clubOffset = offsetParam(req.query.clubOffset);
+  const generalOffset = offsetParam(req.query.generalOffset);
 
   // 2. Resolve Targeted Entity Relationship Lists
   const followedClubIds = req.user.followedClubs || [];
@@ -250,13 +253,13 @@ export const deleteAnnouncement = asyncHandler(async (req, res) => {
   const user = req.user; // Populated by your authentication middleware
 
   if (!id || id === "undefined") {
-    return sendResponse(res, 400, "Invalid or missing ID parameter");
+    throw new ApiError(400, "Invalid or missing ID parameter");
   }
 
   // 1. Fetch the announcement to check context properties
   const announcement = await Announcement.findById(id);
   if (!announcement) {
-    return sendResponse(res, 404, "Announcement does not exist");
+    throw new ApiError(404, "Announcement does not exist");
   }
 
   // 2. Base Authorization Checks (Superadmin or Creator)
@@ -268,30 +271,22 @@ export const deleteAnnouncement = asyncHandler(async (req, res) => {
   // 3. Contextual Authority Check (Club Admin array check)
   if (announcement.targetType === "club" && announcement.club) {
     const club = await Club.findById(announcement.club);
-    if (club && club.clubAdmin) {
-      isAuthorizedManager = club.clubAdmin.some(
-        (adminId) => adminId.toString() === user._id.toString(),
-      );
+    if (club) {
+      isAuthorizedManager = isClubAdmin(club, user);
     }
   }
 
-  // 4. Contextual Authority Check (Event Organizers array check)
+  // 4. Contextual Authority Check (event managers — same rule as posting)
   if (announcement.targetType === "event" && announcement.event) {
     const event = await Event.findById(announcement.event);
-    if (event && event.eventOrganizers) {
-      isAuthorizedManager = event.eventOrganizers.some(
-        (organizerId) => organizerId.toString() === user._id.toString(),
-      );
+    if (event) {
+      isAuthorizedManager = await canManageEvent(user, event);
     }
   }
 
   // 5. Enforce final gatekeeping block
   if (!isSuperAdmin && !isAuthor && !isAuthorizedManager) {
-    return sendResponse(
-      res,
-      403,
-      "Forbidden: You are not authorized to delete this announcement",
-    );
+    throw new ApiError(403, "Forbidden: You are not authorized to delete this announcement");
   }
 
   // 6. Execution Block

@@ -91,7 +91,11 @@ export default function Events() {
       setFeedItems((prev) =>
         prev.map((ev) => (ev._id === eventId ? payload.data.data.event : ev)),
       );
-      setUser(payload.data.data.user);
+      // The server registers atomically and returns only the event; mirror the
+      // registration into the cached user.
+      setUser((prev) =>
+        prev ? { ...prev, registeredEvents: [...(prev.registeredEvents || []), eventId] } : prev,
+      );
     } catch (err) {
       console.error(err);
     }
