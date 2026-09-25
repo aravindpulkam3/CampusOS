@@ -8,6 +8,7 @@ import mongoose from "mongoose";
 import Drive from "../models/Drive.js";
 import Application from "../models/Application.js";
 import ApiError from "../utils/apiError.js";
+import { getJSON, setJSON, del } from "../utils/cache.js";
 import { canManageEvent } from "../middleware/eventManagerMiddleware.js";
 import {
   buildEligibilityFilter,
@@ -73,6 +74,14 @@ const canManage = (user, notice) =>
   notice.createdBy.toString() === user._id.toString() ||
   user.role === "superadmin";
 
+const CLASSROOM_NOTICE_TTL = 60 * 5;
+const classroomNoticeCacheKey = (classroomId) =>
+  `cache:notices:classroom:${classroomId}`;
+const invalidateClassroomNotices = (notice) =>
+  notice.targetType === "classroom"
+    ? del(classroomNoticeCacheKey(notice.targetId))
+    : Promise.resolve();
+
 // ─── POST /api/notices ────────────────────────────────────────────────────────
 export const createNotice = asyncHandler(async (req, res) => {
   const {
@@ -131,6 +140,7 @@ export const createNotice = asyncHandler(async (req, res) => {
     expiresAt: expiresAt || null,
     createdBy: req.user._id,
   });
+  await invalidateClassroomNotices(notice);
 
   const noticeFields = {
     title: notice.title,
@@ -177,6 +187,7 @@ export const getNotices = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Invalid notice filter.");
   }
   const user = req.user;
+  let classroomCacheKey = null;
 
   // Base persistent query layer
   const query = { isArchived: false };
@@ -246,6 +257,7 @@ export const getNotices = asyncHandler(async (req, res) => {
       { semesterNumber: null },
       { semesterNumber: classroomDoc?.currentSemesterNumber ?? null },
     ];
+    classroomCacheKey = classroomNoticeCacheKey(query.targetId);
   } else {
     // A classroom listing without a specific id would span every classroom.
     if (targetType === "classroom" && user.role !== "superadmin") {
@@ -268,6 +280,24 @@ export const getNotices = asyncHandler(async (req, res) => {
       $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }],
     },
   ];
+
+  // The access and current-semester checks above must run on every request.
+  // Cached rows omit the populated creator, whose name/role can change.
+  if (classroomCacheKey) {
+    const cached = await getJSON(classroomCacheKey);
+    const now = Date.now();
+    if (Array.isArray(cached) && cached.every(
+      (notice) => !notice.expiresAt || new Date(notice.expiresAt).getTime() > now,
+    )) {
+      const populated = await Notice.populate(cached, {
+        path: "createdBy",
+        model: "User",
+        select: "firstName lastName role",
+        options: { lean: true },
+      });
+      return sendResponse(res, 200, "Notices fetched safely.", { notices: populated });
+    }
+  }
 
   // ─── 6. EXECUTE FETCH PIPELINE ────────────────────────────────
   let notices = await Notice.find(query)
@@ -319,6 +349,27 @@ export const getNotices = asyncHandler(async (req, res) => {
   // Keep final presentation compact and fast
   const finalFeed = notices.slice(0, 5);
 
+  if (classroomCacheKey) {
+    // Expire the key before the first visible notice expires, so Mongo can
+    // refill the five-item feed. Skip caching sub-second expiry windows.
+    const nextExpiry = Math.min(
+      Infinity,
+      ...finalFeed.filter((notice) => notice.expiresAt)
+        .map((notice) => new Date(notice.expiresAt).getTime()),
+    );
+    const ttl = Math.min(
+      CLASSROOM_NOTICE_TTL,
+      Math.floor((nextExpiry - Date.now()) / 1000),
+    );
+    if (ttl > 0) {
+      const sharedRows = finalFeed.map((notice) => ({
+        ...notice,
+        createdBy: notice.createdBy?._id ?? notice.createdBy,
+      }));
+      await setJSON(classroomCacheKey, sharedRows, ttl);
+    }
+  }
+
   return sendResponse(res, 200, "Notices fetched safely.", {
     notices: finalFeed,
   });
@@ -356,6 +407,7 @@ export const deleteNotice = asyncHandler(async (req, res) => {
   }
 
   await notice.deleteOne();
+  await invalidateClassroomNotices(notice);
   sendResponse(res, 200, "Notice deleted.");
 });
 
@@ -371,6 +423,7 @@ export const togglePin = asyncHandler(async (req, res) => {
 
   notice.isPinned = !notice.isPinned;
   await notice.save();
+  await invalidateClassroomNotices(notice);
   sendResponse(
     res,
     200,
@@ -393,5 +446,6 @@ export const archiveNotice = asyncHandler(async (req, res) => {
 
   notice.isArchived = true;
   await notice.save();
+  await invalidateClassroomNotices(notice);
   sendResponse(res, 200, "Notice archived.");
 });

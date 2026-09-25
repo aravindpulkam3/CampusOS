@@ -5,6 +5,7 @@ import Deadline from "../models/Deadline.js";
 import User from "../models/User.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import sendResponse from "../utils/sendResponse.js";
+import { del } from "../utils/cache.js";
 import { notifyClassroomStudents } from "../services/notification.service.js";
 import {
   getAcademicClassroom,
@@ -118,6 +119,7 @@ const applySemesterTransition = async (
   classroom.periods = [];
   await classroom.save();
   await invalidateAcademicClassroom(classroom._id);
+  await del(`cache:notices:classroom:${classroom._id}`);
   await classroom.populate("curriculum");
   return classroom;
 };
