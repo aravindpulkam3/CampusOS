@@ -1,14 +1,12 @@
 // Presentation helpers shared by the dashboard sections. The backend already
 // decided WHAT is relevant and sorted it; these only decide how it reads.
+import { formatShortDate } from "../../utils/formatDate";
 
 export const formatTime = (d) =>
   new Date(d).toLocaleTimeString("en-IN", {
     hour: "2-digit",
     minute: "2-digit",
   });
-
-export const formatDate = (d) =>
-  new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
 
 export const relativeTime = (d) => {
   const mins = Math.floor((Date.now() - new Date(d)) / 60000);
@@ -36,7 +34,7 @@ export const describeDue = (d) => {
 
   const days = Math.ceil((date - now) / 86400000);
   if (days <= 7) return { label: `${days}d`, color: "text-gray-500" };
-  return { label: formatDate(d), color: "text-gray-400" };
+  return { label: formatShortDate(d), color: "text-gray-400" };
 };
 
 // "Closes in 6h" reads better than "Closes today" when the hour count is small.

@@ -3,6 +3,7 @@ import Application from "../models/Application.js";
 import Classroom from "../models/Classroom.js";
 import Curriculum from "../models/Curriculum.js";
 import Drive from "../models/Drive.js";
+import Notice from "../models/Notice.js";
 import User from "../models/User.js";
 import { loginAs, makeUser } from "./helpers.js";
 
@@ -21,6 +22,31 @@ vi.mock("../utils/cache.js", () => ({
 beforeEach(() => cacheStore.clear());
 
 describe("shared read caches", () => {
+  it("shows the student's classroom notices before and after the academic cache warms", async () => {
+    const student = await makeUser({ batch: 2025 });
+    const otherStudent = await makeUser({ batch: 2025, section: "B" });
+    const [classroom, otherClassroom] = await Classroom.create([
+      { branch: "CSE", batch: 2025, section: "A", currentSemesterNumber: 2 },
+      { branch: "CSE", batch: 2025, section: "B", currentSemesterNumber: 2 },
+    ]);
+    await User.updateOne({ _id: student._id }, { $set: { classroom: classroom._id } });
+    await User.updateOne({ _id: otherStudent._id }, { $set: { classroom: otherClassroom._id } });
+    await Notice.create([
+      { title: "Class update", content: "Room 204", targetType: "classroom", targetId: classroom._id, semesterNumber: 2, createdBy: student._id },
+      { title: "Other class", content: "Room 205", targetType: "classroom", targetId: otherClassroom._id, semesterNumber: 2, createdBy: otherStudent._id },
+      { title: "Old semester", content: "Old room", targetType: "classroom", targetId: classroom._id, semesterNumber: 1, createdBy: student._id },
+    ]);
+
+    const studentClient = await loginAs(student);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const response = await studentClient.get("/api/dashboard");
+      expect(response.status).toBe(200);
+      expect(response.body.data.notices.map((notice) => notice.title)).toEqual(["Class update"]);
+      expect(response.body.data.notices[0].url).toBe(`/academics/classroom/${classroom._id}`);
+    }
+    expect(cacheStore.has(`cache:classroom:${classroom._id}:academic`)).toBe(true);
+  });
+
   it("keeps the drive list response shape and application state current on a catalogue hit", async () => {
     const student = await makeUser({ cgpa: 8, backlogs: 0 });
     const coordinator = await makeUser({ role: "placementCoordinator" });

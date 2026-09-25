@@ -3,16 +3,10 @@ import { Link } from "react-router-dom";
 import { Search, X, Users, Plus } from "lucide-react";
 import { getAllClubs, followClub, unfollowClub } from "../../api/club.api";
 import useAuth from "../../hooks/useAuth";
+import { CLUB_CATEGORIES } from "../../constants/categories";
 
 // ✅ Included Sports category cleanly in definition array
-const CATEGORIES = [
-  "All",
-  "Technical",
-  "Cultural",
-  "Creative",
-  "Business",
-  "Sports",
-];
+const CATEGORIES = ["All", ...CLUB_CATEGORIES];
 
 // ✅ Configured unique matching layout theme for Sports cards
 const categoryColor = {

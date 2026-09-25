@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { ArrowLeft, AlertTriangle } from "lucide-react";
 import { getClassroom, getDeadlines, createDeadline, updateDeadline } from "../../../api/classroom.api";
+import { toLocalDateTimeInput } from "../../../utils/formatDate";
 
 // ─── Config ───────────────────────────────────────────────────
 const TYPES = [
@@ -21,11 +22,6 @@ const isUrgent = (dateStr) => {
   if (!dateStr) return false;
   const diff = new Date(dateStr) - new Date();
   return diff > 0 && diff < 48 * 60 * 60 * 1000;
-};
-
-const toDatetimeLocal = (isoString) => {
-  if (!isoString) return "";
-  return new Date(isoString).toISOString().slice(0, 16);
 };
 
 const FieldError = ({ message }) =>
@@ -98,7 +94,7 @@ export default function CreateDeadline() {
         title: existingDeadline.title || "",
         description: existingDeadline.description || "",
         type: existingDeadline.type || "",
-        dueDate: existingDeadline.dueDate ? toDatetimeLocal(existingDeadline.dueDate) : "",
+        dueDate: existingDeadline.dueDate ? toLocalDateTimeInput(existingDeadline.dueDate) : "",
       });
     }
   }, [existingDeadline]);
@@ -196,7 +192,7 @@ export default function CreateDeadline() {
 
   const titleLeft = MAX_TITLE - form.title.length;
   const descLeft = MAX_DESC - form.description.length;
-  const minDate = new Date(Date.now() + 60000).toISOString().slice(0, 16);
+  const minDate = toLocalDateTimeInput(new Date(Date.now() + 60000));
   const selectedType = TYPES.find((t) => t.value === form.type);
 
   return (

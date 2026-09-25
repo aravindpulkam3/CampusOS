@@ -34,6 +34,8 @@ import {
 import NoticeFeed from "../../components/cards/NoticeFeed";
 import safeHref from "../../utils/safeHref";
 import { toCsv } from "../../utils/csv";
+import { toLocalDateTimeInput } from "../../utils/formatDate";
+import { formatRegistrationDeadlineTime } from "./format";
 
 // ─── Helpers ──────────────────────────────────────────────────
 const formatDate = (d) =>
@@ -48,21 +50,12 @@ const formatDate = (d) =>
 const formatDateTimeWithFallback = (d) => {
   if (!d) return "—";
   const dateObj = new Date(d);
-  const isMidnight = dateObj.getHours() === 0 && dateObj.getMinutes() === 0;
   const dateStr = dateObj.toLocaleDateString("en-IN", {
     day: "numeric",
     month: "long",
     year: "numeric",
   });
-  if (isMidnight) {
-    return `${dateStr}, 11:59 PM`;
-  }
-  const timeStr = dateObj.toLocaleTimeString("en-IN", {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
-  return `${dateStr}, ${timeStr}`;
+  return `${dateStr}, ${formatRegistrationDeadlineTime(dateObj)}`;
 };
 
 const formatRoundDate = (d) => {
@@ -221,7 +214,7 @@ const Btn = ({ children, onClick, variant = "default", disabled, type = "button"
 const RoundFormModal = ({ initial, onClose, onSubmit, title }) => {
   const [name, setName] = useState(initial?.name || "");
   const [startDate, setStartDate] = useState(
-    initial?.startDate ? initial.startDate.slice(0, 16) : "",
+    initial?.startDate ? toLocalDateTimeInput(initial.startDate) : "",
   );
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -816,7 +809,7 @@ const SettingsTab = ({ drive, onSaved }) => {
     ctc: drive.ctc || "",
     stipend: drive.stipend || "",
     registrationDeadline: drive.registrationDeadline
-      ? drive.registrationDeadline.slice(0, 16)
+      ? toLocalDateTimeInput(drive.registrationDeadline)
       : "",
     applicationLink: drive.applicationLink || "",
   });

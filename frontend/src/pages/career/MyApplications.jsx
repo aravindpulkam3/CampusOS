@@ -7,15 +7,9 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { getMyApplications } from "../../api/career.api";
+import { formatDate } from "../../utils/formatDate";
 
 // ─── Helpers ──────────────────────────────────────────────────
-const formatDate = (d) =>
-  new Date(d).toLocaleDateString("en-IN", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-
 const formatDateTime = (d) =>
   new Date(d).toLocaleString("en-IN", {
     day: "numeric",

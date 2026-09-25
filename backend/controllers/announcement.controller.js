@@ -10,6 +10,7 @@ import { notifyClubFollowers, notifyEventRegistrants } from "../services/notific
 import { isClubAdmin } from "../middleware/clubAdminMiddleware.js";
 import { canManageEvent } from "../middleware/eventManagerMiddleware.js";
 import escapeRegex from "../utils/escapeRegex.js";
+import { normalizeSearch, parseQueryInt } from "../utils/queryParams.js";
 // TODO: implement controller functions
 export const createAnnouncement = asyncHandler(async (req, res) => {
   const { targetType, targetId } = req.params;
@@ -98,11 +99,10 @@ export const getCommunityFeed = asyncHandler(async (req, res) => {
   const userId = req.user._id;
 
   // 1. Parse individual category page cursors/offsets
-  const offsetParam = (value) => Math.max(0, parseInt(value, 10) || 0);
-  const eventOffset = offsetParam(req.query.eventOffset);
-  const clubOffset = offsetParam(req.query.clubOffset);
-  const generalOffset = offsetParam(req.query.generalOffset);
-  const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
+  const eventOffset = parseQueryInt(req.query.eventOffset, 0, 0);
+  const clubOffset = parseQueryInt(req.query.clubOffset, 0, 0);
+  const generalOffset = parseQueryInt(req.query.generalOffset, 0, 0);
+  const search = normalizeSearch(req.query.search);
   const type = req.query.type === "club" || req.query.type === "event"
     ? req.query.type
     : "All";

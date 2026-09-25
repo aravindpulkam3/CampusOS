@@ -22,6 +22,7 @@ import {
   getPlacementProfile,
 } from "../services/eligibility.service.js";
 import { getJSON, setJSON, del } from "../utils/cache.js";
+import { normalizeSearch, parseQueryInt } from "../utils/queryParams.js";
 
 const DRIVE_CATALOGUE_CACHE_KEY = "cache:drives:catalog:default";
 const DRIVE_CATALOGUE_TTL = 60;
@@ -116,9 +117,9 @@ export const getDrives = asyncHandler(async (req, res) => {
   const status = str(req.query.status);
   const jobType = str(req.query.jobType);
   const eligibleOnly = str(req.query.eligibleOnly);
-  const search = str(req.query.search);
-  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
-  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+  const search = normalizeSearch(req.query.search);
+  const page = parseQueryInt(req.query.page, 1);
+  const limit = parseQueryInt(req.query.limit, 20, 1, 100);
 
   const query = {};
   // NOTE: this "status" query param means registration open/closed (derived
@@ -328,8 +329,8 @@ export const deleteDrive = asyncHandler(async (req, res) => {
 // ─── GET /api/drives/:id/applications  (coordinator only) ─────────────────────
 export const getDriveApplications = asyncHandler(async (req, res) => {
   const status = typeof req.query.status === "string" ? req.query.status : undefined;
-  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
-  const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 50));
+  const page = parseQueryInt(req.query.page, 1);
+  const limit = parseQueryInt(req.query.limit, 50, 1, 200);
   const query = { drive: req.params.id };
   if (status) query.status = status;
 

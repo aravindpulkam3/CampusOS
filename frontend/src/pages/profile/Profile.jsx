@@ -30,15 +30,9 @@ import useIsClassRep from "../../hooks/useIsClassRep";
 import { changePasswordApi, getProfile, logoutApi, updateProfile } from "../../api/auth.api";
 import ImageUploadZone from "../../components/forms/ImageUploadZone.jsx";
 import safeHref from "../../utils/safeHref";
+import { formatDate } from "../../utils/formatDate";
 
 // ─── Helpers ──────────────────────────────────────────────────
-const formatDate = (d) =>
-  new Date(d).toLocaleDateString("en-IN", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-
 const statusConfig = {
   active: { label: "Active", color: "bg-blue-50 text-blue-700" },
   selected: { label: "Selected", color: "bg-green-50 text-green-700" },

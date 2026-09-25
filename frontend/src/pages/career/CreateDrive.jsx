@@ -2,6 +2,7 @@ import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { ArrowLeft, Plus, X, AlertTriangle } from "lucide-react"
 import { createDrive } from "../../api/career.api"
+import { formatDate, toLocalDateTimeInput } from "../../utils/formatDate"
 
 // ─── Constants ────────────────────────────────────────────────
 const BRANCHES = ["CSE", "ECE", "EEE", "ME", "CE", "IT", "CHEM", "BIO"]
@@ -190,7 +191,7 @@ const CreateDrive = () => {
     }
   }
 
-  const minDeadline = new Date(Date.now() + 60000).toISOString().slice(0, 16)
+  const minDeadline = toLocalDateTimeInput(new Date(Date.now() + 60000))
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -484,9 +485,7 @@ const CreateDrive = () => {
                 )}
                 {form.registrationDeadline && (
                   <p className="text-xs text-gray-400 mt-0.5">
-                    Deadline: {new Date(form.registrationDeadline).toLocaleDateString("en-IN", {
-                      day: "numeric", month: "short", year: "numeric"
-                    })}
+                    Deadline: {formatDate(form.registrationDeadline)}
                   </p>
                 )}
               </div>

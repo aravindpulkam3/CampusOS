@@ -7,6 +7,7 @@ import {
   Trash2,
   Megaphone,
 } from "lucide-react";
+import { formatDate } from "../../utils/formatDate";
 
 const relativeTime = (d) => {
   if (!d) return "";
@@ -17,13 +18,6 @@ const relativeTime = (d) => {
   if (hrs < 24) return `${hrs}h`;
   return `${Math.floor(hrs / 24)}d`;
 };
-
-const formatDate = (d) =>
-  new Date(d).toLocaleDateString("en-IN", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
 
 // "By X · Expires <date>" — expiry stays secondary, in the muted footer line.
 const footerText = (notice, byLabel) =>

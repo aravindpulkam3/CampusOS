@@ -11,6 +11,7 @@ import {
 import { getAllEvents, registerForEvent } from "../../api/event.api";
 import useAuth from "../../hooks/useAuth";
 import useDebounce from "../../hooks/useDebounce";
+import { formatTime24 } from "../../utils/formatDate";
 
 const CATEGORIES = [
   "All",
@@ -49,10 +50,9 @@ const getStatus = (event) => {
 
 const formatTime = (event, status) => {
   if (!event.startDateTime) return "";
-  const timeOpts = { hour: "2-digit", minute: "2-digit", hour12: false };
   if (status === "Ongoing")
-    return `Ends ${new Date(event.endDateTime).toLocaleTimeString("en-IN", timeOpts)}`;
-  return new Date(event.startDateTime).toLocaleTimeString("en-IN", timeOpts);
+    return `Ends ${formatTime24(event.endDateTime)}`;
+  return formatTime24(event.startDateTime);
 };
 
 const formatDate = (d) =>

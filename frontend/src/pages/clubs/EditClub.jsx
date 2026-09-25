@@ -4,15 +4,15 @@ import { ArrowLeft, X, Plus, AlertTriangle ,ShieldAlert} from "lucide-react";
 import api from "../../api/axios"; 
 import ImageUploadZone from "../../components/forms/ImageUploadZone"; 
 import { updateClub } from "../../api/club.api";
+import { CLUB_CATEGORIES } from "../../constants/categories";
 
 // ─── Constants ────────────────────────────────────────────────
-const CATEGORIES = ["Technical", "Cultural", "Creative", "Business"];
-
 const categoryColor = {
   Technical: "border-blue-200 bg-blue-50 text-blue-700",
   Cultural: "border-purple-200 bg-purple-50 text-purple-700",
   Creative: "border-orange-200 bg-orange-50 text-orange-700",
   Business: "border-green-200 bg-green-50 text-green-700",
+  Sports: "border-emerald-200 bg-emerald-50 text-emerald-700",
 };
 
 // ─── Field Components ─────────────────────────────────────────
@@ -205,7 +205,7 @@ const EditClub = () => {
           <div>
             <Label required>Category</Label>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-1">
-              {CATEGORIES.map((cat) => (
+              {CLUB_CATEGORIES.map((cat) => (
                 <button
                   key={cat}
                   type="button"

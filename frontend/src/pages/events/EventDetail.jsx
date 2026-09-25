@@ -36,6 +36,8 @@ import useImageOk from "../../hooks/useImageOk";
 import { focusRing, SectionHeader, ManageLink } from "../../components/common/SectionBits";
 import NoticeFeed from "../../components/cards/NoticeFeed";
 import AnnouncementCard from "../announcements/AnnouncementCard";
+import { formatShortDate, formatTime24 } from "../../utils/formatDate";
+import { formatEventDay, registrationCutoff } from "./eventDates";
 
 // ─── Event accent ─────────────────────────────────────────────
 // Each category's accent, written out as complete class strings: Tailwind only
@@ -205,26 +207,6 @@ const idOf = (x) => String(x?._id ?? x);
 
 const countFormat = new Intl.NumberFormat("en-IN");
 
-const fmtDate = (d) => {
-  const date = new Date(d);
-  return date.toLocaleDateString("en-IN", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    ...(date.getFullYear() !== new Date().getFullYear() && { year: "numeric" }),
-  });
-};
-
-const fmtTime = (d) =>
-  new Date(d).toLocaleTimeString("en-IN", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-
-const fmtShort = (d) =>
-  new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
-
 // "2d 5h", "4h 12m", "12m".
 const fmtSpan = (ms) => {
   const mins = Math.max(0, Math.floor(ms / 60000));
@@ -243,16 +225,6 @@ const fmtYears = (years) => {
   return consecutive
     ? `Years ${years[0]}–${years[years.length - 1]}`
     : `Years ${years.join(", ")}`;
-};
-
-// Mirrors the backend rule. Writes enforce deadline <= start, so for every
-// valid event this is simply "the deadline if set, otherwise the start"; the
-// min() only guards events stored before that check existed.
-const registrationCutoff = (event) => {
-  const start = new Date(event.startDateTime);
-  if (!event.registrationDeadline) return start;
-  const deadline = new Date(event.registrationDeadline);
-  return deadline < start ? deadline : start;
 };
 
 const URGENT_MS = 48 * 60 * 60 * 1000;
@@ -628,7 +600,7 @@ export default function EventDetail() {
         : phase === "completed"
           ? "This event has ended."
           : regOpen
-            ? `See you on ${fmtDate(start)}`
+            ? `See you on ${formatEventDay(start)}`
             : "Registration is closed.";
   } else {
     const closed = (label, line) => {
@@ -642,7 +614,7 @@ export default function EventDetail() {
     };
     if (phase === "completed") closed("This event has ended", null);
     else if (phase === "ongoing") closed("Registration closed", "This event has already started.");
-    else if (!regOpen) closed("Registration closed", `Closed on ${fmtShort(cutoff)}`);
+    else if (!regOpen) closed("Registration closed", `Closed on ${formatShortDate(cutoff)}`);
     else if (ineligible) closed("Not eligible", `Open to ${eligibilityText}`);
     else {
       action = (
@@ -811,12 +783,12 @@ export default function EventDetail() {
                       />
                     </div>
                     <span className="whitespace-nowrap">
-                      Ends {sameDay ? `at ${fmtTime(end)}` : `${fmtShort(end)} · ${fmtTime(end)}`}
+                      Ends {sameDay ? `at ${formatTime24(end)}` : `${formatShortDate(end)} · ${formatTime24(end)}`}
                     </span>
                   </div>
                 )}
                 {phase === "completed" && (
-                  <p className="text-sm font-semibold text-white/70">Ended {fmtShort(end)}</p>
+                  <p className="text-sm font-semibold text-white/70">Ended {formatShortDate(end)}</p>
                 )}
               </div>
             </div>
@@ -893,11 +865,11 @@ export default function EventDetail() {
           <FactItem
             icon={CalendarDays}
             label="When"
-            value={sameDay ? fmtDate(start) : `${fmtDate(start)} · ${fmtTime(start)}`}
+            value={sameDay ? formatEventDay(start) : `${formatEventDay(start)} · ${formatTime24(start)}`}
             detail={
               sameDay
-                ? `${fmtTime(start)} – ${fmtTime(end)} · ${fmtSpan(end - start)}`
-                : `until ${fmtDate(end)} · ${fmtTime(end)}`
+                ? `${formatTime24(start)} – ${formatTime24(end)} · ${fmtSpan(end - start)}`
+                : `until ${formatEventDay(end)} · ${formatTime24(end)}`
             }
             accent={accent}
           />
@@ -912,7 +884,7 @@ export default function EventDetail() {
             className="border-t sm:col-span-2 lg:col-span-1 lg:border-t-0 lg:border-l"
             icon={Timer}
             label="Registration closes"
-            value={hasDeadline ? `${fmtDate(cutoff)} · ${fmtTime(cutoff)}` : "When the event starts"}
+            value={hasDeadline ? `${formatEventDay(cutoff)} · ${formatTime24(cutoff)}` : "When the event starts"}
             detail={!isCancelled && !regOpen ? "Closed" : null}
             accent={accent}
           />

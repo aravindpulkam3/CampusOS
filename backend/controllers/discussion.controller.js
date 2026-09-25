@@ -5,6 +5,7 @@ import Reply from "../models/Reply.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import sendResponse from "../utils/sendResponse.js";
 import ApiError from "../utils/apiError.js";
+import { normalizeSearch, parseQueryInt } from "../utils/queryParams.js";
 import { createNotification } from "../services/notification.service.js";
 
 // Who upvoted or bookmarked what is not public: responses carry counts plus the
@@ -147,16 +148,16 @@ const replyFilter = (req) => ({
 // GET /api/discussions?category=&search=&sort=newest|popular|unanswered|active&page=1&limit=20
 export const getDiscussions = asyncHandler(async (req, res) => {
   const category = queryString(req.query.category);
-  const search = queryString(req.query.search);
+  const search = normalizeSearch(req.query.search);
   const sort = queryString(req.query.sort) ?? "newest";
   // Malformed paging falls back to defaults instead of reaching Mongo as NaN
   // (a 500); limit is capped so one request can't pull the whole collection.
-  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
-  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 5));
+  const page = parseQueryInt(req.query.page, 1);
+  const limit = parseQueryInt(req.query.limit, 5, 1, 50);
 
   const query = { isDeleted: false };
   if (category && category !== "all") query.category = category;
-  if (typeof search === "string" && search) query.$text = { $search: search };
+  if (search) query.$text = { $search: search };
 
   // _id breaks ties, so skip/limit pages can't overlap or skip equal rows.
   const sortMap = {

@@ -8,6 +8,7 @@ import mongoose from "mongoose";
 import Drive from "../models/Drive.js";
 import Application from "../models/Application.js";
 import ApiError from "../utils/apiError.js";
+import { parseQueryInt } from "../utils/queryParams.js";
 import { getJSON, setJSON, del } from "../utils/cache.js";
 import { canManageEvent } from "../middleware/eventManagerMiddleware.js";
 import {
@@ -174,7 +175,7 @@ export const createNotice = asyncHandler(async (req, res) => {
 
 // Management is separate from the compact, audience-scoped notice feeds.
 export const listPlatformNotices = asyncHandler(async (req, res) => {
-  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const page = parseQueryInt(req.query.page, 1);
   const limit = 20;
   const query = { targetType: "platform" };
   const [notices, total] = await Promise.all([

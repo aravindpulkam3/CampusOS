@@ -7,6 +7,7 @@ import { getClubDetails } from "../../api/club.api";
 import { getEventById } from "../../api/event.api";
 import { getDriveById } from "../../api/career.api";
 import useAuth from "../../hooks/useAuth";
+import { toLocalDateInput } from "../../utils/formatDate";
 
 // ─── Config ────────────────────────────────────────────────────────────────────
 // Schema targetType enum: "classroom" | "clubs" | "events" | "drive" | "platform"
@@ -387,7 +388,7 @@ const CreateNotice = () => {
                 type="date"
                 value={form.expiresAt}
                 onChange={set("expiresAt")}
-                min={new Date().toISOString().split("T")[0]}
+                min={toLocalDateInput(new Date())}
               />
               <p className="text-xs text-gray-400 mt-1">Leave blank to keep indefinitely</p>
             </div>
@@ -423,4 +424,3 @@ const CreateNotice = () => {
 };
 
 export default CreateNotice;
-

@@ -34,6 +34,8 @@ import useImageOk from "../../hooks/useImageOk";
 import { focusRing, SectionHeader, ManageLink } from "../../components/common/SectionBits";
 import NoticeFeed from "../../components/cards/NoticeFeed";
 import AnnouncementCard from "../announcements/AnnouncementCard";
+import { formatShortDate, formatTime24 } from "../../utils/formatDate";
+import { formatEventDay, registrationCutoff } from "../events/eventDates";
 
 // ─── Helpers ──────────────────────────────────────────────────
 const clubBg = [
@@ -70,39 +72,10 @@ const clubInitials = (name) =>
 // Ids arrive either bare or populated.
 const idOf = (x) => String(x?._id ?? x);
 
-const formatDay = (d) => {
-  const date = new Date(d);
-  return date.toLocaleDateString("en-IN", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    ...(date.getFullYear() !== new Date().getFullYear() && { year: "numeric" }),
-  });
-};
-
-const formatTime = (d) =>
-  new Date(d).toLocaleTimeString("en-IN", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-
-const formatShortDate = (d) =>
-  new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
-
 const formatEventWhen = (start, end) =>
   new Date(start).toDateString() === new Date(end).toDateString()
-    ? `${formatDay(start)} · ${formatTime(start)}–${formatTime(end)}`
-    : `${formatDay(start)} – ${formatDay(end)}`;
-
-// Mirrors the backend rule: registration closes at the earlier of the
-// deadline and the start.
-const registrationCutoff = (event) => {
-  const start = new Date(event.startDateTime);
-  if (!event.registrationDeadline) return start;
-  const deadline = new Date(event.registrationDeadline);
-  return deadline < start ? deadline : start;
-};
+    ? `${formatEventDay(start)} · ${formatTime24(start)}–${formatTime24(end)}`
+    : `${formatEventDay(start)} – ${formatEventDay(end)}`;
 
 const eventStatus = (event, registered, now) => {
   if (event.status === "Cancelled")

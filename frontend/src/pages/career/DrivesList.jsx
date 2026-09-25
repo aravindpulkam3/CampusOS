@@ -4,6 +4,7 @@ import { Search, X, Briefcase, ChevronRight, Plus, Clock } from "lucide-react";
 import useAuth from "../../hooks/useAuth";
 import useDebounce from "../../hooks/useDebounce";
 import { getAllDrives } from "../../api/career.api";
+import { formatRegistrationDeadlineTime } from "./format";
 
 // ─── Helpers ──────────────────────────────────────────────────
 const isOpenNow = (deadline) =>
@@ -12,20 +13,11 @@ const isOpenNow = (deadline) =>
 const formatDateTimeWithFallback = (d) => {
   if (!d) return "—";
   const dateObj = new Date(d);
-  const isMidnight = dateObj.getHours() === 0 && dateObj.getMinutes() === 0;
   const dateStr = dateObj.toLocaleDateString("en-IN", {
     day: "numeric",
     month: "short",
   });
-  if (isMidnight) {
-    return `${dateStr}, 11:59 PM`;
-  }
-  const timeStr = dateObj.toLocaleTimeString("en-IN", {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
-  return `${dateStr}, ${timeStr}`;
+  return `${dateStr}, ${formatRegistrationDeadlineTime(dateObj)}`;
 };
 
 const formatDeadline = (d) => {

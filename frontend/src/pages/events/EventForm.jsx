@@ -4,20 +4,14 @@ import { ArrowLeft, X, Plus } from "lucide-react";
 import { createEvent, getEventById, updateEvent } from "../../api/event.api.js"; // Added getEventById & updateEvent
 import { BRANCHES } from "../../constants/branches.js";
 import { EVENT_CATEGORIES } from "../../constants/categories.js";
+import { YEARS } from "../../constants/years.js";
 import useAuth from "../../hooks/useAuth.js";
 import ImageUploadZone from "../../components/forms/ImageUploadZone.jsx";
-
-const YEARS = [1, 2, 3, 4];
+import { toLocalDateInput, toLocalDateTimeInput } from "../../utils/formatDate.js";
 
 // Date inputs work in LOCAL time, while toISOString() is UTC — slicing an ISO
 // string would shift the date for times between local midnight and the UTC
-// offset. These format a Date the way <input type="date|datetime-local"> expects.
-const pad = (n) => String(n).padStart(2, "0");
-const toLocalDate = (d) =>
-  `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-const toLocalDateTime = (d) =>
-  `${toLocalDate(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-
+// offset. The shared helpers format dates for these inputs.
 // ─── Reusable Field Components ────────────────────────────────
 const Label = ({ children, required }) => (
   <label className="block text-xs font-medium text-gray-700 mb-1.5">
@@ -153,12 +147,12 @@ const EventForm = ({ mode = "create" }) => {
     setForm({
       eventName: eventData.eventName || "",
       description: eventData.description || "",
-      startDate: toLocalDate(start),
+      startDate: toLocalDateInput(start),
       startTime: start.toTimeString().split(" ")[0].slice(0, 5),
-      endDate: toLocalDate(end),
+      endDate: toLocalDateInput(end),
       endTime: end.toTimeString().split(" ")[0].slice(0, 5),
       registrationDeadline: eventData.registrationDeadline
-        ? toLocalDateTime(new Date(eventData.registrationDeadline))
+        ? toLocalDateTimeInput(eventData.registrationDeadline)
         : "",
       venue: eventData.venue || "",
       category: eventData.category || "",
@@ -357,7 +351,7 @@ const EventForm = ({ mode = "create" }) => {
                 type="date"
                 value={form.startDate}
                 onChange={set("startDate")}
-                min={isEditMode ? undefined : new Date().toISOString().split("T")[0]}
+                min={isEditMode ? undefined : toLocalDateInput(new Date())}
               />
               <FieldError message={errors.startDate} />
             </div>
@@ -380,7 +374,7 @@ const EventForm = ({ mode = "create" }) => {
                 type="date"
                 value={form.endDate}
                 onChange={set("endDate")}
-                min={form.startDate || new Date().toISOString().split("T")[0]}
+                min={form.startDate || toLocalDateInput(new Date())}
               />
               <FieldError message={errors.endDate} />
             </div>
@@ -418,7 +412,7 @@ const EventForm = ({ mode = "create" }) => {
               type="datetime-local"
               value={form.registrationDeadline}
               onChange={set("registrationDeadline")}
-              min={isEditMode ? undefined : toLocalDateTime(new Date())}
+              min={isEditMode ? undefined : toLocalDateTimeInput(new Date())}
             />
             <FieldError message={errors.registrationDeadline} />
           </div>

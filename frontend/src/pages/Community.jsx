@@ -18,6 +18,7 @@ import useAuth from "../hooks/useAuth";
 import useDebounce from "../hooks/useDebounce";
 import AnnouncementCard from "./announcements/AnnouncementCard";
 import NoticeFeed from "../components/cards/NoticeFeed";
+import { formatShortDate } from "../utils/formatDate";
 
 const clubBg = [
   "bg-slate-900",
@@ -32,10 +33,7 @@ const clubBg = [
 const UpcomingEventsWidget = ({ events, loading }) => {
   const formatWidgetDate = (d) => {
     if (!d) return "";
-    return new Date(d).toLocaleDateString("en-IN", {
-      day: "numeric",
-      month: "short",
-    });
+    return formatShortDate(d);
   };
 
   return (

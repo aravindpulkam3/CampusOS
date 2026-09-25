@@ -1,16 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { resetPasswordApi } from "../../api/auth.api.js";
+import { readTokenFromHash, validatePasswordSetup } from "./passwordSetup";
 
 // Same handling as VerifyEmail.jsx: the one-time token arrives in the URL
 // FRAGMENT (/reset-password#token=...), which is never sent to any server. It
 // is removed from the address bar and history immediately, kept only in
 // component state, and sent once — in a POST body — with the new password.
-const readTokenFromHash = () => {
-  const params = new URLSearchParams(window.location.hash.slice(1));
-  return params.get("token") || "";
-};
-
 export default function ResetPassword() {
   const navigate = useNavigate();
   const [token] = useState(readTokenFromHash);
@@ -31,16 +27,9 @@ export default function ResetPassword() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (form.password.length < 8) {
-      setError("Password must be at least 8 characters.");
-      return;
-    }
-    if (new TextEncoder().encode(form.password).length > 72) {
-      setError("Password must be at most 72 characters.");
-      return;
-    }
-    if (form.password !== form.confirmPassword) {
-      setError("Passwords do not match.");
+    const validationError = validatePasswordSetup(form.password, form.confirmPassword);
+    if (validationError) {
+      setError(validationError);
       return;
     }
 
