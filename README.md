@@ -60,6 +60,24 @@ The API uses cookie-based JWT authentication. Access and refresh tokens are held
 | Data | MongoDB; Redis is optional and used only as a cache |
 | Verification | Vitest and Supertest API tests with an in-memory MongoDB replica set |
 
+### Redis cache TTLs and operational notes
+
+TTL constants remain next to their read paths. All values below are seconds from the cache write; MongoDB remains authoritative.
+
+| Cache | Key | TTL | Reason |
+| --- | --- | ---: | --- |
+| Active clubs | `cache:clubs:active` | 24 h | Club details change rarely; create, update, and follow writes invalidate it. |
+| Popular clubs | `cache:clubs:popular:active` | 1 h | Follower ranking changes more often; club/follow writes invalidate it. |
+| Upcoming events | `cache:events:upcoming` | 15 min | The set changes as events end; create/update writes invalidate it. Cancelled events are excluded when the DB query refills the key. |
+| Global search | `cache:search:v2:<normalizedQuery>` | 60 s | Many query variants; source writes do not invalidate individual search keys. |
+| Academic classroom | `cache:classroom:<id>:academic` | 1 h | Shared academic data changes infrequently; period, semester, classroom, and curriculum edits invalidate it. |
+| Classroom notices | `cache:notices:classroom:<id>` | Up to 5 min | Writes invalidate it; TTL is shortened to the earliest visible notice expiry. |
+| Default drive catalogue | `cache:drives:catalog:default` | 60 s | Candidate set is shared; application state, eligibility, and final page documents are read per request. |
+
+The cache helper counts hits, misses, Redis-not-ready bypasses, and GET/SET/DEL/JSON errors by key family. It reports cumulative per-process counters only after activity, every minute in development and every five minutes in production; it logs no keys, search text, payloads, or Redis URL. A malformed JSON value is deleted by its exact key and treated as a miss. Maintenance scripts bound their optional Redis connection wait to eight seconds and continue when cleanup cannot run.
+
+Cache-aside has bounded stale windows: a Redis outage can skip invalidation, and a read racing a DB write can repopulate an older value after deletion. TTL is the eventual freshness bound; there is no stampede lock or cross-database atomicity. An out-of-band cancellation may remain in a previously cached upcoming-events value until its 15-minute TTL ends. A missed drive invalidation can briefly leave catalogue membership or pagination totals stale, while personal application/eligibility values and displayed drive documents are still read live.
+
 ### Repository map
 
 ```text

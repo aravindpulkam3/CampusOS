@@ -322,6 +322,7 @@ export const getUpcomingEvents = asyncHandler(async (req, res) => {
   const events = await Event.find({
     // Keeps events that are either currently running or haven't started yet
     endDateTime: { $gte: now },
+    status: { $ne: "Cancelled" },
   })
     .populate("organizerClub", "clubName logo")
     .sort({ startDateTime: 1 }) // Keeps the closest events at the top

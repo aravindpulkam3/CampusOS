@@ -43,6 +43,22 @@ describe("Global Search and Event list improvements", () => {
       .toEqual(["Zephyr Lantern Live"]);
   });
 
+  it("includes only non-ended, non-cancelled events in the upcoming widget feed", async () => {
+    const now = Date.now();
+    await Event.insertMany([
+      eventData("Orion Widget Active", new Date(now + 60_000), new Date(now + 3_600_000)),
+      eventData("Orion Widget Cancelled", new Date(now + 30_000), new Date(now + 3_600_000), "Cancelled"),
+      eventData("Orion Widget Ended", new Date(now - 7_200_000), new Date(now - 3_600_000)),
+    ]);
+
+    const res = await agent.get("/api/events/upcoming");
+    expect(res.status).toBe(200);
+    const names = res.body.data.map((event) => event.eventName);
+    expect(names).toContain("Orion Widget Active");
+    expect(names).not.toContain("Orion Widget Cancelled");
+    expect(names).not.toContain("Orion Widget Ended");
+  });
+
   it("pages Events deterministically when their start times tie", async () => {
     const now = Date.now();
     const hour = 3600000;
