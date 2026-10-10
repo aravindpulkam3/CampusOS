@@ -345,16 +345,18 @@ const CreateNotice = () => {
           </div>
 
           {resolvedType === "classroom" && (
-            <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer select-none">
+            <label className="flex items-start gap-2 text-xs text-gray-600 cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={scopeToCurrentSemester}
                 onChange={(e) => setScopeToCurrentSemester(e.target.checked)}
-                className="rounded border-gray-300"
+                className="mt-0.5 rounded border-gray-300"
               />
-              Only show for the current semester
-              <span className="text-gray-400">
-                — leave unchecked for a general notice that persists across semesters
+              <span>
+                Only show for the current semester
+                <span className="text-gray-400">
+                  {" "}— leave unchecked for a general notice that persists across semesters
+                </span>
               </span>
             </label>
           )}
@@ -381,7 +383,7 @@ const CreateNotice = () => {
         </Section>
 
         <Section title="Timing">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <Label optional>Expires at</Label>
               <Input

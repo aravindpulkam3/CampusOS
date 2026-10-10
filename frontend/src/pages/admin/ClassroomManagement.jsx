@@ -115,7 +115,7 @@ const ClassroomManagement = () => {
               placeholder="e.g. CSE"
               value={createForm.branch}
               onChange={(e) => setCreateForm((p) => ({ ...p, branch: e.target.value }))}
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-gray-400"
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
             />
           </div>
           <div>
@@ -125,7 +125,7 @@ const ClassroomManagement = () => {
               placeholder="e.g. 2023"
               value={createForm.batch}
               onChange={(e) => setCreateForm((p) => ({ ...p, batch: e.target.value }))}
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-gray-400"
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
             />
           </div>
           <div>
@@ -135,7 +135,7 @@ const ClassroomManagement = () => {
               placeholder="e.g. A"
               value={createForm.section}
               onChange={(e) => setCreateForm((p) => ({ ...p, section: e.target.value }))}
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-gray-400"
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
             />
           </div>
           <button
@@ -194,7 +194,7 @@ const ClassroomManagement = () => {
                       placeholder="CR roll number"
                       value={crInputs[c._id] || ""}
                       onChange={(e) => setCrInputs((p) => ({ ...p, [c._id]: e.target.value }))}
-                      className="px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg outline-none focus:border-gray-400 w-32"
+                      className="px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100 w-32"
                     />
                     <button
                       onClick={() => handleAssignCr(c._id)}
@@ -213,7 +213,7 @@ const ClassroomManagement = () => {
                       placeholder="Sem #"
                       value={overrideInputs[c._id] || ""}
                       onChange={(e) => setOverrideInputs((p) => ({ ...p, [c._id]: e.target.value }))}
-                      className="px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg outline-none focus:border-gray-400 w-20"
+                      className="px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100 w-20"
                     />
                     <button
                       onClick={() => handleOverride(c._id)}

@@ -36,7 +36,7 @@ const statusConfig = {
     color: "text-blue-700 bg-blue-50",
     dot: "bg-blue-500 animate-pulse",
   },
-  Completed: { color: "text-slate-500 bg-slate-100", dot: "bg-slate-400" },
+  Completed: { color: "text-gray-500 bg-gray-100", dot: "bg-gray-400" },
 };
 
 const getStatus = (event) => {
@@ -61,13 +61,13 @@ const formatDate = (d) =>
 
 
 const CardSkeleton = () => (
-  <div className="border border-slate-100 rounded-2xl overflow-hidden animate-pulse bg-white space-y-4 p-4 shadow-3xs">
-    <div className="h-40 bg-slate-100 rounded-xl" />
+  <div className="border border-gray-100 rounded-2xl overflow-hidden animate-pulse bg-white space-y-4 p-4">
+    <div className="h-40 bg-gray-100 rounded-xl" />
     <div className="space-y-2">
-      <div className="w-1/3 h-3 bg-slate-100 rounded" />
-      <div className="w-3/4 h-4 bg-slate-100 rounded" />
+      <div className="w-1/3 h-3 bg-gray-100 rounded" />
+      <div className="w-3/4 h-4 bg-gray-100 rounded" />
     </div>
-    <div className="h-8 bg-slate-50 rounded-xl pt-2" />
+    <div className="h-8 bg-gray-50 rounded-xl pt-2" />
   </div>
 );
 
@@ -170,35 +170,35 @@ export default function Events() {
   const retryFeed = () => fetchFeed(offset, offset > 0);
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-2 space-y-5">
+    <div className="max-w-6xl mx-auto space-y-5">
       {/* Search Header Action Container */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white border border-slate-100 p-3 rounded-2xl shadow-3xs">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white border border-gray-100 p-3 rounded-2xl">
         <div>
-          <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider">
-            Campus Timelines
+          <h2 className="text-lg font-semibold text-gray-900">
+            Events
           </h2>
-          <p className="text-xs font-semibold text-slate-800 mt-0.5">
-            Explore active community events
+          <p className="text-xs text-gray-400 mt-0.5">
+            Upcoming and past events from campus clubs
           </p>
         </div>
         <div className="relative w-full md:w-72">
           <Search
             size={14}
-            className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
+            className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
           />
           <input
             type="text"
             aria-label="Search events"
-            placeholder="Search matching events..."
+            placeholder="Search events..."
             value={search}
             onChange={(e) => { searchRef.current = e.target.value; invalidateFeed(); setSearch(e.target.value); }}
-            className="w-full pl-9 pr-8 py-2 text-xs bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:border-slate-300 placeholder:text-slate-400 transition-colors"
+            className="w-full pl-9 pr-8 py-2 text-xs bg-gray-50 border border-gray-100 rounded-xl focus:outline-none focus:border-gray-300 placeholder:text-gray-400 transition-colors"
           />
           {search && (
             <button
               aria-label="Clear event search"
               onClick={() => { searchRef.current = ""; invalidateFeed(); setSearch(""); }}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
             >
               <X size={13} />
             </button>
@@ -212,11 +212,11 @@ export default function Events() {
           <button
             key={cat}
             onClick={() => { if (cat !== activeCategory) { invalidateFeed(); setActiveCategory(cat); } }}
-            className={`px-3.5 py-1.5 text-xs font-semibold rounded-full border whitespace-nowrap transition-all duration-150 shadow-3xs
+            className={`px-3.5 py-1.5 text-xs font-semibold rounded-full border whitespace-nowrap transition-all duration-150
               ${
                 activeCategory === cat
-                  ? "bg-slate-900 text-white border-slate-900"
-                  : "bg-white text-slate-500 border-slate-200 hover:border-slate-400 hover:text-slate-800"
+                  ? "bg-gray-900 text-white border-gray-900"
+                  : "bg-white text-gray-500 border-gray-200 hover:border-gray-400 hover:text-gray-800"
               }`}
           >
             {cat}
@@ -232,23 +232,23 @@ export default function Events() {
         </div>
       )}
       {feedLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
           {Array.from({ length: 6 }).map((_, i) => (
             <CardSkeleton key={i} />
           ))}
         </div>
       ) : feedError && feedItems.length === 0 ? null : feedItems.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 bg-white border border-slate-100 rounded-2xl text-center shadow-3xs">
-          <div className="w-10 h-10 bg-slate-50 border border-slate-100 rounded-full flex items-center justify-center mb-3 shadow-3xs">
-            <Calendar size={15} className="text-slate-400" />
+        <div className="flex flex-col items-center justify-center py-20 bg-white border border-gray-100 rounded-2xl text-center">
+          <div className="w-10 h-10 bg-gray-50 border border-gray-100 rounded-full flex items-center justify-center mb-3">
+            <Calendar size={15} className="text-gray-400" />
           </div>
-          <p className="text-sm font-bold text-slate-800">
+          <p className="text-sm font-bold text-gray-800">
             No synchronized entries match criteria
           </p>
         </div>
       ) : (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
             {feedItems.map((event) => {
               const isRegistered = user?.registeredEvents?.some(
                 (eventId) => (eventId._id ?? eventId) === event._id,
@@ -256,16 +256,16 @@ export default function Events() {
               const status = getStatus(event);
               const statusCfg = statusConfig[status] || statusConfig.Upcoming;
               const catStyle =
-                categoryColor[event.category] || "text-slate-600 bg-slate-100";
+                categoryColor[event.category] || "text-gray-600 bg-gray-100";
               const isClosed = status === "Completed";
 
               return (
                 <div
                   key={event._id}
                   onClick={() => navigate(`/community/events/${event._id}`)}
-                  className="group border border-slate-100/80 rounded-2xl overflow-hidden cursor-pointer hover:border-slate-300 hover:shadow-xs transition-all duration-200 bg-white flex flex-col shadow-3xs relative"
+                  className="group border border-gray-100/80 rounded-2xl overflow-hidden cursor-pointer hover:border-gray-300 hover:shadow-xs transition-all duration-200 bg-white flex flex-col relative"
                 >
-                  <div className="relative h-40 bg-slate-50 overflow-hidden flex-shrink-0 border-b border-slate-50">
+                  <div className="relative h-40 bg-gray-50 overflow-hidden flex-shrink-0 border-b border-gray-50">
                     {event.banner ? (
                       <img
                         src={event.banner}
@@ -274,8 +274,8 @@ export default function Events() {
                         loading="lazy"
                       />
                     ) : (
-                      <div className="w-full h-full bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
-                        <Calendar size={22} className="text-slate-300" />
+                      <div className="w-full h-full bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
+                        <Calendar size={22} className="text-gray-300" />
                       </div>
                     )}
                     <span
@@ -283,7 +283,7 @@ export default function Events() {
                     >
                       {event.category}
                     </span>
-                    <span className="absolute top-3 right-3 text-[10px] font-bold text-slate-700 bg-white/90 backdrop-blur-xs px-2 py-0.5 rounded-md border border-slate-100/40">
+                    <span className="absolute top-3 right-3 text-[10px] font-bold text-gray-700 bg-white/90 backdrop-blur-xs px-2 py-0.5 rounded-md border border-gray-100/40">
                       {formatDate(event.startDateTime)}
                     </span>
                   </div>
@@ -295,24 +295,24 @@ export default function Events() {
                           {event.organizerClub.clubName}
                         </p>
                       )}
-                      <h3 className="text-xs font-bold text-slate-800 leading-snug line-clamp-2 group-hover:text-slate-900 transition-colors">
+                      <h3 className="text-xs font-bold text-gray-800 leading-snug line-clamp-2 group-hover:text-gray-900 transition-colors">
                         {event.eventName}
                       </h3>
                     </div>
 
-                    <div className="space-y-1.5 text-[11px] font-medium text-slate-400">
+                    <div className="space-y-1.5 text-[11px] font-medium text-gray-400">
                       {event.venue && (
                         <div className="flex items-center gap-1.5">
                           <MapPin
                             size={12}
-                            className="text-slate-300 flex-shrink-0"
+                            className="text-gray-300 flex-shrink-0"
                           />
                           <span className="truncate">{event.venue}</span>
                         </div>
                       )}
                     </div>
 
-                    <div className="mt-auto pt-3 border-t border-slate-50 flex items-center justify-between gap-2">
+                    <div className="mt-auto pt-3 border-t border-gray-50 flex items-center justify-between gap-2">
                       <div className="flex items-center gap-1.5 min-w-0">
                         <span
                           className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md border ${statusCfg.color}`}
@@ -322,7 +322,7 @@ export default function Events() {
                           />
                           {status}
                         </span>
-                        <span className="text-[11px] text-slate-400 truncate font-semibold">
+                        <span className="text-[11px] text-gray-400 truncate font-semibold">
                           {formatTime(event, status)}
                         </span>
                       </div>
@@ -337,19 +337,19 @@ export default function Events() {
                       ) : isClosed ? (
                         <button
                           disabled
-                          className="text-[11px] font-bold text-slate-400 bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-xl cursor-not-allowed whitespace-nowrap flex-shrink-0"
+                          className="text-[11px] font-bold text-gray-400 bg-gray-50 border border-gray-100 px-3 py-1.5 rounded-xl cursor-not-allowed whitespace-nowrap flex-shrink-0"
                         >
                           Closed
                         </button>
                       ) : (
                         <button
                           onClick={(e) => handleRegister(e, event._id)}
-                          className="text-[11px] font-bold text-white bg-slate-900 px-3 py-1.5 rounded-xl hover:bg-slate-800 active:scale-97 transition-all whitespace-nowrap flex-shrink-0 group/btn flex items-center gap-1"
+                          className="text-[11px] font-bold text-white bg-gray-900 px-3 py-1.5 rounded-xl hover:bg-gray-800 active:scale-97 transition-all whitespace-nowrap flex-shrink-0 group/btn flex items-center gap-1"
                         >
                           Register{" "}
                           <ArrowUpRight
                             size={10}
-                            className="text-slate-400 group-hover/btn:translate-x-0.5 group-hover/btn:-translate-y-0.5 transition-transform"
+                            className="text-gray-400 group-hover/btn:translate-x-0.5 group-hover/btn:-translate-y-0.5 transition-transform"
                           />
                         </button>
                       )}
@@ -365,11 +365,11 @@ export default function Events() {
             <button
               onClick={handleLoadMore}
               disabled={loadMoreLoading}
-              className="flex items-center justify-center gap-2 w-full py-3 text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-xl hover:border-slate-400 hover:bg-slate-50/50 transition-all disabled:opacity-50"
+              className="flex items-center justify-center gap-2 w-full py-3 text-xs font-bold text-gray-700 bg-white border border-gray-200 rounded-xl hover:border-gray-400 hover:bg-gray-50/50 transition-all disabled:opacity-50"
             >
               {loadMoreLoading ? (
                 <>
-                  <Loader2 size={13} className="animate-spin text-slate-400" />{" "}
+                  <Loader2 size={13} className="animate-spin text-gray-400" />{" "}
                   Slicing Next Registry Block...
                 </>
               ) : (

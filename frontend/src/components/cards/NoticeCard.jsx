@@ -45,16 +45,16 @@ const priorityConf = {
     label: "High Priority",
   },
   normal: {
-    dot: "bg-slate-400",
-    bar: "bg-slate-300",
-    row: "bg-white border-slate-200/80 shadow-2xs",
+    dot: "bg-gray-400",
+    bar: "bg-gray-300",
+    row: "bg-white border-gray-200/80 shadow-2xs",
     badge: null,
     label: "",
   },
   low: {
-    dot: "bg-slate-300",
-    bar: "bg-slate-200",
-    row: "bg-slate-50/40 border-slate-200/60 opacity-90",
+    dot: "bg-gray-300",
+    bar: "bg-gray-200",
+    row: "bg-gray-50/40 border-gray-200/60 opacity-90",
     badge: null,
     label: "",
   },
@@ -88,7 +88,7 @@ const NoticeCard = ({
   if (compact) {
     return (
       <div
-        className={`border-b border-slate-100/80 last:border-0 transition-all ${busy ? "opacity-40" : ""}`}
+        className={`border-b border-gray-100/80 last:border-0 transition-all ${busy ? "opacity-40" : ""}`}
       >
         <button
           onClick={() => setOpen((o) => !o)}
@@ -111,7 +111,7 @@ const NoticeCard = ({
               )}
 
               <p
-                className={`text-xs text-slate-800 break-words transition-colors group-hover:text-slate-900 ${isPinned || isAlert ? "font-semibold" : "font-medium"}`}
+                className={`text-xs text-gray-800 break-words transition-colors group-hover:text-gray-900 ${isPinned || isAlert ? "font-semibold" : "font-medium"}`}
               >
                 {notice.title}
               </p>
@@ -119,7 +119,7 @@ const NoticeCard = ({
 
             {/* Row 2: Populated Source Name */}
             {notice.targetId && typeof notice.targetId === "object" && (
-              <div className="flex items-center gap-2 mt-1 flex-wrap text-[10px] text-slate-400 font-medium">
+              <div className="flex items-center gap-2 mt-1 flex-wrap text-[10px] text-gray-400 font-medium">
                 <span className="font-semibold text-blue-600 bg-blue-50/60 border border-blue-100/40 px-1.5 py-0.5 rounded">
                   {notice.targetType === "clubs" && notice.targetId.clubName}
                   {notice.targetType === "events" &&
@@ -134,30 +134,30 @@ const NoticeCard = ({
 
           {/* Right Edge Action Alignments */}
           <div className="flex items-center gap-2 flex-shrink-0 pt-0.5">
-            <span className="text-[10px] text-slate-400 font-mono font-medium bg-slate-50 border border-slate-100 px-1.5 py-0.5 rounded">
+            <span className="text-[10px] text-gray-400 font-mono font-medium bg-gray-50 border border-gray-100 px-1.5 py-0.5 rounded">
               {relativeTime(notice.createdAt)}
             </span>
             <ChevronDown
               size={12}
-              className={`text-slate-300 group-hover:text-slate-500 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+              className={`text-gray-300 group-hover:text-gray-500 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
             />
           </div>
         </button>
 
         {open && (
-          <div className="ml-4 pb-3.5 space-y-2.5 overflow-hidden animate-in fade-in duration-150">
+          <div className="ml-4 pb-3.5 space-y-2.5 overflow-hidden duration-150">
             {notice.content && (
-              <p className="text-xs text-slate-600 leading-relaxed break-words whitespace-pre-line bg-slate-50/50 p-2.5 rounded-lg border border-slate-100/50">
+              <p className="text-xs text-gray-600 leading-relaxed break-words whitespace-pre-line bg-gray-50/50 p-2.5 rounded-lg border border-gray-100/50">
                 {notice.content}
               </p>
             )}
 
-            <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-              <span className="text-[10px] text-slate-400 font-medium">
+            <div className="flex flex-wrap items-center justify-between gap-x-2 pt-2 border-t border-gray-100">
+              <span className="text-[10px] text-gray-400 font-medium">
                 {footerText(notice, "By")}
               </span>
               {canManage && (
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1 -mr-1.5">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -166,7 +166,7 @@ const NoticeCard = ({
                         setIsPinned((p) => !p);
                       });
                     }}
-                    className={`flex items-center gap-1 text-[10px] font-medium transition-colors ${isPinned ? "text-slate-900 font-semibold" : "text-slate-400 hover:text-slate-700"}`}
+                    className={`flex items-center gap-1 p-1.5 rounded text-[10px] font-medium transition-colors ${isPinned ? "text-gray-900 font-semibold" : "text-gray-400 hover:text-gray-700"}`}
                   >
                     <Pin size={10} className={isPinned ? "fill-current" : ""} />{" "}
                     {isPinned ? "Pinned" : "Pin"}
@@ -176,7 +176,7 @@ const NoticeCard = ({
                       e.stopPropagation();
                       act(() => onArchive?.(notice._id));
                     }}
-                    className="flex items-center gap-1 text-[10px] font-medium text-slate-400 hover:text-slate-600 transition-colors"
+                    className="flex items-center gap-1 p-1.5 rounded text-[10px] font-medium text-gray-400 hover:text-gray-600 transition-colors"
                   >
                     <Archive size={10} /> Archive
                   </button>
@@ -185,7 +185,7 @@ const NoticeCard = ({
                       e.stopPropagation();
                       act(() => onDelete?.(notice._id));
                     }}
-                    className="flex items-center gap-1 text-[10px] font-medium text-slate-400 hover:text-red-500 transition-colors"
+                    className="flex items-center gap-1 p-1.5 rounded text-[10px] font-medium text-gray-400 hover:text-red-500 transition-colors"
                   >
                     <Trash2 size={10} /> Delete
                   </button>
@@ -210,18 +210,18 @@ const NoticeCard = ({
         {/* Top Header Row: Icon, Badges, and Time cleanly separated */}
         <div className="flex items-center justify-between gap-4 mb-3">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 shadow-3xs bg-slate-100">
-              <Megaphone size={13} className="text-slate-600" />
+            <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 bg-gray-100">
+              <Megaphone size={13} className="text-gray-600" />
             </div>
             {isPinned && (
               <Pin
                 size={10}
-                className="text-slate-400 fill-slate-400/20 flex-shrink-0"
+                className="text-gray-400 fill-gray-400/20 flex-shrink-0"
               />
             )}
             {isAlert && pc.badge && (
               <span
-                className={`text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-wider shadow-3xs flex-shrink-0 ${pc.badge}`}
+                className={`text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-wider flex-shrink-0 ${pc.badge}`}
               >
                 {pc.label}
               </span>
@@ -229,20 +229,20 @@ const NoticeCard = ({
           </div>
 
           {/* Timestamp cleanly aligned on the right edge */}
-          <span className="text-[10px] text-slate-400 font-mono font-medium bg-white/80 border border-slate-200/60 px-2 py-0.5 rounded shadow-3xs flex-shrink-0">
+          <span className="text-[10px] text-gray-400 font-mono font-medium bg-white/80 border border-gray-200/60 px-2 py-0.5 rounded flex-shrink-0">
             {relativeTime(notice.createdAt)}
           </span>
         </div>
 
         {/* Content Body Layout */}
         <div className="max-w-3xl">
-          <h4 className="text-sm font-bold text-slate-900 leading-snug tracking-tight mb-1.5">
+          <h4 className="text-sm font-bold text-gray-900 leading-snug tracking-tight mb-1.5">
             {notice.title}
           </h4>
 
           {notice.content && (
             <p
-              className={`text-xs text-slate-600 leading-relaxed break-words ${open ? "whitespace-pre-line" : "line-clamp-2"}`}
+              className={`text-xs text-gray-600 leading-relaxed break-words ${open ? "whitespace-pre-line" : "line-clamp-2"}`}
             >
               {notice.content}
             </p>
@@ -253,7 +253,7 @@ const NoticeCard = ({
         {(notice.content?.length > 120 || canManage) && (
           <button
             onClick={() => setOpen((o) => !o)}
-            className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 hover:text-slate-700 mt-3 px-2.5 py-1 bg-white border border-slate-200 shadow-3xs rounded-md transition-all"
+            className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 hover:text-gray-700 mt-3 px-2.5 py-1 bg-white border border-gray-200 rounded-md transition-all"
           >
             {open ? (
               <>
@@ -270,13 +270,13 @@ const NoticeCard = ({
 
       {/* Accordion Expansion Drawer Section */}
       {open && (
-        <div className="mx-5 mb-4 space-y-3 pt-3.5 border-t border-slate-200/60 animate-in fade-in duration-200">
-          <div className="flex items-center justify-between pt-2 border-t border-slate-200/60">
-            <span className="text-[10px] font-medium text-slate-400">
+        <div className="mx-5 mb-4 space-y-3 pt-3.5 border-t border-gray-200/60 duration-200">
+          <div className="flex flex-wrap items-center justify-between gap-x-2 pt-2 border-t border-gray-200/60">
+            <span className="text-[10px] font-medium text-gray-400">
               {footerText(notice, "Posted by")}
             </span>
             {canManage && (
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1 -mr-1.5">
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -285,7 +285,7 @@ const NoticeCard = ({
                       setIsPinned((p) => !p);
                     });
                   }}
-                  className={`flex items-center gap-1 text-[10px] font-semibold transition-colors ${isPinned ? "text-slate-900" : "text-slate-400 hover:text-slate-700"}`}
+                  className={`flex items-center gap-1 p-1.5 rounded text-[10px] font-semibold transition-colors ${isPinned ? "text-gray-900" : "text-gray-400 hover:text-gray-700"}`}
                 >
                   <Pin size={10} className={isPinned ? "fill-current" : ""} />{" "}
                   {isPinned ? "Pinned" : "Pin Notice"}
@@ -295,7 +295,7 @@ const NoticeCard = ({
                     e.stopPropagation();
                     act(() => onArchive?.(notice._id));
                   }}
-                  className="flex items-center gap-1 text-[10px] font-semibold text-slate-400 hover:text-slate-600 transition-colors"
+                  className="flex items-center gap-1 p-1.5 rounded text-[10px] font-semibold text-gray-400 hover:text-gray-600 transition-colors"
                 >
                   <Archive size={10} /> Archive
                 </button>
@@ -304,7 +304,7 @@ const NoticeCard = ({
                     e.stopPropagation();
                     act(() => onDelete?.(notice._id));
                   }}
-                  className="flex items-center gap-1 text-[10px] font-semibold text-slate-400 hover:text-red-500 transition-colors"
+                  className="flex items-center gap-1 p-1.5 rounded text-[10px] font-semibold text-gray-400 hover:text-red-500 transition-colors"
                 >
                   <Trash2 size={10} /> Delete Notice
                 </button>

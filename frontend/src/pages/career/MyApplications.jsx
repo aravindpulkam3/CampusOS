@@ -206,6 +206,7 @@ const Skeleton = () => (
 const MyApplications = () => {
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [filter, setFilter] = useState("all");
 
   useEffect(() => {
@@ -215,6 +216,7 @@ const MyApplications = () => {
         setApplications(res.data.data || []);
       } catch (err) {
         console.error(err);
+        setLoadError(true);
       } finally {
         setLoading(false);
       }
@@ -240,7 +242,7 @@ const MyApplications = () => {
         <div>
           <h2 className="text-lg font-semibold text-gray-900">My Applications</h2>
           <p className="text-xs text-gray-400 mt-0.5">
-            {loading ? "Loading..." : `${applications.length} total applications`}
+            {loading ? "Loading..." : loadError ? "Could not load applications" : `${applications.length} total applications`}
           </p>
         </div>
         <Link
@@ -251,7 +253,7 @@ const MyApplications = () => {
         </Link>
       </div>
 
-      <div className="flex gap-2 mb-6">
+      <div className="flex flex-wrap gap-2 mb-6">
         {filters.map((f) => (
           <button
             key={f.key}
@@ -275,6 +277,10 @@ const MyApplications = () => {
 
       {loading ? (
         <Skeleton />
+      ) : loadError ? (
+        <p role="alert" className="rounded-xl border border-red-100 bg-red-50 px-5 py-8 text-center text-sm text-red-700">
+          Could not load your applications. Please refresh and try again.
+        </p>
       ) : filtered.length > 0 ? (
         <div className="space-y-3">
           {filtered.map((app) => (

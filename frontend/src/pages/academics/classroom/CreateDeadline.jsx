@@ -223,7 +223,7 @@ export default function CreateDeadline() {
           <label className="block text-xs font-medium text-gray-700 mb-3">
             Type <span className="text-red-400">*</span>
           </label>
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {TYPES.map((t) => (
               <button
                 key={t.value}

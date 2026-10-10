@@ -127,26 +127,26 @@ const SubmitModal = ({ activeCategory, onClose, onSubmit }) => {
       <div className="bg-white rounded-2xl border border-gray-100 shadow-xl w-full max-w-md">
         <div className="flex items-center justify-between p-5 border-b border-gray-100">
           <h3 className="text-sm font-semibold text-gray-900">Submit a Resource</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-700"><LuX size={16} /></button>
+          <button onClick={onClose} aria-label="Close" className="p-1.5 -m-1.5 rounded-lg text-gray-400 hover:text-gray-700"><LuX size={16} /></button>
         </div>
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+        <form onSubmit={handleSubmit} className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
           <div>
             <label className="text-xs font-medium text-gray-700 block mb-1.5">Title <span className="text-red-400">*</span></label>
             <input type="text" placeholder="e.g. Striver's A2Z DSA Sheet" value={form.title} onChange={set("title")}
-              className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 placeholder:text-gray-300" />
+              className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100 placeholder:text-gray-300" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-medium text-gray-700 block mb-1.5">Category</label>
               <select value={form.category} onChange={set("category")}
-                className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400">
+                className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100">
                 {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
               </select>
             </div>
             <div>
               <label className="text-xs font-medium text-gray-700 block mb-1.5">Type</label>
               <select value={form.type} onChange={set("type")}
-                className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400">
+                className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100">
                 {Object.keys(resourceTypeIcon).map(t => <option key={t} value={t}>{t}</option>)}
               </select>
             </div>
@@ -154,19 +154,19 @@ const SubmitModal = ({ activeCategory, onClose, onSubmit }) => {
           <div>
             <label className="text-xs font-medium text-gray-700 block mb-1.5">URL <span className="text-red-400">*</span></label>
             <input type="url" placeholder="https://" value={form.url} onChange={set("url")}
-              className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 placeholder:text-gray-300" />
+              className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100 placeholder:text-gray-300" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-medium text-gray-700 block mb-1.5">Platform</label>
               <input type="text" placeholder="e.g. YouTube, GitHub" value={form.platform} onChange={set("platform")}
-                className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 placeholder:text-gray-300" />
+                className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100 placeholder:text-gray-300" />
             </div>
           </div>
           <div>
             <label className="text-xs font-medium text-gray-700 block mb-1.5">Description</label>
             <textarea rows={3} placeholder="Brief description of this resource..." value={form.description} onChange={set("description")}
-              className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 placeholder:text-gray-300 resize-none" />
+              className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100 placeholder:text-gray-300 resize-none" />
           </div>
           <div className="flex justify-end gap-3 pt-1">
             <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-500 border border-gray-200 rounded-lg hover:border-gray-400 transition-colors">Cancel</button>
@@ -268,7 +268,7 @@ const CompetitivePrep = () => {
           placeholder="Search resources..."
           value={search}
           onChange={e => setSearch(e.target.value)}
-          className="w-full pl-9 pr-8 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 placeholder:text-gray-300"
+          className="w-full pl-9 pr-8 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100 placeholder:text-gray-300"
         />
         {search && (
           <button onClick={() => setSearch("")} aria-label="Clear resource search" className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">

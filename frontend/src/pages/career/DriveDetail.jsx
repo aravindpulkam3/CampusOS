@@ -175,13 +175,14 @@ const Section = ({ title, children, action }) => (
 );
 
 const Modal = ({ title, onClose, children, wide }) => (
-  <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+  // m-0!: rendered inside a space-y container, whose margin would shorten the backdrop
+  <div className="fixed inset-0 m-0! bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
     <div
       className={`bg-white rounded-2xl border border-gray-100 shadow-xl w-full ${wide ? "max-w-xl" : "max-w-sm"} my-8`}
     >
       <div className="flex items-center justify-between p-5 border-b border-gray-100">
         <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
-        <button onClick={onClose} className="text-gray-400 hover:text-gray-700">
+        <button onClick={onClose} aria-label="Close" className="p-1.5 -m-1.5 rounded-lg text-gray-400 hover:text-gray-700">
           <X size={16} />
         </button>
       </div>
@@ -255,7 +256,7 @@ const RoundFormModal = ({ initial, onClose, onSubmit, title }) => {
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="e.g. Online Assessment, Technical Interview"
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400"
+            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
           />
         </div>
         <div>
@@ -266,7 +267,7 @@ const RoundFormModal = ({ initial, onClose, onSubmit, title }) => {
             type="datetime-local"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400"
+            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
           />
         </div>
         <div className="flex justify-end gap-2 pt-2">
@@ -853,11 +854,11 @@ const SettingsTab = ({ drive, onSaved }) => {
           <p className="text-xs text-green-700">Saved.</p>
         </div>
       )}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="block text-xs font-medium text-gray-700 mb-1.5">Company Name</label>
           <input
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400"
+            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
             value={form.companyName}
             onChange={set("companyName")}
           />
@@ -865,7 +866,7 @@ const SettingsTab = ({ drive, onSaved }) => {
         <div>
           <label className="block text-xs font-medium text-gray-700 mb-1.5">Role</label>
           <input
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400"
+            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
             value={form.role}
             onChange={set("role")}
           />
@@ -875,16 +876,16 @@ const SettingsTab = ({ drive, onSaved }) => {
         <label className="block text-xs font-medium text-gray-700 mb-1.5">Description</label>
         <textarea
           rows={3}
-          className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 resize-none"
+          className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100 resize-none"
           value={form.description}
           onChange={set("description")}
         />
       </div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="block text-xs font-medium text-gray-700 mb-1.5">Location</label>
           <input
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400"
+            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
             value={form.location}
             onChange={set("location")}
           />
@@ -894,18 +895,18 @@ const SettingsTab = ({ drive, onSaved }) => {
             {drive.jobType === "internship" ? "Stipend" : "CTC"}
           </label>
           <input
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400"
+            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
             value={drive.jobType === "internship" ? form.stipend : form.ctc}
             onChange={set(drive.jobType === "internship" ? "stipend" : "ctc")}
           />
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="block text-xs font-medium text-gray-700 mb-1.5">Registration Deadline</label>
           <input
             type="datetime-local"
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400"
+            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
             value={form.registrationDeadline}
             onChange={set("registrationDeadline")}
           />
@@ -913,7 +914,7 @@ const SettingsTab = ({ drive, onSaved }) => {
         <div>
           <label className="block text-xs font-medium text-gray-700 mb-1.5">Application Link</label>
           <input
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400"
+            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
             value={form.applicationLink}
             onChange={set("applicationLink")}
           />
@@ -938,6 +939,7 @@ const DriveDetail = () => {
   const [eligibility, setEligibility] = useState(null);
   const [application, setApplication] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [applying, setApplying] = useState(false);
   const [applyError, setApplyError] = useState("");
   const [tab, setTab] = useState("overview");
@@ -955,6 +957,8 @@ const DriveDetail = () => {
       setApplication(myApplication);
     } catch (err) {
       console.error(err);
+      // Anything but a 404 is a failed request, not a missing drive.
+      setLoadFailed(err.response?.status !== 404);
     } finally {
       setLoading(false);
     }
@@ -983,7 +987,9 @@ const DriveDetail = () => {
   if (!drive)
     return (
       <div className="max-w-3xl mx-auto text-center py-20">
-        <p className="text-sm text-gray-400 mb-3">Drive not found.</p>
+        <p className="text-sm text-gray-400 mb-3">
+          {loadFailed ? "Could not load this drive. Please try again." : "Drive not found."}
+        </p>
         <button
           onClick={() => navigate(-1)}
           className="text-xs text-gray-500 underline"
@@ -1115,12 +1121,12 @@ const DriveDetail = () => {
       </div>
 
       {/* ── Tabs ── */}
-      <div className="flex gap-1 border-b border-gray-100">
+      <div className="flex gap-1 border-b border-gray-100 overflow-x-auto">
         {tabs.map((t) => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${
+            className={`flex-shrink-0 px-3 py-2 text-xs font-medium border-b-2 transition-colors ${
               tab === t.key
                 ? "border-gray-900 text-gray-900"
                 : "border-transparent text-gray-400 hover:text-gray-700"
@@ -1272,6 +1278,7 @@ const DriveDetail = () => {
             <NoticeFeed
               targetType="drive"
               targetId={id}
+              showHeader={false}
               canPost={isCoordinator}
               showActions={isCoordinator}
             />

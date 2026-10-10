@@ -49,18 +49,18 @@ const SubjectRow = ({ curriculumId, subject, onChanged }) => {
         <input
           value={form.name}
           onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-          className="flex-1 px-2 py-1 text-xs border border-gray-200 rounded-lg outline-none focus:border-gray-400"
+          className="flex-1 min-w-0 px-2 py-1 text-xs border border-gray-200 rounded-lg outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
         />
         <input
           value={form.code}
           onChange={(e) => setForm((p) => ({ ...p, code: e.target.value }))}
           placeholder="Code"
-          className="w-20 px-2 py-1 text-xs border border-gray-200 rounded-lg outline-none focus:border-gray-400"
+          className="w-20 px-2 py-1 text-xs border border-gray-200 rounded-lg outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
         />
-        <button onClick={handleSave} disabled={busy} className="text-green-600 hover:text-green-700">
+        <button onClick={handleSave} disabled={busy} aria-label="Save subject" className="p-1.5 rounded text-green-600 hover:text-green-700">
           <Check size={13} />
         </button>
-        <button onClick={() => setEditing(false)} className="text-gray-400 hover:text-gray-700">
+        <button onClick={() => setEditing(false)} aria-label="Cancel editing" className="p-1.5 rounded text-gray-400 hover:text-gray-700">
           <X size={13} />
         </button>
       </div>
@@ -69,17 +69,17 @@ const SubjectRow = ({ curriculumId, subject, onChanged }) => {
 
   return (
     <div>
-      <div className="flex items-center justify-between py-1.5 group">
-        <div className="text-xs text-gray-700">
+      <div className="flex items-center justify-between gap-2 py-0.5">
+        <div className="min-w-0 text-xs text-gray-700 break-words">
           {subject.name}
           {subject.code && <span className="text-gray-400"> ({subject.code})</span>}
         </div>
-        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button onClick={() => setEditing(true)} className="text-gray-400 hover:text-gray-900">
-            <Pencil size={11} />
+        <div className="flex items-center flex-shrink-0 -mr-1.5">
+          <button onClick={() => setEditing(true)} aria-label="Edit subject" className="p-1.5 rounded text-gray-400 hover:text-gray-900">
+            <Pencil size={12} />
           </button>
-          <button onClick={handleDelete} disabled={busy} className="text-gray-400 hover:text-red-500">
-            <Trash2 size={11} />
+          <button onClick={handleDelete} disabled={busy} aria-label="Delete subject" className="p-1.5 rounded text-gray-400 hover:text-red-500">
+            <Trash2 size={12} />
           </button>
         </div>
       </div>
@@ -127,7 +127,7 @@ const CurriculumCard = ({ curriculum, onChanged }) => {
         <p className="text-sm font-semibold text-gray-900">
           {curriculum.branch} — Semester {curriculum.semesterNumber}
         </p>
-        <button onClick={handleDeleteCurriculum} disabled={busy} className="text-gray-400 hover:text-red-500">
+        <button onClick={handleDeleteCurriculum} disabled={busy} aria-label="Delete curriculum" className="p-1.5 -m-1.5 rounded text-gray-400 hover:text-red-500">
           <Trash2 size={13} />
         </button>
       </div>
@@ -153,13 +153,13 @@ const CurriculumCard = ({ curriculum, onChanged }) => {
           placeholder="New subject name"
           value={newSubject.name}
           onChange={(e) => setNewSubject((p) => ({ ...p, name: e.target.value }))}
-          className="flex-1 px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg outline-none focus:border-gray-400"
+          className="flex-1 min-w-0 px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
         />
         <input
           placeholder="Code"
           value={newSubject.code}
           onChange={(e) => setNewSubject((p) => ({ ...p, code: e.target.value }))}
-          className="w-20 px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg outline-none focus:border-gray-400"
+          className="w-20 px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
         />
         <button
           type="submit"
@@ -241,7 +241,7 @@ const CurriculumManagement = () => {
               placeholder="e.g. CSE"
               value={createForm.branch}
               onChange={(e) => setCreateForm((p) => ({ ...p, branch: e.target.value }))}
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-gray-400"
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
             />
           </div>
           <div>
@@ -253,7 +253,7 @@ const CurriculumManagement = () => {
               placeholder="1-8"
               value={createForm.semesterNumber}
               onChange={(e) => setCreateForm((p) => ({ ...p, semesterNumber: e.target.value }))}
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-gray-400"
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
             />
           </div>
           <button

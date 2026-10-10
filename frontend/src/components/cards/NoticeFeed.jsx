@@ -55,6 +55,7 @@ const NoticeFeed = ({
   canPost = false,
   showActions = false,
   title = "Notices",
+  showHeader = true, // false when the caller already renders its own heading
   compact = false, // Layout styling flag only now
 }) => {
   const navigate = useNavigate();
@@ -108,6 +109,7 @@ const NoticeFeed = ({
   return (
     <div>
       {/* Header */}
+      {showHeader && (
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           {urgentCount > 0 ? (
@@ -128,6 +130,7 @@ const NoticeFeed = ({
           )}
         </div>
       </div>
+      )}
 
       {/* Body */}
       {loading ? (

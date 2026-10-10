@@ -10,7 +10,7 @@ export const getNotificationPath = (notification) => {
     case "discussion":
       return targetId ? `/discussions/${targetId}` : "/discussions";
     case "announcement":
-      return "/community/announcements";
+      return "/community";
     default:
       return "/";
   }

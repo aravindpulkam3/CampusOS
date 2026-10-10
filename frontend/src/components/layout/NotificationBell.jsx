@@ -30,6 +30,7 @@ const NotificationBell = () => {
     <div ref={containerRef} className="relative">
       <button
         onClick={() => setIsOpen((p) => !p)}
+        aria-label="Notifications"
         className="relative p-2 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
       >
         <Bell size={17} />
@@ -39,7 +40,7 @@ const NotificationBell = () => {
       </button>
 
       {isOpen && (
-        <div className="absolute top-[calc(100%+8px)] right-0 w-80 max-sm:fixed max-sm:top-16 max-sm:inset-x-4 max-sm:w-auto bg-white border border-gray-100 rounded-2xl shadow-xl overflow-hidden z-50 flex flex-col max-h-[520px]">
+        <div className="absolute top-[calc(100%+8px)] right-0 w-80 max-sm:fixed max-sm:top-16 max-sm:inset-x-4 max-sm:w-auto bg-white border border-gray-100 rounded-2xl shadow-xl overflow-hidden z-50 flex flex-col max-h-[min(520px,calc(100dvh-5rem))]">
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-50 flex-shrink-0">
             <span className="text-xs font-semibold text-gray-900">Notifications</span>

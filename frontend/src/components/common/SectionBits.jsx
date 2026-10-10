@@ -1,11 +1,11 @@
 import { Link } from "react-router-dom";
 
 // Small structural pieces shared by detail pages. Deliberately neutral: the
-// defaults are plain slate, and every colour can be overridden by the caller,
+// defaults are plain gray, and every colour can be overridden by the caller,
 // so a page with its own accent (e.g. EventDetail) is never boxed in.
 
 export const focusRing =
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/15";
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15";
 
 export const SectionHeader = ({
   id,
@@ -13,8 +13,8 @@ export const SectionHeader = ({
   title,
   count,
   className = "mb-3 px-1",
-  iconClassName = "text-slate-400",
-  titleClassName = "text-sm font-semibold text-slate-800",
+  iconClassName = "text-gray-400",
+  titleClassName = "text-sm font-semibold text-gray-800",
 }) => (
   <div className={`flex items-center gap-2 ${className}`}>
     {Icon && <Icon size={15} className={iconClassName} aria-hidden="true" />}
@@ -22,7 +22,7 @@ export const SectionHeader = ({
       {title}
     </h2>
     {count > 0 && (
-      <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-md">
+      <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded-md">
         {count}
       </span>
     )}
@@ -37,8 +37,8 @@ export const ManageLink = ({
   state,
   icon: Icon,
   children,
-  className = "text-slate-600 border-transparent hover:bg-white hover:border-slate-200 hover:text-slate-900",
-  iconClassName = "text-slate-400",
+  className = "text-gray-600 border-transparent hover:bg-white hover:border-gray-200 hover:text-gray-900",
+  iconClassName = "text-gray-400",
   focusClassName = focusRing,
 }) => (
   <Link

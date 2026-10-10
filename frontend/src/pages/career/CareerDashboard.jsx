@@ -63,8 +63,8 @@ const CompanyAvatar = ({ logo, name, size = "w-9 h-9" }) => (
 // ─── Skeleton ─────────────────────────────────────────────────
 const Skeleton = () => (
   <div className="max-w-5xl mx-auto animate-pulse space-y-5">
-    <div className="bg-white border border-gray-100 rounded-xl p-3.5 grid grid-cols-4 gap-px">
-      {[...Array(4)].map((_, i) => (
+    <div className="bg-white border border-gray-100 rounded-xl p-3.5 grid grid-cols-3 gap-px">
+      {[...Array(3)].map((_, i) => (
         <div key={i} className="px-4 space-y-2">
           <div className="w-16 h-2.5 bg-gray-100 rounded" />
           <div className="w-8 h-5 bg-gray-100 rounded" />
@@ -248,6 +248,7 @@ const CareerDashboard = () => {
   const { user } = useAuth();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -256,6 +257,7 @@ const CareerDashboard = () => {
         setData(res.data.data);
       } catch (err) {
         console.error(err);
+        setLoadError(true);
       } finally {
         setLoading(false);
       }
@@ -263,6 +265,14 @@ const CareerDashboard = () => {
   }, []);
 
   if (loading) return <Skeleton />;
+  if (loadError)
+    return (
+      <div className="max-w-5xl mx-auto">
+        <p role="alert" className="rounded-xl border border-red-100 bg-red-50 px-5 py-8 text-center text-sm text-red-700">
+          Could not load your career overview. Please refresh and try again.
+        </p>
+      </div>
+    );
 
   const {
     eligibleDrives = [],
@@ -300,7 +310,7 @@ const CareerDashboard = () => {
             color: "text-amber-600",
           },
         ].map(({ label, value, icon: Icon, color }) => (
-          <div key={label} className="flex items-center gap-3 px-5 py-3.5">
+          <div key={label} className="flex items-center gap-2 sm:gap-3 px-3 sm:px-5 py-3.5">
             <Icon size={16} className={`${color} flex-shrink-0`} />
             <div>
               <p className="text-xl font-bold text-gray-900 leading-none">
@@ -389,7 +399,7 @@ const CareerDashboard = () => {
               <NoticeFeed
                 targetType="career"
                 compact={true}
-                title="Placement Notices"
+                showHeader={false}
                 canPost={
                   user?.role === "superadmin" ||
                   user?.role == "placementCoordinator"

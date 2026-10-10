@@ -17,7 +17,7 @@ const relativeTime = (d) => {
 };
 
 const clubBg = [
-  "bg-slate-900",
+  "bg-gray-900",
   "bg-blue-600",
   "bg-purple-600",
   "bg-emerald-600",
@@ -87,7 +87,7 @@ const AnnouncementCard = ({
   const authorInitials = isPopulated
     ? `${author.firstName?.[0] ?? ""}${author.lastName?.[0] ?? ""}`.toUpperCase()
     : "A";
-  const authorAvatarBg = avatarBg || "bg-slate-800";
+  const authorAvatarBg = avatarBg || "bg-gray-800";
 
   const handleDeleteClick = async (e) => {
     e.stopPropagation();
@@ -111,14 +111,14 @@ const AnnouncementCard = ({
   return (
     <div
       onClick={isFeed && onClick ? onClick : undefined}
-      className={`bg-white border border-slate-100 rounded-2xl overflow-hidden transition-all duration-200 shadow-3xs
-        ${isFeed && onClick ? "cursor-pointer hover:border-slate-300 hover:shadow-2xs group" : ""}
+      className={`bg-white border border-gray-100 rounded-2xl overflow-hidden transition-all duration-200
+        ${isFeed && onClick ? "cursor-pointer hover:border-gray-300 hover:shadow-2xs group" : ""}
         ${isDeleting ? "opacity-50 pointer-events-none" : ""}
       `}
     >
       {/* Feed Card Top Hero Image */}
       {isFeed && announcement.image && (
-        <div className="w-full h-44 sm:h-48 overflow-hidden bg-slate-50 border-b border-slate-100">
+        <div className="w-full h-44 sm:h-48 overflow-hidden bg-gray-50 border-b border-gray-100">
           <img
             src={announcement.image}
             alt=""
@@ -139,14 +139,14 @@ const AnnouncementCard = ({
               {tConf.label}
             </span>
             <div className="flex items-center gap-2">
-              <span className="text-[11px] text-slate-400 font-medium">
+              <span className="text-[11px] text-gray-400 font-medium">
                 {relativeTime(announcement.createdAt)}
               </span>
               {(isEligible || user?.role === "superadmin") && (
                 <button
                   onClick={handleDeleteClick}
                   aria-label="Delete announcement"
-                  className="text-slate-400 hover:text-red-500 p-1.5 rounded-xl hover:bg-red-50 transition-colors"
+                  className="text-gray-400 hover:text-red-500 p-1.5 rounded-xl hover:bg-red-50 transition-colors"
                 >
                   <Trash2 size={13} />
                 </button>
@@ -174,10 +174,10 @@ const AnnouncementCard = ({
                 )}
               </div>
               <div className="min-w-0">
-                <p className="text-xs font-bold text-slate-800 leading-tight">
+                <p className="text-xs font-bold text-gray-800 leading-tight">
                   {authorName}
                 </p>
-                <p className="text-[11px] text-slate-500 font-medium mt-px">
+                <p className="text-[11px] text-gray-500 font-medium mt-px">
                   {relativeTime(announcement.createdAt)}
                 </p>
               </div>
@@ -186,7 +186,7 @@ const AnnouncementCard = ({
               <button
                 onClick={handleDeleteClick}
                 aria-label="Delete announcement"
-                className="text-slate-400 hover:text-red-500 p-1.5 rounded-xl hover:bg-red-50 transition-colors"
+                className="text-gray-400 hover:text-red-500 p-1.5 rounded-xl hover:bg-red-50 transition-colors"
               >
                 <Trash2 size={13} />
               </button>
@@ -196,7 +196,7 @@ const AnnouncementCard = ({
 
         {/* Core content header title string block */}
         <div className="space-y-1 min-w-0">
-          <h3 className="text-xs sm:text-sm font-bold text-slate-800 leading-snug tracking-tight break-words">
+          <h3 className="text-xs sm:text-sm font-bold text-gray-800 leading-snug tracking-tight break-words">
             {announcement.title}
           </h3>
 
@@ -205,7 +205,7 @@ const AnnouncementCard = ({
             <div className="relative">
               <p
                 ref={bodyRef}
-                className={`text-xs text-slate-500 font-medium leading-relaxed whitespace-pre-line break-words
+                className={`text-xs text-gray-500 font-medium leading-relaxed whitespace-pre-line break-words
         ${!isExpanded ? "line-clamp-3" : ""}`}
               >
                 {announcement.body}
@@ -215,7 +215,7 @@ const AnnouncementCard = ({
                 <button
                   onClick={toggleExpand}
                   aria-expanded={isExpanded}
-                  className="flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-700 mt-1.5 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/15 transition-colors"
+                  className="flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-700 mt-1.5 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15 transition-colors"
                 >
                   {isExpanded ? (
                     <>
@@ -234,7 +234,7 @@ const AnnouncementCard = ({
 
         {/* Inline Content Attachment Image (Detail variant layout placement) */}
         {!isFeed && announcement.image && (
-          <div className="w-full rounded-2xl overflow-hidden border border-slate-100 bg-slate-50/50 shadow-3xs">
+          <div className="w-full rounded-2xl overflow-hidden border border-gray-100 bg-gray-50/50">
             <img
               src={announcement.image}
               alt=""
@@ -246,14 +246,14 @@ const AnnouncementCard = ({
 
         {/* Feed Source Chip Summary Footer Block */}
         {isFeed && sourceName && (
-          <div className="flex items-center gap-2 pt-3 border-t border-slate-50">
+          <div className="flex items-center gap-2 pt-3 border-t border-gray-50">
             <div
               className={`w-5 h-5 rounded-md ${sourceAvatarBg} flex items-center justify-center text-white font-black flex-shrink-0 border border-black/5`}
               style={{ fontSize: "8px" }}
             >
               {sourceInitials}
             </div>
-            <span className="text-[11px] font-semibold text-slate-400 truncate">
+            <span className="text-[11px] font-semibold text-gray-400 truncate">
               {sourceName}
             </span>
           </div>

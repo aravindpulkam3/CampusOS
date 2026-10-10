@@ -30,21 +30,21 @@ const Label = ({ children, required, optional }) => (
 const Input = (props) => (
   <input
     {...props}
-    className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 placeholder:text-gray-300 transition-colors"
+    className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100 placeholder:text-gray-300 transition-colors"
   />
 )
 
 const Select = (props) => (
   <select
     {...props}
-    className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 transition-colors bg-no-repeat appearance-none"
+    className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100 transition-colors"
   />
 )
 
 const Textarea = (props) => (
   <textarea
     {...props}
-    className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 placeholder:text-gray-300 transition-colors resize-none"
+    className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100 placeholder:text-gray-300 transition-colors resize-none"
   />
 )
 
@@ -222,7 +222,7 @@ const CreateDrive = () => {
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         {/* ── Company & Role ── */}
         <Section title="Company & Role">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <Label required>Company Name</Label>
               <Input
@@ -245,7 +245,7 @@ const CreateDrive = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <Label optional>Company Logo URL</Label>
               <Input
@@ -267,7 +267,7 @@ const CreateDrive = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <Label required>Job Type</Label>
               <Select value={form.jobType} onChange={set("jobType")}>
@@ -300,7 +300,7 @@ const CreateDrive = () => {
 
         {/* ── Compensation & Terms ── */}
         <Section title="Compensation & Terms">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {form.jobType === "fulltime" ? (
               <div>
                 <Label optional>CTC</Label>
@@ -353,7 +353,7 @@ const CreateDrive = () => {
             )}
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <Label>Minimum CGPA</Label>
               <Input
@@ -389,7 +389,7 @@ const CreateDrive = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <Label>Minimum Academic Year</Label>
               <Select value={form.minYear} onChange={set("minYear")}>
@@ -412,7 +412,7 @@ const CreateDrive = () => {
 
         {/* ── Application ── */}
         <Section title="Application Details">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <Label optional>Total Slots Available</Label>
               <Input

@@ -39,7 +39,7 @@ import { formatEventDay, registrationCutoff } from "../events/eventDates";
 
 // ─── Helpers ──────────────────────────────────────────────────
 const clubBg = [
-  "bg-slate-900",
+  "bg-gray-900",
   "bg-blue-600",
   "bg-purple-600",
   "bg-emerald-600",
@@ -96,27 +96,27 @@ const eventStatus = (event, registered, now) => {
       label: `Registration closes ${formatShortDate(cutoff)}`,
       color: soon
         ? "bg-amber-50 text-amber-700 border-amber-100"
-        : "bg-slate-50 text-slate-600 border-slate-200/70",
+        : "bg-gray-50 text-gray-600 border-gray-200/70",
     };
   }
-  return { label: "Registration closed", color: "bg-slate-50 text-slate-500 border-slate-200/70" };
+  return { label: "Registration closed", color: "bg-gray-50 text-gray-500 border-gray-200/70" };
 };
 
 // ─── Small building blocks ────────────────────────────────────
 const Skeleton = () => (
-  <div className="max-w-5xl mx-auto px-4 sm:px-6 py-2 space-y-5 animate-pulse">
-    <div className="w-12 h-3 bg-slate-200 rounded" />
-    <div className="bg-white border border-slate-100 rounded-2xl overflow-hidden">
-      <div className="h-24 sm:h-32 bg-slate-100" />
+  <div className="max-w-5xl mx-auto space-y-5 animate-pulse">
+    <div className="w-12 h-3 bg-gray-200 rounded" />
+    <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden">
+      <div className="h-24 sm:h-32 bg-gray-100" />
       <div className="px-4 sm:px-5 pb-5">
-        <div className="w-16 h-16 sm:w-20 sm:h-20 -mt-8 sm:-mt-10 rounded-2xl bg-slate-200 border-4 border-white" />
-        <div className="mt-3 w-48 h-5 bg-slate-100 rounded" />
-        <div className="mt-2 w-64 max-w-full h-3 bg-slate-100 rounded" />
+        <div className="w-16 h-16 sm:w-20 sm:h-20 -mt-8 sm:-mt-10 rounded-2xl bg-gray-200 border-4 border-white" />
+        <div className="mt-3 w-48 h-5 bg-gray-100 rounded" />
+        <div className="mt-2 w-64 max-w-full h-3 bg-gray-100 rounded" />
       </div>
     </div>
-    <div className="h-28 bg-white border border-slate-100 rounded-2xl" />
-    <div className="h-20 bg-white border border-slate-100 rounded-2xl" />
-    <div className="h-48 bg-white border border-slate-100 rounded-2xl" />
+    <div className="h-28 bg-white border border-gray-100 rounded-2xl" />
+    <div className="h-20 bg-white border border-gray-100 rounded-2xl" />
+    <div className="h-48 bg-white border border-gray-100 rounded-2xl" />
   </div>
 );
 
@@ -134,12 +134,12 @@ const EventRow = ({ event, status, past = false }) => {
     <li>
       <Link
         to={`/community/events/${event._id}`}
-        className="group flex items-center gap-3 sm:gap-4 px-4 py-3 hover:bg-slate-50/70 focus-visible:outline-none focus-visible:bg-slate-50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-slate-900/15 transition-colors"
+        className="group flex items-center gap-3 sm:gap-4 px-4 py-3 hover:bg-gray-50/70 focus-visible:outline-none focus-visible:bg-gray-50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gray-900/15 transition-colors"
       >
         {/* Event banner as the thumbnail; the date tile stands in when there is none. */}
         <div
           className={`w-20 h-14 sm:w-24 sm:h-16 flex-shrink-0 rounded-xl border overflow-hidden flex flex-col items-center justify-center ${
-            past ? "border-slate-100 bg-slate-50/60" : "border-slate-200 bg-white"
+            past ? "border-gray-100 bg-gray-50/60" : "border-gray-200 bg-white"
           }`}
         >
           {showBanner ? (
@@ -152,12 +152,12 @@ const EventRow = ({ event, status, past = false }) => {
             />
           ) : (
             <>
-              <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+              <div className="text-[10px] font-bold uppercase tracking-wide text-gray-500">
                 {start.toLocaleDateString("en-IN", { month: "short" })}
               </div>
               <div
                 className={`text-lg font-black leading-none mt-0.5 ${
-                  past ? "text-slate-500" : "text-slate-800"
+                  past ? "text-gray-500" : "text-gray-800"
                 }`}
               >
                 {start.getDate()}
@@ -169,19 +169,19 @@ const EventRow = ({ event, status, past = false }) => {
         <div className="flex-1 min-w-0">
           <p
             className={`text-sm font-semibold truncate transition-colors group-hover:text-blue-600 ${
-              past ? "text-slate-500" : "text-slate-800"
+              past ? "text-gray-500" : "text-gray-800"
             }`}
           >
             {event.eventName}
           </p>
-          <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] font-medium text-slate-500">
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] font-medium text-gray-500">
             <span className="flex items-center gap-1">
-              <Clock size={11} className="text-slate-400 flex-shrink-0" />
+              <Clock size={11} className="text-gray-400 flex-shrink-0" />
               {formatEventWhen(event.startDateTime, event.endDateTime)}
             </span>
             {event.venue && (
               <span className="flex items-center gap-1 min-w-0">
-                <MapPin size={11} className="text-slate-400 flex-shrink-0" />
+                <MapPin size={11} className="text-gray-400 flex-shrink-0" />
                 <span className="truncate">{event.venue}</span>
               </span>
             )}
@@ -192,7 +192,7 @@ const EventRow = ({ event, status, past = false }) => {
         {status && <StatusChip status={status} className="hidden sm:inline-flex flex-shrink-0" />}
         <ChevronRight
           size={14}
-          className="flex-shrink-0 text-slate-300 transition-colors group-hover:text-slate-500"
+          className="flex-shrink-0 text-gray-300 transition-colors group-hover:text-gray-500"
         />
       </Link>
     </li>
@@ -360,10 +360,10 @@ const ClubDetail = () => {
   if (loadError || !club)
     return (
       <div className="max-w-md mx-auto text-center py-20 px-4 space-y-3">
-        <p className="text-sm font-semibold text-slate-700">
+        <p className="text-sm font-semibold text-gray-700">
           {loadError === "failed" ? "Couldn't load this club" : "Club not found"}
         </p>
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-gray-500">
           {loadError === "failed"
             ? "Check your connection and try again."
             : "It may have been removed, or the link is incorrect."}
@@ -371,14 +371,14 @@ const ClubDetail = () => {
         {loadError === "failed" ? (
           <button
             onClick={() => setReloadKey((k) => k + 1)}
-            className={`px-3.5 py-2 text-xs font-bold rounded-xl border border-slate-200 text-slate-600 bg-white hover:border-slate-400 hover:text-slate-900 transition-colors ${focusRing}`}
+            className={`px-3.5 py-2 text-xs font-bold rounded-xl border border-gray-200 text-gray-600 bg-white hover:border-gray-400 hover:text-gray-900 transition-colors ${focusRing}`}
           >
             Try again
           </button>
         ) : (
           <Link
             to="/community/clubs"
-            className={`inline-block px-3.5 py-2 text-xs font-bold rounded-xl border border-slate-200 text-slate-600 bg-white hover:border-slate-400 hover:text-slate-900 transition-colors ${focusRing}`}
+            className={`inline-block px-3.5 py-2 text-xs font-bold rounded-xl border border-gray-200 text-gray-600 bg-white hover:border-gray-400 hover:text-gray-900 transition-colors ${focusRing}`}
           >
             Back to clubs
           </Link>
@@ -395,18 +395,18 @@ const ClubDetail = () => {
   const hiddenTeamCount = coreTeam.length - shownTeam.length;
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-2 space-y-5">
+    <div className="max-w-5xl mx-auto space-y-5">
       <button
         onClick={() => navigate(-1)}
-        className={`inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-800 rounded transition-colors ${focusRing}`}
+        className={`inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-gray-800 rounded transition-colors ${focusRing}`}
       >
         <ArrowLeft size={13} /> Back
       </button>
 
       {/* ── Header ── */}
-      <header className="bg-white border border-slate-100 rounded-2xl overflow-hidden">
+      <header className="bg-white border border-gray-100 rounded-2xl overflow-hidden">
         <div
-          className={`${showClubBanner ? "h-28 sm:h-40" : "h-14 sm:h-16"} bg-slate-100 border-b border-slate-100`}
+          className={`${showClubBanner ? "h-28 sm:h-40" : "h-14 sm:h-16"} bg-gray-100 border-b border-gray-100`}
         >
           {showClubBanner && (
             <img
@@ -446,8 +446,8 @@ const ClubDetail = () => {
                   disabled={mutePending}
                   aria-label={isMuted ? "Unmute notifications from this club" : "Mute notifications from this club"}
                   title={isMuted ? "Unmute notifications" : "Mute notifications"}
-                  className={`p-2 rounded-xl border border-slate-200 bg-white transition-colors hover:border-slate-400 hover:text-slate-900 disabled:opacity-60 disabled:cursor-wait ${
-                    isMuted ? "text-slate-400" : "text-slate-600"
+                  className={`p-2 rounded-xl border border-gray-200 bg-white transition-colors hover:border-gray-400 hover:text-gray-900 disabled:opacity-60 disabled:cursor-wait ${
+                    isMuted ? "text-gray-400" : "text-gray-600"
                   } ${focusRing}`}
                 >
                   {isMuted ? <BellOff size={14} /> : <Bell size={14} />}
@@ -458,8 +458,8 @@ const ClubDetail = () => {
                 disabled={followPending}
                 className={`group/follow min-w-[88px] px-3.5 py-2 text-xs font-bold rounded-xl border transition-colors disabled:opacity-60 disabled:cursor-wait ${focusRing} ${
                   isFollowing
-                    ? "border-slate-200 text-slate-600 bg-white hover:border-red-200 hover:text-red-500 hover:bg-red-50/40"
-                    : "border-slate-900 bg-slate-900 text-white hover:bg-slate-800"
+                    ? "border-gray-200 text-gray-600 bg-white hover:border-red-200 hover:text-red-500 hover:bg-red-50/40"
+                    : "border-gray-900 bg-gray-900 text-white hover:bg-gray-800"
                 }`}
               >
                 {isFollowing ? (
@@ -475,27 +475,27 @@ const ClubDetail = () => {
           </div>
 
           <div className="mt-3 min-w-0">
-            <h1 className="text-lg sm:text-xl font-bold text-slate-800 tracking-tight leading-tight break-words">
+            <h1 className="text-lg sm:text-xl font-bold text-gray-800 tracking-tight leading-tight break-words">
               {club.clubName}
             </h1>
-            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs font-medium text-slate-500">
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs font-medium text-gray-500">
               {club.category && (
                 <span
-                  className={`inline-flex ${chipBase} ${categoryColor[club.category] || "bg-slate-50 text-slate-600 border-slate-200"}`}
+                  className={`inline-flex ${chipBase} ${categoryColor[club.category] || "bg-gray-50 text-gray-600 border-gray-200"}`}
                 >
                   {club.category}
                 </span>
               )}
               <span className="flex items-center gap-1">
-                <Users size={12} className="text-slate-400" />
+                <Users size={12} className="text-gray-400" />
                 {club.followerCount ?? 0} {club.followerCount === 1 ? "follower" : "followers"}
               </span>
               <span className="flex items-center gap-1">
-                <Shield size={12} className="text-slate-400" />
+                <Shield size={12} className="text-gray-400" />
                 {coreTeam.length} core {coreTeam.length === 1 ? "member" : "members"}
               </span>
               {isCoreMember && (
-                <span className={`inline-flex ${chipBase} bg-slate-900 text-white border-slate-900`}>
+                <span className={`inline-flex ${chipBase} bg-gray-900 text-white border-gray-900`}>
                   Core member
                 </span>
               )}
@@ -509,8 +509,8 @@ const ClubDetail = () => {
         </div>
 
         {isAdmin && (
-          <div className="flex flex-wrap items-center gap-1 px-3 sm:px-4 py-2 border-t border-slate-100 bg-slate-50/60">
-            <span className="px-1.5 mr-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+          <div className="flex flex-wrap items-center gap-1 px-3 sm:px-4 py-2 border-t border-gray-100 bg-gray-50/60">
+            <span className="px-1.5 mr-1 text-[10px] font-bold uppercase tracking-wider text-gray-500">
               Manage
             </span>
             <ManageLink to={`/clubs/${clubId}/create-notice`} icon={Plus}>
@@ -536,18 +536,18 @@ const ClubDetail = () => {
       {/* ── About ── */}
       <section
         aria-labelledby="club-about"
-        className="bg-white border border-slate-100 rounded-2xl p-4 sm:p-5"
+        className="bg-white border border-gray-100 rounded-2xl p-4 sm:p-5"
       >
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
           <div className="md:col-span-2 min-w-0">
-            <h2 id="club-about" className="text-sm font-semibold text-slate-800 mb-1.5">
+            <h2 id="club-about" className="text-sm font-semibold text-gray-800 mb-1.5">
               About
             </h2>
             {club.description ? (
               <>
                 <p
                   ref={descriptionRef}
-                  className={`text-[13px] text-slate-600 leading-relaxed whitespace-pre-line break-words ${
+                  className={`text-[13px] text-gray-600 leading-relaxed whitespace-pre-line break-words ${
                     aboutExpanded ? "" : "line-clamp-4"
                   }`}
                 >
@@ -572,15 +572,15 @@ const ClubDetail = () => {
                 )}
               </>
             ) : (
-              <p className="text-xs text-slate-400">No description yet.</p>
+              <p className="text-xs text-gray-400">No description yet.</p>
             )}
           </div>
 
-          <dl className="space-y-3 text-xs pt-4 border-t border-slate-100 md:pt-0 md:border-t-0 md:border-l md:pl-6">
+          <dl className="space-y-3 text-xs pt-4 border-t border-gray-100 md:pt-0 md:border-t-0 md:border-l md:pl-6">
             {club.createdAt && (
               <div className="flex items-center justify-between gap-3">
-                <dt className="font-medium text-slate-500">Created</dt>
-                <dd className="font-semibold text-slate-700">
+                <dt className="font-medium text-gray-500">Created</dt>
+                <dd className="font-semibold text-gray-700">
                   {new Date(club.createdAt).toLocaleDateString("en-IN", {
                     month: "short",
                     year: "numeric",
@@ -590,7 +590,7 @@ const ClubDetail = () => {
             )}
             {coreTeam.length > 0 && (
               <div>
-                <dt className="font-medium text-slate-500 mb-2">Core team</dt>
+                <dt className="font-medium text-gray-500 mb-2">Core team</dt>
                 <dd>
                   <ul className="grid grid-cols-2 gap-x-3 gap-y-2">
                     {shownTeam.map((member, i) => (
@@ -604,14 +604,14 @@ const ClubDetail = () => {
                             `${member.firstName?.[0] ?? ""}${member.lastName?.[0] ?? ""}`
                           )}
                         </div>
-                        <span className="font-semibold text-slate-700 truncate">
+                        <span className="font-semibold text-gray-700 truncate">
                           {member.firstName} {member.lastName}
                         </span>
                       </li>
                     ))}
                   </ul>
                   {hiddenTeamCount > 0 && (
-                    <p className="mt-2 text-[11px] font-medium text-slate-500">
+                    <p className="mt-2 text-[11px] font-medium text-gray-500">
                       +{hiddenTeamCount} more
                     </p>
                   )}
@@ -648,14 +648,14 @@ const ClubDetail = () => {
           title="Events"
           count={upcomingEvents.length}
         />
-        <div className="bg-white border border-slate-100 rounded-2xl overflow-hidden">
+        <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden">
           {pastEvents.length > 0 && (
-            <h3 className="px-4 py-2 border-b border-slate-100 bg-slate-50/60 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+            <h3 className="px-4 py-2 border-b border-gray-100 bg-gray-50/60 text-[10px] font-bold uppercase tracking-wider text-gray-500">
               Upcoming
             </h3>
           )}
           {upcomingEvents.length > 0 ? (
-            <ul className="divide-y divide-slate-100">
+            <ul className="divide-y divide-gray-100">
               {upcomingEvents.map((event) => (
                 <EventRow
                   key={event._id}
@@ -665,22 +665,22 @@ const ClubDetail = () => {
               ))}
             </ul>
           ) : (
-            <p className="px-4 py-4 text-xs text-slate-500">No upcoming events.</p>
+            <p className="px-4 py-4 text-xs text-gray-500">No upcoming events.</p>
           )}
 
           {pastEvents.length > 0 && (
             <>
-              <div className="flex items-center justify-between gap-3 px-4 py-2 border-y border-slate-100 bg-slate-50/60">
-                <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+              <div className="flex items-center justify-between gap-3 px-4 py-2 border-y border-gray-100 bg-gray-50/60">
+                <h3 className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
                   Past
                 </h3>
                 {pastEventCount > pastEvents.length && (
-                  <span className="text-[11px] font-medium text-slate-500">
+                  <span className="text-[11px] font-medium text-gray-500">
                     Latest {pastEvents.length} of {pastEventCount}
                   </span>
                 )}
               </div>
-              <ul className="divide-y divide-slate-100">
+              <ul className="divide-y divide-gray-100">
                 {pastEvents.map((event) => (
                   <EventRow
                     key={event._id}
@@ -702,8 +702,8 @@ const ClubDetail = () => {
         <SectionHeader id="club-announcements" icon={Megaphone} title="Announcements" />
         {feedLoading && announcements.length === 0 ? (
           <div className="space-y-3 animate-pulse">
-            <div className="h-24 bg-white border border-slate-100 rounded-2xl" />
-            <div className="h-24 bg-white border border-slate-100 rounded-2xl" />
+            <div className="h-24 bg-white border border-gray-100 rounded-2xl" />
+            <div className="h-24 bg-white border border-gray-100 rounded-2xl" />
           </div>
         ) : announcements.length > 0 ? (
           <div className="space-y-3">
@@ -726,11 +726,11 @@ const ClubDetail = () => {
               <button
                 onClick={handleLoadMore}
                 disabled={loadMoreLoading}
-                className={`flex items-center justify-center gap-2 w-full py-2.5 text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:border-slate-400 hover:text-slate-900 transition-colors disabled:opacity-60 ${focusRing}`}
+                className={`flex items-center justify-center gap-2 w-full py-2.5 text-xs font-bold text-gray-600 bg-white border border-gray-200 rounded-xl hover:border-gray-400 hover:text-gray-900 transition-colors disabled:opacity-60 ${focusRing}`}
               >
                 {loadMoreLoading ? (
                   <>
-                    <Loader2 size={13} className="animate-spin text-slate-400" /> Loading…
+                    <Loader2 size={13} className="animate-spin text-gray-400" /> Loading…
                   </>
                 ) : feedError ? (
                   "Try again"
@@ -741,17 +741,17 @@ const ClubDetail = () => {
             )}
           </div>
         ) : feedError ? (
-          <div className="flex items-center justify-between gap-3 px-4 py-4 bg-white border border-slate-100 rounded-2xl">
-            <p className="text-xs text-slate-500">Couldn't load announcements.</p>
+          <div className="flex items-center justify-between gap-3 px-4 py-4 bg-white border border-gray-100 rounded-2xl">
+            <p className="text-xs text-gray-500">Couldn't load announcements.</p>
             <button
               onClick={() => fetchAnnouncements(0, false)}
-              className={`px-3 py-1.5 text-xs font-bold rounded-xl border border-slate-200 text-slate-600 bg-white hover:border-slate-400 hover:text-slate-900 transition-colors ${focusRing}`}
+              className={`px-3 py-1.5 text-xs font-bold rounded-xl border border-gray-200 text-gray-600 bg-white hover:border-gray-400 hover:text-gray-900 transition-colors ${focusRing}`}
             >
               Try again
             </button>
           </div>
         ) : (
-          <p className="px-4 py-4 text-xs text-slate-500 bg-white border border-slate-100 rounded-2xl">
+          <p className="px-4 py-4 text-xs text-gray-500 bg-white border border-gray-100 rounded-2xl">
             No announcements yet.
           </p>
         )}

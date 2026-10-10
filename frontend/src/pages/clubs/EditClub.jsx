@@ -181,7 +181,7 @@ const EditClub = () => {
                 setForm(prev => ({ ...prev, clubName: e.target.value }));
                 setErrors(prev => ({ ...prev, clubName: "" }));
               }}
-              className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 placeholder:text-gray-300 transition-colors"
+              className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100 placeholder:text-gray-300 transition-colors"
             />
             <FieldError message={errors.clubName} />
           </div>
@@ -197,7 +197,7 @@ const EditClub = () => {
                 setForm(prev => ({ ...prev, description: e.target.value }));
                 setErrors(prev => ({ ...prev, description: "" }));
               }}
-              className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 placeholder:text-gray-300 transition-colors resize-none"
+              className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100 placeholder:text-gray-300 transition-colors resize-none"
             />
             <FieldError message={errors.description} />
           </div>

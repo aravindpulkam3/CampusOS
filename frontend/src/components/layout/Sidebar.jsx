@@ -140,7 +140,8 @@ const Sidebar = ({ isOpen, onClose }) => {
             {/* Close button visible only on mobile */}
             <button
               onClick={onClose}
-              className="lg:hidden text-gray-400 hover:text-gray-700 transition-colors flex-shrink-0"
+              aria-label="Close sidebar"
+              className="lg:hidden p-2 -mr-2 rounded-lg text-gray-400 hover:text-gray-700 transition-colors flex-shrink-0"
             >
               <X size={16} />
             </button>

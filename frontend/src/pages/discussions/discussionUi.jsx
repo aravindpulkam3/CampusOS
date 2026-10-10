@@ -4,7 +4,7 @@ import { focusRing } from "../../components/common/SectionBits";
 // detail), which used to duplicate them. Page-specific markup stays in the pages.
 
 export const CATEGORY = {
-  general: { label: "General", chip: "bg-slate-50 text-slate-600 border-slate-200", dot: "bg-slate-400" },
+  general: { label: "General", chip: "bg-gray-50 text-gray-600 border-gray-200", dot: "bg-gray-400" },
   coding: { label: "Coding", chip: "bg-blue-50 text-blue-700 border-blue-100", dot: "bg-blue-500" },
   projects: { label: "Projects", chip: "bg-teal-50 text-teal-700 border-teal-100", dot: "bg-teal-500" },
   higher_studies: { label: "Higher Studies", chip: "bg-violet-50 text-violet-700 border-violet-100", dot: "bg-violet-500" },
@@ -12,17 +12,17 @@ export const CATEGORY = {
   study_tips: { label: "Study Tips", chip: "bg-rose-50 text-rose-700 border-rose-100", dot: "bg-rose-500" },
 };
 
-// Class recipes (EventSphere look: slate, hairline borders, rounded-2xl cards).
+// Class recipes (EventSphere look: gray, hairline borders, rounded-2xl cards).
 export const card =
-  "bg-white border border-slate-200/70 rounded-2xl shadow-[0_1px_2px_rgba(16,24,40,0.04)]";
+  "bg-white border border-gray-200/70 rounded-2xl shadow-[0_1px_2px_rgba(16,24,40,0.04)]";
 export const chip =
   "inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md border whitespace-nowrap";
-export const btnPrimary = `inline-flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors ${focusRing}`;
-export const btnSecondary = `inline-flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl border border-slate-200 bg-white text-slate-600 enabled:hover:border-slate-400 enabled:hover:text-slate-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${focusRing}`;
+export const btnPrimary = `inline-flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors ${focusRing}`;
+export const btnSecondary = `inline-flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl border border-gray-200 bg-white text-gray-600 enabled:hover:border-gray-400 enabled:hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${focusRing}`;
 // Quiet in-row actions (Reply, Accept, Show replies…). `ghostBase` has no
 // colours, so variants add their own instead of stacking conflicting ones.
 export const ghostBase = `inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold whitespace-nowrap disabled:opacity-60 transition-colors ${focusRing}`;
-export const ghostAction = `${ghostBase} text-slate-500 hover:bg-slate-100 hover:text-slate-800`;
+export const ghostAction = `${ghostBase} text-gray-500 hover:bg-gray-100 hover:text-gray-800`;
 
 export const CategoryChip = ({ category, dot = false }) => {
   const meta = CATEGORY[category] ?? CATEGORY.general;
@@ -42,7 +42,7 @@ const avatarSize = {
 
 export const Avatar = ({ user, size = "sm" }) => (
   <span
-    className={`${avatarSize[size]} rounded-full bg-slate-100 text-slate-600 ring-1 ring-slate-200/70 font-bold flex items-center justify-center flex-shrink-0 select-none`}
+    className={`${avatarSize[size]} rounded-full bg-gray-100 text-gray-600 ring-1 ring-gray-200/70 font-bold flex items-center justify-center flex-shrink-0 select-none`}
     aria-hidden="true"
   >
     {`${user?.firstName?.[0] ?? ""}${user?.lastName?.[0] ?? ""}`.toUpperCase()}

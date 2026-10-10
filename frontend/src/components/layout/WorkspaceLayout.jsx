@@ -5,14 +5,15 @@ const WorkspaceLayout = ({ tabs }) => {
     <div className="flex flex-col h-full">
 
       {/* Tab Bar */}
-      <div className="flex items-center gap-1 border-b border-gray-100 bg-white px-1 pb-0 -mx-6 -mt-6 px-6 mb-6">
+      {/* Scrolls on its own when the tabs don't fit, so the page never pans sideways */}
+      <div className="flex items-center gap-1 border-b border-gray-100 bg-white -mx-6 -mt-6 px-6 mb-6 overflow-x-auto">
         {tabs.map(({ label, path, end }) => (
           <NavLink
             key={path}
             to={path}
             end={end}
             className={({ isActive }) =>
-              `px-4 py-3 text-sm font-medium border-b-2 transition-all duration-150 whitespace-nowrap
+              `px-4 py-3 text-sm font-medium border-b-2 transition-all duration-150 whitespace-nowrap flex-shrink-0
               ${isActive
                 ? 'border-gray-900 text-gray-900'
                 : 'border-transparent text-gray-400 hover:text-gray-700 hover:border-gray-300'

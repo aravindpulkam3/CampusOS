@@ -1,1 +1,9 @@
 @import "tailwindcss";
+
+/* Scrolls as usual but hides the scrollbar (category chip strips). */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}

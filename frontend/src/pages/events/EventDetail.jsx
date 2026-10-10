@@ -63,7 +63,7 @@ const categoryAccent = {
     link: "text-blue-700 hover:text-blue-800",
     check: "text-blue-600",
     pill: "bg-white text-blue-800 ring-1 ring-blue-200",
-    tagPill: "bg-white/70 text-slate-600 ring-1 ring-blue-100",
+    tagPill: "bg-white/70 text-gray-600 ring-1 ring-blue-100",
     sectionIcon: "text-blue-600",
     avatarBg: "bg-blue-600",
   },
@@ -85,7 +85,7 @@ const categoryAccent = {
     link: "text-purple-700 hover:text-purple-800",
     check: "text-purple-600",
     pill: "bg-white text-purple-800 ring-1 ring-purple-200",
-    tagPill: "bg-white/70 text-slate-600 ring-1 ring-purple-100",
+    tagPill: "bg-white/70 text-gray-600 ring-1 ring-purple-100",
     sectionIcon: "text-purple-600",
     avatarBg: "bg-purple-600",
   },
@@ -107,7 +107,7 @@ const categoryAccent = {
     link: "text-orange-700 hover:text-orange-800",
     check: "text-orange-600",
     pill: "bg-white text-orange-800 ring-1 ring-orange-200",
-    tagPill: "bg-white/70 text-slate-600 ring-1 ring-orange-100",
+    tagPill: "bg-white/70 text-gray-600 ring-1 ring-orange-100",
     sectionIcon: "text-orange-600",
     avatarBg: "bg-orange-700",
   },
@@ -129,7 +129,7 @@ const categoryAccent = {
     link: "text-green-700 hover:text-green-800",
     check: "text-green-600",
     pill: "bg-white text-green-800 ring-1 ring-green-200",
-    tagPill: "bg-white/70 text-slate-600 ring-1 ring-green-100",
+    tagPill: "bg-white/70 text-gray-600 ring-1 ring-green-100",
     sectionIcon: "text-green-600",
     avatarBg: "bg-green-700",
   },
@@ -151,38 +151,38 @@ const categoryAccent = {
     link: "text-emerald-700 hover:text-emerald-800",
     check: "text-emerald-600",
     pill: "bg-white text-emerald-800 ring-1 ring-emerald-200",
-    tagPill: "bg-white/70 text-slate-600 ring-1 ring-emerald-100",
+    tagPill: "bg-white/70 text-gray-600 ring-1 ring-emerald-100",
     sectionIcon: "text-emerald-600",
     avatarBg: "bg-emerald-700",
   },
   Other: {
-    chip: "bg-slate-700 text-white",
-    cta: "bg-white hover:bg-slate-100 text-slate-900 shadow-lg shadow-black/30",
+    chip: "bg-gray-700 text-white",
+    cta: "bg-white hover:bg-gray-100 text-gray-900 shadow-lg shadow-black/30",
     ring: "focus-visible:ring-white",
-    fallback: "bg-slate-800",
-    line: "bg-slate-400",
-    progress: "bg-slate-300",
-    dot: "bg-slate-400",
-    countFlash: "text-slate-300",
-    iconOnDark: "bg-white/10 text-slate-200",
-    iconBadge: "bg-slate-100 text-slate-600",
-    aboutIcon: "bg-white text-slate-600 ring-1 ring-slate-200",
-    aboutSurface: "bg-slate-100/50 ring-1 ring-slate-200/70",
-    aboutDivider: "lg:border-slate-200",
-    eyebrow: "text-slate-600",
-    link: "text-slate-700 hover:text-slate-900",
-    check: "text-slate-600",
-    pill: "bg-white text-slate-700 ring-1 ring-slate-200",
-    tagPill: "bg-white/70 text-slate-600 ring-1 ring-slate-200",
-    sectionIcon: "text-slate-500",
-    avatarBg: "bg-slate-900",
+    fallback: "bg-gray-800",
+    line: "bg-gray-400",
+    progress: "bg-gray-300",
+    dot: "bg-gray-400",
+    countFlash: "text-gray-300",
+    iconOnDark: "bg-white/10 text-gray-200",
+    iconBadge: "bg-gray-100 text-gray-600",
+    aboutIcon: "bg-white text-gray-600 ring-1 ring-gray-200",
+    aboutSurface: "bg-gray-100/50 ring-1 ring-gray-200/70",
+    aboutDivider: "lg:border-gray-200",
+    eyebrow: "text-gray-600",
+    link: "text-gray-700 hover:text-gray-900",
+    check: "text-gray-600",
+    pill: "bg-white text-gray-700 ring-1 ring-gray-200",
+    tagPill: "bg-white/70 text-gray-600 ring-1 ring-gray-200",
+    sectionIcon: "text-gray-500",
+    avatarBg: "bg-gray-900",
   },
 };
 
 const accentFor = (category) => categoryAccent[category] ?? categoryAccent.Other;
 
 const statusStyle = {
-  upcoming: { label: "Upcoming", className: "bg-white text-slate-900" },
+  upcoming: { label: "Upcoming", className: "bg-white text-gray-900" },
   ongoing: { label: "Live now", className: "bg-emerald-400 text-emerald-950" },
   completed: {
     label: "Completed",
@@ -250,13 +250,13 @@ const clubInitials = (name) =>
 // ─── Building blocks ──────────────────────────────────────────
 const Skeleton = () => (
   <div
-    className="max-w-5xl mx-auto px-4 sm:px-6 py-2 space-y-5"
+    className="max-w-5xl mx-auto space-y-5"
     aria-busy="true"
     aria-label="Loading event"
   >
-    <div className="w-12 h-3 bg-slate-200 rounded motion-safe:animate-pulse" />
-    <div className="rounded-2xl overflow-hidden border border-slate-200/70 bg-white motion-safe:animate-pulse">
-      <div className="min-h-44 sm:min-h-52 lg:min-h-60 bg-slate-800 flex flex-col justify-end gap-3 p-4 sm:p-6 lg:p-8">
+    <div className="w-12 h-3 bg-gray-200 rounded motion-safe:animate-pulse" />
+    <div className="rounded-2xl overflow-hidden border border-gray-200/70 bg-white motion-safe:animate-pulse">
+      <div className="min-h-44 sm:min-h-52 lg:min-h-60 bg-gray-800 flex flex-col justify-end gap-3 p-4 sm:p-6 lg:p-8">
         <div className="flex gap-2">
           <div className="h-6 w-20 rounded-md bg-white/10" />
           <div className="h-6 w-20 rounded-md bg-white/10" />
@@ -264,17 +264,17 @@ const Skeleton = () => (
         <div className="h-8 w-2/3 rounded-lg bg-white/15" />
         <div className="h-4 w-40 rounded bg-white/10" />
       </div>
-      <div className="h-1 bg-slate-200" />
+      <div className="h-1 bg-gray-200" />
       <div className="grid gap-4 p-4 lg:grid-cols-3 sm:p-5">
         {[0, 1, 2].map((i) => (
-          <div key={i} className="h-11 rounded-lg bg-slate-100" />
+          <div key={i} className="h-11 rounded-lg bg-gray-100" />
         ))}
       </div>
     </div>
     <div className="space-y-5 motion-safe:animate-pulse">
-      <div className="h-44 bg-slate-100/70 rounded-2xl" />
+      <div className="h-44 bg-gray-100/70 rounded-2xl" />
       <div className="h-20 bg-amber-50/50 border border-amber-200/70 rounded-2xl" />
-      <div className="h-24 bg-white border border-slate-100 rounded-2xl" />
+      <div className="h-24 bg-white border border-gray-100 rounded-2xl" />
     </div>
   </div>
 );
@@ -301,8 +301,8 @@ const StatusPill = ({ phase, accent }) => {
 // One item of the info rail. dt/dd must be direct children of the item (valid
 // <dl>), so the icon lives inside the <dt>, positioned into the left gutter.
 const FactItem = ({ icon: Icon, label, value, detail, accent, className = "" }) => (
-  <div className={`relative min-w-0 border-slate-100 py-3 pr-4 pl-15 sm:py-4 sm:pr-5 sm:pl-16 ${className}`}>
-    <dt className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+  <div className={`relative min-w-0 border-gray-100 py-3 pr-4 pl-15 sm:py-4 sm:pr-5 sm:pl-16 ${className}`}>
+    <dt className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
       <span
         className={`absolute left-4 top-3.5 sm:left-5 sm:top-4.5 flex h-8 w-8 items-center justify-center rounded-lg ${accent.iconBadge}`}
         aria-hidden="true"
@@ -311,10 +311,10 @@ const FactItem = ({ icon: Icon, label, value, detail, accent, className = "" }) 
       </span>
       {label}
     </dt>
-    <dd className="mt-0.5 text-sm font-semibold leading-snug text-slate-900 break-words">
+    <dd className="mt-0.5 text-sm font-semibold leading-snug text-gray-900 break-words">
       {value}
     </dd>
-    {detail && <dd className="text-xs font-medium text-slate-500">{detail}</dd>}
+    {detail && <dd className="text-xs font-medium text-gray-500">{detail}</dd>}
   </div>
 );
 
@@ -511,10 +511,10 @@ export default function EventDetail() {
   if (loadError || !event)
     return (
       <div className="max-w-md mx-auto text-center py-20 px-4 space-y-3">
-        <p className="text-sm font-semibold text-slate-700">
+        <p className="text-sm font-semibold text-gray-700">
           {loadError === "failed" ? "Couldn't load this event" : "Event not found"}
         </p>
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-gray-500">
           {loadError === "failed"
             ? "Check your connection and try again."
             : "It may have been removed, or the link is incorrect."}
@@ -522,14 +522,14 @@ export default function EventDetail() {
         {loadError === "failed" ? (
           <button
             onClick={() => setReloadKey((k) => k + 1)}
-            className={`px-3.5 py-2 text-xs font-bold rounded-xl border border-slate-200 text-slate-600 bg-white hover:border-slate-400 hover:text-slate-900 transition-colors ${focusRing}`}
+            className={`px-3.5 py-2 text-xs font-bold rounded-xl border border-gray-200 text-gray-600 bg-white hover:border-gray-400 hover:text-gray-900 transition-colors ${focusRing}`}
           >
             Try again
           </button>
         ) : (
           <Link
             to="/community/events"
-            className={`inline-block px-3.5 py-2 text-xs font-bold rounded-xl border border-slate-200 text-slate-600 bg-white hover:border-slate-400 hover:text-slate-900 transition-colors ${focusRing}`}
+            className={`inline-block px-3.5 py-2 text-xs font-bold rounded-xl border border-gray-200 text-gray-600 bg-white hover:border-gray-400 hover:text-gray-900 transition-colors ${focusRing}`}
           >
             Back to events
           </Link>
@@ -622,7 +622,7 @@ export default function EventDetail() {
           onClick={handleRegister}
           disabled={!!pending}
           aria-busy={pending === "register"}
-          className={`group/cta flex h-12 w-full items-center justify-center gap-2 rounded-xl text-sm font-bold transition duration-150 motion-safe:active:scale-[.98] disabled:cursor-wait disabled:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${accent.ring} ${accent.cta}`}
+          className={`group/cta flex h-12 w-full items-center justify-center gap-2 rounded-xl text-sm font-bold transition duration-150 motion-safe:active:scale-[.98] disabled:cursor-wait disabled:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-950 ${accent.ring} ${accent.cta}`}
         >
           {pending === "register" ? (
             <>
@@ -653,18 +653,18 @@ export default function EventDetail() {
         : "No registrations";
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-2 space-y-5">
+    <div className="max-w-5xl mx-auto space-y-5">
       {/* Back + (organizers) compact manage links — kept off the hero. */}
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <button
           onClick={() => navigate(-1)}
-          className={`inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-800 rounded transition-colors ${focusRing}`}
+          className={`inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-gray-800 rounded transition-colors ${focusRing}`}
         >
           <ArrowLeft size={13} aria-hidden="true" /> Back
         </button>
         {isOrganizer && (
           <nav aria-label="Manage event" className="flex flex-wrap items-center gap-0.5">
-            <span className="hidden sm:inline px-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+            <span className="hidden sm:inline px-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-500">
               Manage
             </span>
             <ManageLink to={`/community/events/${id}/edit`} state={{ event }} icon={Pencil}>
@@ -681,8 +681,8 @@ export default function EventDetail() {
       </div>
 
       {/* ── Hero: banner (title + registration) over a compact info rail ── */}
-      <header className="group overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-sm">
-        <div className="relative isolate flex min-h-44 sm:min-h-52 lg:min-h-60 flex-col justify-end overflow-hidden bg-slate-950">
+      <header className="group overflow-hidden rounded-2xl border border-gray-200/70 bg-white shadow-sm">
+        <div className="relative isolate flex min-h-44 sm:min-h-52 lg:min-h-60 flex-col justify-end overflow-hidden bg-gray-950">
           {showBanner ? (
             <img
               src={event.banner}
@@ -701,7 +701,7 @@ export default function EventDetail() {
           )}
           <div
             aria-hidden="true"
-            className="absolute inset-0 -z-10 bg-linear-to-t from-slate-950 via-slate-950/70 to-slate-950/5"
+            className="absolute inset-0 -z-10 bg-linear-to-t from-gray-950 via-gray-950/70 to-gray-950/5"
           />
 
           <div className="grid gap-5 px-4 pt-12 pb-5 sm:px-6 sm:pb-6 lg:grid-cols-[minmax(0,1fr)_17rem] lg:items-end lg:gap-8 lg:px-8">
@@ -906,14 +906,14 @@ export default function EventDetail() {
                 ? `${event.category} event`
                 : "Campus event"}
             </p>
-            <h2 id="event-about" className="mt-1.5 text-xl font-bold tracking-tight text-slate-900">
+            <h2 id="event-about" className="mt-1.5 text-xl font-bold tracking-tight text-gray-900">
               About this event
             </h2>
             {event.description ? (
               <>
                 <p
                   ref={descriptionRef}
-                  className={`mt-3 max-w-prose text-[15px] leading-7 text-slate-700 whitespace-pre-line break-words ${
+                  className={`mt-3 max-w-prose text-[15px] leading-7 text-gray-700 whitespace-pre-line break-words ${
                     aboutExpanded ? "" : "line-clamp-6"
                   }`}
                 >
@@ -938,7 +938,7 @@ export default function EventDetail() {
                 )}
               </>
             ) : (
-              <p className="mt-3 text-sm text-slate-500">No description yet.</p>
+              <p className="mt-3 text-sm text-gray-500">No description yet.</p>
             )}
 
             {tags.length > 0 && (
@@ -956,9 +956,9 @@ export default function EventDetail() {
           </div>
 
           <div
-            className={`min-w-0 border-t border-slate-200/70 pt-5 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-8 ${accent.aboutDivider}`}
+            className={`min-w-0 border-t border-gray-200/70 pt-5 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-8 ${accent.aboutDivider}`}
           >
-            <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+            <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-900">
               <span
                 className={`flex h-7 w-7 items-center justify-center rounded-lg ${accent.aboutIcon}`}
                 aria-hidden="true"
@@ -972,8 +972,8 @@ export default function EventDetail() {
               <p className="mt-3 flex items-start gap-2">
                 <CheckCircle2 size={18} className={`mt-0.5 flex-none ${accent.check}`} aria-hidden="true" />
                 <span>
-                  <span className="block text-base font-bold text-slate-900">Everyone</span>
-                  <span className="text-xs font-medium text-slate-600">All branches and years</span>
+                  <span className="block text-base font-bold text-gray-900">Everyone</span>
+                  <span className="text-xs font-medium text-gray-600">All branches and years</span>
                 </span>
               </p>
             ) : (
@@ -981,7 +981,7 @@ export default function EventDetail() {
                 <dl className="mt-3 space-y-3">
                   {branches.length > 0 && (
                     <div>
-                      <dt className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                      <dt className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
                         Branches
                       </dt>
                       <dd className="mt-1.5 flex flex-wrap gap-1.5">
@@ -998,17 +998,17 @@ export default function EventDetail() {
                   )}
                   {years.length > 0 && (
                     <div>
-                      <dt className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                      <dt className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
                         Year
                       </dt>
-                      <dd className="mt-1 text-sm font-semibold text-slate-900">{fmtYears(years)}</dd>
+                      <dd className="mt-1 text-sm font-semibold text-gray-900">{fmtYears(years)}</dd>
                     </div>
                   )}
                 </dl>
                 {user && (
                   <p
                     className={`mt-4 flex items-center gap-1.5 text-xs font-semibold ${
-                      ineligible ? "text-slate-600" : "text-emerald-700"
+                      ineligible ? "text-gray-600" : "text-emerald-700"
                     }`}
                   >
                     {ineligible ? (
@@ -1047,12 +1047,12 @@ export default function EventDetail() {
           icon={Megaphone}
           title="Announcements"
           iconClassName={accent.sectionIcon}
-          titleClassName="text-base font-bold text-slate-900"
+          titleClassName="text-base font-bold text-gray-900"
         />
         {feedLoading && announcements.length === 0 ? (
           <div className="space-y-3 motion-safe:animate-pulse">
-            <div className="h-24 bg-white border border-slate-100 rounded-2xl" />
-            <div className="h-24 bg-white border border-slate-100 rounded-2xl" />
+            <div className="h-24 bg-white border border-gray-100 rounded-2xl" />
+            <div className="h-24 bg-white border border-gray-100 rounded-2xl" />
           </div>
         ) : announcements.length > 0 ? (
           <div className="space-y-3">
@@ -1075,11 +1075,11 @@ export default function EventDetail() {
               <button
                 onClick={handleLoadMore}
                 disabled={loadMoreLoading}
-                className={`flex items-center justify-center gap-2 w-full py-2.5 text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:border-slate-400 hover:text-slate-900 transition-colors disabled:opacity-60 ${focusRing}`}
+                className={`flex items-center justify-center gap-2 w-full py-2.5 text-xs font-bold text-gray-600 bg-white border border-gray-200 rounded-xl hover:border-gray-400 hover:text-gray-900 transition-colors disabled:opacity-60 ${focusRing}`}
               >
                 {loadMoreLoading ? (
                   <>
-                    <Loader2 size={13} className="animate-spin text-slate-400" aria-hidden="true" />{" "}
+                    <Loader2 size={13} className="animate-spin text-gray-400" aria-hidden="true" />{" "}
                     Loading…
                   </>
                 ) : feedError ? (
@@ -1091,17 +1091,17 @@ export default function EventDetail() {
             )}
           </div>
         ) : feedError ? (
-          <div className="flex items-center justify-between gap-3 px-4 py-4 bg-white border border-slate-100 rounded-2xl">
-            <p className="text-xs text-slate-500">Couldn't load announcements.</p>
+          <div className="flex items-center justify-between gap-3 px-4 py-4 bg-white border border-gray-100 rounded-2xl">
+            <p className="text-xs text-gray-500">Couldn't load announcements.</p>
             <button
               onClick={() => fetchAnnouncements(0, false)}
-              className={`px-3 py-1.5 text-xs font-bold rounded-xl border border-slate-200 text-slate-600 bg-white hover:border-slate-400 hover:text-slate-900 transition-colors ${focusRing}`}
+              className={`px-3 py-1.5 text-xs font-bold rounded-xl border border-gray-200 text-gray-600 bg-white hover:border-gray-400 hover:text-gray-900 transition-colors ${focusRing}`}
             >
               Try again
             </button>
           </div>
         ) : (
-          <p className="px-4 py-4 text-xs text-slate-500 bg-white border border-slate-100 rounded-2xl">
+          <p className="px-4 py-4 text-xs text-gray-500 bg-white border border-gray-100 rounded-2xl">
             No announcements yet. Updates from the organizers will appear here.
           </p>
         )}

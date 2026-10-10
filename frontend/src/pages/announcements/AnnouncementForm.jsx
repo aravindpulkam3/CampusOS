@@ -168,7 +168,7 @@ export default function CreateAnnouncement() {
                   ? "e.g. Core Team Applications Open"
                   : "e.g. Venue changed to Seminar Hall B"
               }
-              className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 placeholder:text-gray-300 transition-colors"
+              className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100 placeholder:text-gray-300 transition-colors"
             />
             <FieldError message={errors.title} />
           </div>
@@ -189,7 +189,7 @@ export default function CreateAnnouncement() {
                   ? "Share news, updates, or information for your followers..."
                   : "Share important updates with registered students..."
               }
-              className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 placeholder:text-gray-300 transition-colors resize-none"
+              className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100 placeholder:text-gray-300 transition-colors resize-none"
             />
             <FieldError message={errors.body} />
           </div>

@@ -103,7 +103,7 @@ const RosterManagement = () => {
   };
 
   const inputClass =
-    "w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg outline-none focus:border-gray-400";
+    "w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100";
 
   return (
     <div className="max-w-5xl mx-auto space-y-4">
@@ -191,7 +191,7 @@ const RosterManagement = () => {
               placeholder="Roll number or email"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg outline-none focus:border-gray-400"
+              className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
             />
             <button
               type="submit"

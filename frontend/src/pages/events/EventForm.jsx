@@ -22,21 +22,21 @@ const Label = ({ children, required }) => (
 const Input = ({ ...props }) => (
   <input
     {...props}
-    className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 placeholder:text-gray-300 transition-colors"
+    className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100 placeholder:text-gray-300 transition-colors"
   />
 );
 
 const Textarea = ({ ...props }) => (
   <textarea
     {...props}
-    className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 placeholder:text-gray-300 transition-colors resize-none"
+    className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100 placeholder:text-gray-300 transition-colors resize-none"
   />
 );
 
 const Select = ({ children, ...props }) => (
   <select
     {...props}
-    className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 text-gray-700 transition-colors"
+    className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100 text-gray-700 transition-colors"
   >
     {children}
   </select>
@@ -292,8 +292,8 @@ const EventForm = ({ mode = "create" }) => {
         </h2>
         <p className="text-xs text-gray-400 mt-0.5">
           {isEditMode
-            ? "Modify modifications to tweak this running event config details"
-            : "Fill in the details to publish a new club event configuration"}
+            ? "Update this event's details."
+            : "Fill in the details to publish a new club event."}
         </p>
       </div>
 

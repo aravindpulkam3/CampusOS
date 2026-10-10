@@ -29,6 +29,7 @@ import useAuth from "../../hooks/useAuth";
 import useIsClassRep from "../../hooks/useIsClassRep";
 import { changePasswordApi, getProfile, logoutApi, updateProfile } from "../../api/auth.api";
 import ImageUploadZone from "../../components/forms/ImageUploadZone.jsx";
+import EmptyState from "../../components/common/EmptyState";
 import safeHref from "../../utils/safeHref";
 import { formatDate } from "../../utils/formatDate";
 
@@ -163,8 +164,7 @@ const EditProfileModal = ({ user, onClose, onSave }) => {
       onSave(res.data.data);
       onClose();
     } catch (err) {
-      // setError(err.response?.data?.message || "Failed to update profile");
-      console.log(err);
+      setError(err.response?.data?.message || "Failed to update profile");
     } finally {
       setLoading(false);
     }
@@ -179,7 +179,8 @@ const EditProfileModal = ({ user, onClose, onSave }) => {
           </h3>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-700 transition-colors"
+            aria-label="Close"
+            className="p-1.5 -m-1.5 rounded-lg text-gray-400 hover:text-gray-700 transition-colors"
           >
             <X size={16} />
           </button>
@@ -231,7 +232,7 @@ const EditProfileModal = ({ user, onClose, onSave }) => {
             <textarea
               value={form.bio}
               onChange={(e) => setForm((p) => ({ ...p, bio: e.target.value }))}
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 resize-none"
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100 resize-none"
               placeholder="Tell us a bit about yourself..."
               rows={2}
             />
@@ -282,7 +283,7 @@ const EditProfileModal = ({ user, onClose, onSave }) => {
                 onChange={(e) =>
                   setForm((p) => ({ ...p, github: e.target.value }))
                 }
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400"
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
                 placeholder="https://github.com/username"
               />
             </div>
@@ -297,7 +298,7 @@ const EditProfileModal = ({ user, onClose, onSave }) => {
                 onChange={(e) =>
                   setForm((p) => ({ ...p, linkedin: e.target.value }))
                 }
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400"
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
                 placeholder="https://linkedin.com/in/username"
               />
             </div>
@@ -312,7 +313,7 @@ const EditProfileModal = ({ user, onClose, onSave }) => {
                 onChange={(e) =>
                   setForm((p) => ({ ...p, portfolio: e.target.value }))
                 }
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400"
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
                 placeholder="https://portfolio.com"
               />
             </div>
@@ -415,7 +416,7 @@ const ChangePasswordModal = ({ onClose }) => {
         value={form[field]}
         onChange={(e) => setForm((p) => ({ ...p, [field]: e.target.value }))}
         placeholder={placeholder}
-        className="w-full px-3 py-2 pr-9 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 placeholder:text-gray-300"
+        className="w-full px-3 py-2 pr-9 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100 placeholder:text-gray-300"
       />
       <button
         type="button"
@@ -436,12 +437,13 @@ const ChangePasswordModal = ({ onClose }) => {
           </h3>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-700"
+            aria-label="Close"
+            className="p-1.5 -m-1.5 rounded-lg text-gray-400 hover:text-gray-700"
           >
             <X size={16} />
           </button>
         </div>
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+        <form onSubmit={handleSubmit} className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
           {error && (
             <div className="flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg">
               <AlertTriangle size={13} className="text-red-500 flex-shrink-0" />
@@ -517,11 +519,6 @@ const Section = ({ title, linkTo, linkLabel, children }) => (
   </div>
 );
 
-const EmptyState = ({ message }) => (
-  <p className="text-xs text-gray-400 text-center py-5 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-    {message}
-  </p>
-);
 
 // ─── Info Row ─────────────────────────────────────────────────
 const InfoRow = ({ icon: Icon, label, value, isLink, url }) => (

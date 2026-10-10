@@ -5,22 +5,23 @@ import GlobalSearch from "./GlobalSearch";
 import NotificationBell from "./NotificationBell";
 import { useState,useEffect } from "react";
 
-const pageTitles = {
-  "/": "Dashboard",
-  "/community": "Community",
-  "/community/events": "Community",
-  "/community/announcements": "Community",
-  "/academics": "Academics",
-  "/discussions": "Discussions",
-  "/academics/competitive": "Academics",
-  "/career": "Career & Opportunities",
-  "/career/opportunities": "Career & Opportunities",
-  "/career/interviews": "Career & Opportunities",
-  "/admin": "Admin Panel",
-  "/admin/drives": "Admin Panel",
-  "/admin/moderation": "Admin Panel",
-  "/admin/notices": "Admin Panel",
-  "/profile": "Profile",
+// Matched on the first path segment, so detail and form routes get a title too.
+const sectionTitles = {
+  community: "Community",
+  clubs: "Community",
+  events: "Community",
+  academics: "Academics",
+  classroom: "Academics",
+  discussions: "Discussions",
+  career: "Career & Opportunities",
+  drive: "Career & Opportunities",
+  admin: "Admin Panel",
+  profile: "Profile",
+};
+
+const getPageTitle = (pathname) => {
+  if (pathname === "/") return "Dashboard";
+  return sectionTitles[pathname.split("/")[1]] ?? "EventSphere";
 };
 
 const Navbar = ({ onToggleSidebar, sidebarOpen }) => {
@@ -28,7 +29,7 @@ const Navbar = ({ onToggleSidebar, sidebarOpen }) => {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  const title = pageTitles[pathname] ?? "EventSphere";
+  const title = getPageTitle(pathname);
 
   const avatarUrl = user?.profilePicture;
 
@@ -45,7 +46,8 @@ const Navbar = ({ onToggleSidebar, sidebarOpen }) => {
       <div className="flex items-center gap-3 min-w-0">
         <button
           onClick={onToggleSidebar}
-          className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+          aria-label={sidebarOpen ? "Close sidebar" : "Open sidebar"}
+          className="flex-shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
         >
           {sidebarOpen ? (
             <PanelLeftClose size={18} />
@@ -53,7 +55,8 @@ const Navbar = ({ onToggleSidebar, sidebarOpen }) => {
             <PanelLeftOpen size={18} />
           )}
         </button>
-        <h1 className="text-sm font-semibold text-gray-900 tracking-tight truncate">
+        {/* Hidden on phones: there's only room for a few letters next to the search box */}
+        <h1 className="hidden sm:block text-sm font-semibold text-gray-900 tracking-tight truncate">
           {title}
         </h1>
       </div>
@@ -69,6 +72,7 @@ const Navbar = ({ onToggleSidebar, sidebarOpen }) => {
             {/* PROFILE IMAGE / INITIAL BUTTON */}
             <button
               onClick={() => navigate("/profile")}
+              aria-label="Profile"
               className="w-8 h-8 flex-shrink-0 rounded-full bg-gray-900 text-white text-xs font-bold flex items-center justify-center hover:bg-gray-700 transition-colors overflow-hidden border border-gray-100"
             >
               {/* ✅ 3. Only render image if a valid URL exists and it hasn't failed */}

@@ -21,7 +21,7 @@ import NoticeFeed from "../components/cards/NoticeFeed";
 import { formatShortDate } from "../utils/formatDate";
 
 const clubBg = [
-  "bg-slate-900",
+  "bg-gray-900",
   "bg-blue-600",
   "bg-purple-600",
   "bg-emerald-600",
@@ -43,8 +43,8 @@ const UpcomingEventsWidget = ({ events, loading }) => {
           <Calendar size={15} className="text-gray-400" />
           <h3 className="text-sm font-bold text-gray-900">Upcoming Events</h3>
         </div>
-        <span className="text-[10px] bg-slate-50 border border-slate-100 text-slate-500 font-semibold px-2 py-0.5 rounded-full">
-          Live Timeline
+        <span className="text-[10px] bg-gray-50 border border-gray-100 text-gray-500 font-semibold px-2 py-0.5 rounded-full">
+          Coming up
         </span>
       </div>
 
@@ -60,10 +60,10 @@ const UpcomingEventsWidget = ({ events, loading }) => {
             <Link
               key={event._id}
               to={`/community/events/${event._id}`}
-              className="block group bg-slate-50/40 border border-slate-100 rounded-xl overflow-hidden hover:border-slate-300 hover:bg-white hover:shadow-xs transition-all duration-200"
+              className="block group bg-gray-50/40 border border-gray-100 rounded-xl overflow-hidden hover:border-gray-300 hover:bg-white hover:shadow-xs transition-all duration-200"
             >
               {/* Event Banner */}
-              <div className="h-24 w-full bg-slate-100 relative overflow-hidden">
+              <div className="h-24 w-full bg-gray-100 relative overflow-hidden">
                 {event.banner ? (
                   <img
                     src={event.banner}
@@ -71,21 +71,21 @@ const UpcomingEventsWidget = ({ events, loading }) => {
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-700 to-slate-900 text-white/20 font-black tracking-wider uppercase text-xs">
-                    EventSphere Live
+                  <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-700 to-gray-900 text-white/20 font-black tracking-wider uppercase text-xs">
+                    Event
                   </div>
                 )}
-                <div className="absolute top-2.5 right-2.5 bg-white/95 backdrop-blur-xs text-[10px] font-bold px-2 py-0.5 rounded-md text-slate-800 shadow-3xs">
+                <div className="absolute top-2.5 right-2.5 bg-white/95 backdrop-blur-xs text-[10px] font-bold px-2 py-0.5 rounded-md text-gray-800">
                   {formatWidgetDate(event.startDateTime)}
                 </div>
               </div>
 
               {/* Body */}
               <div className="p-3">
-                <h4 className="text-xs font-bold text-slate-800 group-hover:text-blue-600 line-clamp-1 transition-colors">
+                <h4 className="text-xs font-bold text-gray-800 group-hover:text-blue-600 line-clamp-1 transition-colors">
                   {event.eventName}
                 </h4>
-                <div className="flex items-center gap-1 mt-1 text-[11px] text-slate-400">
+                <div className="flex items-center gap-1 mt-1 text-[11px] text-gray-400">
                   <MapPin size={10} className="flex-shrink-0" />
                   <span className="truncate">
                     {event.venue || "Campus grounds"}
@@ -96,19 +96,19 @@ const UpcomingEventsWidget = ({ events, loading }) => {
           ))}
         </div>
       ) : (
-        <p className="text-xs text-slate-400 text-center py-6">
+        <p className="text-xs text-gray-400 text-center py-6">
           No scheduled entries active.
         </p>
       )}
 
       <Link
         to="/community/events"
-        className="flex items-center justify-center gap-1 w-full mt-4 py-2 text-xs font-semibold text-slate-600 bg-slate-50 hover:bg-slate-100 border border-slate-100 rounded-xl transition-colors group"
+        className="flex items-center justify-center gap-1 w-full mt-4 py-2 text-xs font-semibold text-gray-600 bg-gray-50 hover:bg-gray-100 border border-gray-100 rounded-xl transition-colors group"
       >
-        View Complete Calendar
+        View all events
         <ArrowUpRight
           size={12}
-          className="text-slate-400 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform"
+          className="text-gray-400 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform"
         />
       </Link>
     </div>
@@ -141,7 +141,7 @@ const TrendingClubsWidget = ({ clubs, loading }) => (
           <Link
             key={club._id}
             to={`/community/clubs/${club._id}`}
-            className="flex items-center gap-3 p-2 border border-transparent rounded-xl hover:bg-slate-50 hover:border-slate-100 transition-all group"
+            className="flex items-center gap-3 p-2 border border-transparent rounded-xl hover:bg-gray-50 hover:border-gray-100 transition-all group"
           >
             <div
               className={`w-9 h-9 rounded-xl ${clubBg[i % clubBg.length]} flex items-center justify-center text-white text-xs font-black flex-shrink-0 overflow-hidden border border-black/5`}
@@ -157,22 +157,22 @@ const TrendingClubsWidget = ({ clubs, loading }) => (
               )}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-bold text-slate-800 group-hover:text-slate-900 truncate">
+              <p className="text-xs font-bold text-gray-800 group-hover:text-gray-900 truncate">
                 {club.clubName}
               </p>
-              <p className="text-[11px] text-slate-400 font-medium mt-px">
+              <p className="text-[11px] text-gray-400 font-medium mt-px">
                 {club.followerCount || 0} active followers
               </p>
             </div>
             <ChevronRight
               size={13}
-              className="text-slate-300 group-hover:text-slate-500 group-hover:translate-x-0.5 transition-all flex-shrink-0"
+              className="text-gray-300 group-hover:text-gray-500 group-hover:translate-x-0.5 transition-all flex-shrink-0"
             />
           </Link>
         ))}
       </div>
     ) : (
-      <p className="text-xs text-slate-400 text-center py-4">
+      <p className="text-xs text-gray-400 text-center py-4">
         No discovered networks.
       </p>
     )}
@@ -317,27 +317,27 @@ const Community = () => {
   };
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-2">
+    <div className="max-w-6xl mx-auto">
       {/* Search Header Action Panels */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 bg-white border border-slate-100 p-3 rounded-2xl shadow-3xs">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 bg-white border border-gray-100 p-3 rounded-2xl">
         <div className="relative w-full sm:w-80">
           <Search
             size={14}
-            className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
+            className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
           />
           <input
             type="text"
             aria-label="Search community updates"
-            placeholder="Search matching feed keywords..."
+            placeholder="Search the feed..."
             value={search}
             onChange={(e) => { searchRef.current = e.target.value; resetFeed(); setSearch(e.target.value); }}
-            className="w-full pl-9 pr-8 py-2 text-xs bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:border-slate-300 placeholder:text-slate-400 transition-colors"
+            className="w-full pl-9 pr-8 py-2 text-xs bg-gray-50 border border-gray-100 rounded-xl focus:outline-none focus:border-gray-300 placeholder:text-gray-400 transition-colors"
           />
           {search && (
             <button
               aria-label="Clear community search"
               onClick={() => { searchRef.current = ""; resetFeed(); setSearch(""); }}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
             >
               <X size={13} />
             </button>
@@ -349,11 +349,11 @@ const Community = () => {
             <button
               key={type}
               onClick={() => { if (type !== activeType) { resetFeed(); setActiveType(type); } }}
-              className={`px-3.5 py-1.5 text-xs font-semibold rounded-full border whitespace-nowrap transition-all duration-150 shadow-3xs
+              className={`px-3.5 py-1.5 text-xs font-semibold rounded-full border whitespace-nowrap transition-all duration-150
                 ${
                   activeType === type
-                    ? "bg-slate-900 text-white border-slate-900"
-                    : "bg-white text-slate-500 border-slate-200 hover:border-slate-400 hover:text-slate-800"
+                    ? "bg-gray-900 text-white border-gray-900"
+                    : "bg-white text-gray-500 border-gray-200 hover:border-gray-400 hover:text-gray-800"
                 }`}
             >
               {typeLabels[type]}
@@ -367,12 +367,12 @@ const Community = () => {
         {/* Left Feed */}
         <div className="flex-1 w-full min-w-0 order-2 lg:order-1">
           <div className="flex items-center justify-between mb-4 px-1">
-            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-              Timeline Activity Stream
+            <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+              Latest activity
             </h2>
             {!feedLoading && !feedError && (
-              <span className="text-xs text-slate-400 font-medium">
-                {feedItems.length} entries shown
+              <span className="text-xs text-gray-400 font-medium">
+                {feedItems.length} shown
               </span>
             )}
           </div>
@@ -406,14 +406,14 @@ const Community = () => {
               ))}
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center py-20 bg-white border border-slate-100 rounded-2xl text-center shadow-3xs">
-              <div className="w-10 h-10 bg-slate-50 border border-slate-100 rounded-full flex items-center justify-center mb-3 shadow-3xs">
-                <Megaphone size={15} className="text-slate-400" />
+            <div className="flex flex-col items-center justify-center py-20 bg-white border border-gray-100 rounded-2xl text-center">
+              <div className="w-10 h-10 bg-gray-50 border border-gray-100 rounded-full flex items-center justify-center mb-3">
+                <Megaphone size={15} className="text-gray-400" />
               </div>
-              <p className="text-sm font-bold text-slate-800">
+              <p className="text-sm font-bold text-gray-800">
                 No synchronized updates active
               </p>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-gray-400 mt-0.5">
                 {search
                   ? "Try rewriting search matching criteria filter nodes."
                   : "Follow extra campus networks to inflate timelines."}
@@ -424,10 +424,10 @@ const Community = () => {
             <button
               onClick={handleLoadMore}
               disabled={loadMoreLoading}
-              className="flex items-center justify-center gap-2 w-full py-3 mt-4 text-xs font-bold text-slate-700 bg-white border border-slate-200/80 rounded-xl hover:border-slate-400 hover:bg-slate-50/50 active:bg-slate-50 transition-all disabled:opacity-50"
+              className="flex items-center justify-center gap-2 w-full py-3 mt-4 text-xs font-bold text-gray-700 bg-white border border-gray-200/80 rounded-xl hover:border-gray-400 hover:bg-gray-50/50 active:bg-gray-50 transition-all disabled:opacity-50"
             >
               {loadMoreLoading ? (
-                <><Loader2 size={13} className="animate-spin text-slate-400" />{" "}Synchronizing Pipeline...</>
+                <><Loader2 size={13} className="animate-spin text-gray-400" />{" "}Loading...</>
               ) : (
                 "Load More Activity Updates"
               )}

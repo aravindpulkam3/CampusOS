@@ -23,6 +23,7 @@ import {
   startNextSemester,
 } from "../../../api/classroom.api";
 import NoticeFeed from "../../../components/cards/NoticeFeed";
+import EmptyState from "../../../components/common/EmptyState";
 
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -82,15 +83,10 @@ const Skeleton = () => (
   </div>
 );
 
-const EmptyState = ({ message }) => (
-  <p className="text-xs text-gray-400 text-center py-6 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-    {message}
-  </p>
-);
-
 // ─── Confirmation modal — used for the destructive "start next semester" action ──
 const ConfirmModal = ({ title, message, confirmLabel, onConfirm, onCancel, loading }) => (
-  <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+  // m-0!: these modals render inside a space-y container, whose margin would shorten the backdrop
+  <div className="fixed inset-0 m-0! bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center p-4">
     <div className="bg-white rounded-2xl border border-gray-100 shadow-xl w-full max-w-sm p-5">
       <div className="flex items-start gap-2.5 mb-3">
         <AlertTriangle size={16} className="text-amber-500 flex-shrink-0 mt-0.5" />
@@ -163,27 +159,29 @@ const TimetableGrid = ({ periods, subjects, editable, onAddClick, onEditClick, o
                   return (
                     <td key={day} className="p-1.5 align-top">
                       {period ? (
-                        <div className="bg-gray-50 border border-gray-100 rounded-lg p-2 group relative min-w-[90px]">
+                        <div className="bg-gray-50 border border-gray-100 rounded-lg p-2 relative min-w-[90px] max-w-[160px]">
                           <p className="font-semibold text-gray-900 truncate">
                             {subject?.name || "Unknown subject"}
                           </p>
                           {period.faculty && <p className="text-gray-400 truncate">{period.faculty}</p>}
                           {period.room && <p className="text-gray-400 truncate">{period.room}</p>}
                           {editable && (
-                            <div className="flex gap-2 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className="flex gap-1 mt-1 -ml-1.5">
                               <button
                                 type="button"
                                 onClick={() => onEditClick(period)}
-                                className="text-gray-400 hover:text-gray-900"
+                                aria-label="Edit period"
+                                className="p-1.5 rounded text-gray-400 hover:text-gray-900"
                               >
-                                <Pencil size={10} />
+                                <Pencil size={12} />
                               </button>
                               <button
                                 type="button"
                                 onClick={() => onDeleteClick(period)}
-                                className="text-gray-400 hover:text-red-500"
+                                aria-label="Delete period"
+                                className="p-1.5 rounded text-gray-400 hover:text-red-500"
                               >
-                                <Trash2 size={10} />
+                                <Trash2 size={12} />
                               </button>
                             </div>
                           )}
@@ -279,15 +277,15 @@ const PeriodFormModal = ({ initial, day, subjects, onSave, onClose, onDelete }) 
   };
 
   return (
-    <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 m-0! bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl border border-gray-100 shadow-xl w-full max-w-sm">
         <div className="flex items-center justify-between p-5 border-b border-gray-100">
           <h3 className="text-sm font-semibold text-gray-900">{isEdit ? "Edit period" : "Add period"}</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-700">
+          <button onClick={onClose} aria-label="Close" className="p-1.5 -m-1.5 rounded-lg text-gray-400 hover:text-gray-700">
             <X size={16} />
           </button>
         </div>
-        <form onSubmit={handleSubmit} className="p-5 space-y-3">
+        <form onSubmit={handleSubmit} className="p-5 space-y-3 max-h-[75vh] overflow-y-auto">
           {error && (
             <div className="px-3 py-2 bg-red-50 border border-red-200 rounded-lg">
               <p className="text-xs text-red-700">{error}</p>
@@ -299,7 +297,7 @@ const PeriodFormModal = ({ initial, day, subjects, onSave, onClose, onDelete }) 
             <select
               value={form.day}
               onChange={handleChange("day")}
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-gray-400"
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
             >
               {DAYS.map((d) => (
                 <option key={d} value={d}>
@@ -314,7 +312,7 @@ const PeriodFormModal = ({ initial, day, subjects, onSave, onClose, onDelete }) 
             <select
               value={form.subject}
               onChange={handleChange("subject")}
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-gray-400"
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
             >
               <option value="">Select subject</option>
               {subjects.map((s) => (
@@ -333,7 +331,7 @@ const PeriodFormModal = ({ initial, day, subjects, onSave, onClose, onDelete }) 
                 type="time"
                 value={form.startTime}
                 onChange={handleChange("startTime")}
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-gray-400"
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
               />
             </div>
             <div>
@@ -342,7 +340,7 @@ const PeriodFormModal = ({ initial, day, subjects, onSave, onClose, onDelete }) 
                 type="time"
                 value={form.endTime}
                 onChange={handleChange("endTime")}
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-gray-400"
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
               />
             </div>
           </div>
@@ -354,7 +352,7 @@ const PeriodFormModal = ({ initial, day, subjects, onSave, onClose, onDelete }) 
               placeholder="e.g. Dr. Rao"
               value={form.faculty}
               onChange={handleChange("faculty")}
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-gray-400"
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
             />
           </div>
 
@@ -365,7 +363,7 @@ const PeriodFormModal = ({ initial, day, subjects, onSave, onClose, onDelete }) 
               placeholder="e.g. C101"
               value={form.room}
               onChange={handleChange("room")}
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-gray-400"
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
             />
           </div>
 
@@ -462,7 +460,8 @@ const DeadlineCard = ({ deadline, classroomId, isClassRep, onDelete }) => {
               <div className="relative">
                 <button
                   onClick={() => setMenuOpen((p) => !p)}
-                  className="p-1 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+                  aria-label="Deadline actions"
+                  className="p-2 -m-1 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
                 >
                   <MoreHorizontal size={14} />
                 </button>
@@ -510,13 +509,16 @@ const Classroom = () => {
   const [showAdvanceConfirm, setShowAdvanceConfirm] = useState(false);
   const [advancing, setAdvancing] = useState(false);
   const [actionError, setActionError] = useState("");
+  const [loadError, setLoadError] = useState(false);
 
   const fetchOverview = useCallback(async () => {
     try {
       const { data } = await getClassroom();
       setOverview(data.data);
+      setLoadError(false);
     } catch (err) {
       console.error(err);
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -528,6 +530,17 @@ const Classroom = () => {
   }, [user?._id, fetchOverview]);
 
   if (loading) return <Skeleton />;
+
+  // A failed first load is not the same as having no classroom.
+  if (loadError && !overview) {
+    return (
+      <div className="max-w-2xl mx-auto">
+        <p role="alert" className="rounded-xl border border-red-100 bg-red-50 px-5 py-8 text-center text-sm text-red-700">
+          Could not load your classroom. Please refresh and try again.
+        </p>
+      </div>
+    );
+  }
 
   if (!overview || overview.reason === "unassigned") {
     return (
@@ -690,13 +703,15 @@ const Classroom = () => {
       )}
 
       {/* ── Academic Notices ── */}
-      <NoticeFeed
-        targetType="classroom"
-        targetId={classroomId}
-        title="Academic Notices"
-        canPost={isClassRep}
-        showActions={isClassRep}
-      />
+      <div className="bg-white border border-gray-100 rounded-xl p-5">
+        <NoticeFeed
+          targetType="classroom"
+          targetId={classroomId}
+          title="Academic Notices"
+          canPost={isClassRep}
+          showActions={isClassRep}
+        />
+      </div>
 
       {/* ── Upcoming Deadlines ── */}
       <div className="bg-white border border-gray-100 rounded-xl p-5">
