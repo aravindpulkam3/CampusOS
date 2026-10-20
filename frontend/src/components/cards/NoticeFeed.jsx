@@ -1,6 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
-import { Bell, BellRing, Plus, ChevronRight } from "lucide-react";
+import { useEffect, useState, useCallback, useId, useRef } from "react";
 import {
   getNotices,
   togglePinNotice,
@@ -9,57 +7,35 @@ import {
 } from "../../api/notice.api";
 import NoticeCard from "./NoticeCard";
 import useAuth from "../../hooks/useAuth";
+import { LoadError, SectionHead, note } from "../common/ui";
 
-const CompactSkeleton = () => (
-  <div className="animate-pulse">
-    {[...Array(3)].map((_, i) => (
-      <div
-        key={i}
-        className="flex items-center gap-2.5 py-2 border-b border-gray-50 last:border-0"
-      >
-        <div className="w-1.5 h-1.5 rounded-full bg-gray-200 flex-shrink-0" />
-        <div className="flex-1 space-y-1">
-          <div
-            className="h-2.5 bg-gray-100 rounded"
-            style={{ width: `${50 + i * 15}%` }}
-          />
-          <div className="h-2 bg-gray-100 rounded w-1/4" />
-        </div>
-        <div className="w-4 h-2 bg-gray-100 rounded" />
+const Skeleton = () => (
+  <div role="status" className="animate-pulse space-y-5 py-1.5">
+    <span className="sr-only">Loading notices</span>
+    {[62, 78].map((w) => (
+      <div key={w} className="space-y-2">
+        <div className="h-3 w-24 rounded bg-soft" />
+        <div className="h-3.5 rounded bg-soft" style={{ width: `${w}%` }} />
+        <div className="h-3 w-full rounded bg-soft" />
       </div>
     ))}
   </div>
 );
 
-const FullSkeleton = () => (
-  <div className="space-y-2 animate-pulse">
-    {[...Array(2)].map((_, i) => (
-      <div
-        key={i}
-        className="border border-gray-100 rounded-xl p-3.5 flex gap-3"
-      >
-        <div className="w-6 h-6 bg-gray-100 rounded-md flex-shrink-0" />
-        <div className="flex-1 space-y-2">
-          <div className="h-2 bg-gray-100 rounded w-1/4" />
-          <div className="h-3 bg-gray-100 rounded w-3/4" />
-          <div className="h-2.5 bg-gray-100 rounded" />
-        </div>
-      </div>
-    ))}
-  </div>
-);
-
+// The notice section every page shares: a heading, then the notices as a quiet
+// feed, urgent ones first. It has no width of its own, so the same component
+// serves a full page column, a side column and a phone.
 const NoticeFeed = ({
   targetType,
   targetId,
   canPost = false,
   showActions = false,
   title = "Notices",
-  showHeader = true, // false when the caller already renders its own heading
-  compact = false, // Layout styling flag only now
+  postTo, // where "Post notice" goes; shown only when canPost is also true
 }) => {
-  const navigate = useNavigate();
   const { user } = useAuth();
+  const headingId = useId();
+  const headingRef = useRef(null);
 
   const [notices, setNotices] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -76,7 +52,7 @@ const NoticeFeed = ({
       // Backend now naturally returns a max of 5 unexpired notices sorted by priority
       setNotices(res.data.data.notices);
     } catch {
-      setError("Failed to load notices.");
+      setError("Couldn't load notices.");
     } finally {
       setLoading(false);
     }
@@ -86,7 +62,11 @@ const NoticeFeed = ({
     fetchNotices();
   }, [fetchNotices]);
 
-  const handleRemove = (id) => setNotices((p) => p.filter((n) => n._id !== id));
+  // The row that had focus is gone, so park focus on the section heading.
+  const handleRemove = (id) => {
+    setNotices((p) => p.filter((n) => n._id !== id));
+    headingRef.current?.focus();
+  };
   const handlePin = async (id) => {
     await togglePinNotice(id);
   };
@@ -101,73 +81,51 @@ const NoticeFeed = ({
     handleRemove(id);
   };
 
-  const urgentCount = notices.filter(
-    (n) => n.priority === "urgent" || n.priority === "high",
-  ).length;
-  const createPath = `/notices/create?category=${targetType}${targetId ? `&${targetType}=${targetId}` : ""}`;
+  // Urgent notices lead; within each group the backend's order (pinned first)
+  // is kept as it came. Nothing is dropped and nothing else is re-sorted.
+  const ordered = [
+    ...notices.filter((n) => n.priority === "urgent"),
+    ...notices.filter((n) => n.priority !== "urgent"),
+  ];
 
   return (
-    <div>
-      {/* Header */}
-      {showHeader && (
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          {urgentCount > 0 ? (
-            <BellRing size={13} className="text-red-500" />
-          ) : (
-            <Bell size={13} className="text-gray-400" />
-          )}
-          <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
-          {!loading && notices.length > 0 && (
-            <span
-              className={`text-xs font-semibold px-2 py-0.5 rounded-full
-              ${urgentCount > 0 ? "bg-red-50 text-red-700" : "bg-gray-100 text-gray-500"}`}
-            >
-              {urgentCount > 0
-                ? `${urgentCount} alert${urgentCount > 1 ? "s" : ""}`
-                : notices.length}
-            </span>
-          )}
-        </div>
-      </div>
-      )}
+    <section aria-labelledby={headingId} className="min-w-0">
+      <SectionHead
+        id={headingId}
+        headingRef={headingRef}
+        title={title}
+        linkTo={canPost && postTo ? postTo : undefined}
+        linkLabel="Post notice"
+      />
 
-      {/* Body */}
       {loading ? (
-        compact ? (
-          <CompactSkeleton />
-        ) : (
-          <FullSkeleton />
-        )
+        <Skeleton />
       ) : error ? (
-        <p className="text-xs text-red-600">{error}</p>
+        <LoadError onRetry={fetchNotices}>{error}</LoadError>
       ) : notices.length > 0 ? (
-        <>
-          <div className={compact ? "" : "space-y-2"}>
-            {notices.map((notice) => {
-              // createdBy is usually populated, but may be a bare id.
-              const creatorId = notice.createdBy?._id ?? notice.createdBy;
-              const isOwner = !!user && String(creatorId) === String(user._id);
-              const canManage =
-                showActions && (isOwner || user?.role === "superadmin");
-              return (
-                <NoticeCard
-                  key={notice._id}
-                  notice={notice}
-                  compact={compact}
-                  canManage={canManage}
-                  onPin={handlePin}
-                  onArchive={handleArchive}
-                  onDelete={handleDelete}
-                />
-              );
-            })}
-          </div>
-        </>
+        <ul className="divide-y divide-line">
+          {ordered.map((notice) => {
+            // createdBy is usually populated, but may be a bare id.
+            const creatorId = notice.createdBy?._id ?? notice.createdBy;
+            const isOwner = !!user && String(creatorId) === String(user._id);
+            const canManage = showActions && (isOwner || user?.role === "superadmin");
+            return (
+              <NoticeCard
+                key={notice._id}
+                notice={notice}
+                canManage={canManage}
+                showSource={!targetId}
+                onPin={handlePin}
+                onArchive={handleArchive}
+                onDelete={handleDelete}
+              />
+            );
+          })}
+        </ul>
       ) : (
-        <p className="text-xs text-gray-500">No notices yet.</p>
+        <p className={note}>No notices yet. New ones will show up here.</p>
       )}
-    </div>
+    </section>
   );
 };
 

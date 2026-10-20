@@ -1,265 +1,140 @@
-import { Megaphone, Radio, Trash2, ChevronDown, ChevronUp } from "lucide-react";
 import { useRef, useState } from "react";
+import { Link } from "react-router-dom";
+import { Trash2 } from "lucide-react";
 import useAuth from "../../hooks/useAuth";
 import useIsClamped from "../../hooks/useIsClamped";
+import useImageOk from "../../hooks/useImageOk";
+import { LogoTile, feedTitle, focusRing } from "../../components/common/ui";
+import { formatDateTime, formatTimeAgo } from "../../utils/formatDate";
 
-// ─── Helpers ──────────────────────────────────────────────────
-const relativeTime = (d) => {
-  if (!d) return "—";
-  const mins = Math.floor((Date.now() - new Date(d)) / 60000);
-  if (mins < 1) return "Just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  if (days === 1) return "Yesterday";
-  return `${days}d ago`;
-};
+const hoverLine = "decoration-ink/25 underline-offset-[3px] hover:underline";
 
-const clubBg = [
-  "bg-gray-900",
-  "bg-blue-600",
-  "bg-purple-600",
-  "bg-emerald-600",
-  "bg-amber-500",
-  "bg-rose-600",
-];
-
-const getAccentBg = (name) =>
-  clubBg[(name?.charCodeAt(0) ?? 0) % clubBg.length];
-
-const getInitials = (name) =>
-  name
-    ?.split(" ")
-    .map((w) => w[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase() || "?";
-
-const typeConfig = {
-  club: {
-    label: "Club Announcement",
-    icon: Megaphone,
-    color: "bg-blue-50 text-blue-700 border-blue-100/40",
-  },
-  event: {
-    label: "Event Update",
-    icon: Radio,
-    color: "bg-purple-50 text-purple-700 border-purple-100/40",
-  },
-};
-
-const AnnouncementCard = ({
-  announcement,
-  variant = "detail",
-  avatarBg,
-  onClick,
-  onDelete,
-  isEligible,
-}) => {
+// One announcement, as a list item (wrap a run of them in <ul>).
+//   variant="feed"    the community feed: leads with the club or event it came
+//                     from, and links there
+//   variant="detail"  on that club's or event's own page: leads with who posted it
+// `isEligible` allows deleting (superadmins always may).
+const AnnouncementCard = ({ announcement, variant = "detail", onDelete, isEligible }) => {
   const isFeed = variant === "feed";
+  const { user } = useAuth();
   const [isDeleting, setIsDeleting] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const bodyRef = useRef(null);
   const isClamped = useIsClamped(bodyRef, !isExpanded, announcement.body);
-  const { user } = useAuth();
+  const [showImage, onImageError] = useImageOk(announcement.image);
 
-  // ── Source info (feed variant) ──────────────────────────────
-  const tType = announcement.targetType;
-  const tConf = typeConfig[tType] || typeConfig.club;
-  const TypeIcon = tConf.icon;
+  // ── Where it came from (feed) ──
+  const fromEvent = announcement.targetType === "event";
+  const sourceName = fromEvent ? announcement.event?.eventName : announcement.club?.clubName;
+  const sourceId = fromEvent ? announcement.event?._id : announcement.club?._id;
+  const sourceTo = sourceId && `/community/${fromEvent ? "events" : "clubs"}/${sourceId}`;
 
-  const sourceName =
-    tType === "club"
-      ? announcement.club?.clubName
-      : announcement.event?.eventName;
-  const sourceAvatarBg = avatarBg || getAccentBg(sourceName);
-  const sourceInitials = getInitials(sourceName);
-
-  // ── Author info (detail variant) ────────────────────────────
+  // ── Who posted it (detail) ──
   const author = announcement.postedBy;
-  const isPopulated =
-    author && typeof author === "object" && "firstName" in author;
-
+  const isPopulated = author && typeof author === "object" && "firstName" in author;
   const authorName = isPopulated
     ? `${author.firstName ?? ""} ${author.lastName ?? ""}`.trim()
     : "System Admin";
-  const authorInitials = isPopulated
-    ? `${author.firstName?.[0] ?? ""}${author.lastName?.[0] ?? ""}`.toUpperCase()
-    : "A";
-  const authorAvatarBg = avatarBg || "bg-gray-800";
 
-  const handleDeleteClick = async (e) => {
-    e.stopPropagation();
-    if (window.confirm("Are you sure you want to delete this announcement?")) {
-      try {
-        setIsDeleting(true);
-        if (onDelete) await onDelete(announcement._id);
-      } catch (error) {
-        console.error("Failed to delete announcement:", error);
-      } finally {
-        setIsDeleting(false);
-      }
+  const handleDelete = async () => {
+    if (!window.confirm("Are you sure you want to delete this announcement?")) return;
+    try {
+      setIsDeleting(true);
+      if (onDelete) await onDelete(announcement._id);
+    } catch (error) {
+      console.error("Failed to delete announcement:", error);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
-  const toggleExpand = (e) => {
-    e.stopPropagation(); // Stop click pass-throughs from altering standard navigation
-    setIsExpanded(!isExpanded);
-  };
+  const when = (
+    <time dateTime={announcement.createdAt} title={formatDateTime(announcement.createdAt)}>
+      {formatTimeAgo(announcement.createdAt)}
+    </time>
+  );
 
   return (
-    <div
-      onClick={isFeed && onClick ? onClick : undefined}
-      className={`bg-white border border-gray-100 rounded-2xl overflow-hidden transition-all duration-200
-        ${isFeed && onClick ? "cursor-pointer hover:border-gray-300 hover:shadow-2xs group" : ""}
-        ${isDeleting ? "opacity-50 pointer-events-none" : ""}
-      `}
-    >
-      {/* Feed Card Top Hero Image */}
-      {isFeed && announcement.image && (
-        <div className="w-full h-44 sm:h-48 overflow-hidden bg-gray-50 border-b border-gray-100">
+    <li className={`flex items-start gap-3.5 py-5 first:pt-1.5 ${isDeleting ? "pointer-events-none opacity-50" : ""}`}>
+      {isFeed ? (
+        <LogoTile src={announcement.club?.logo} name={sourceName} />
+      ) : (
+        <LogoTile src={isPopulated ? author.profilePicture : null} name={authorName} cover />
+      )}
+
+      <div className="min-w-0 flex-1">
+        <p className="flex items-baseline gap-2 text-[13.5px]">
+          <span className="min-w-0 truncate font-[550] text-ink">
+            {isFeed && sourceTo ? (
+              <Link to={sourceTo} className={`rounded ${hoverLine} ${focusRing}`}>
+                {sourceName}
+              </Link>
+            ) : isFeed ? (
+              sourceName
+            ) : (
+              authorName
+            )}
+          </span>
+          <span className="flex-none text-ink-3">
+            {isFeed && (fromEvent ? "Event update, " : "Club announcement, ")}
+            {when}
+          </span>
+        </p>
+
+        <h3 className={`mt-1 ${feedTitle}`}>
+          {isFeed && sourceTo ? (
+            <Link to={sourceTo} className={`rounded ${hoverLine} ${focusRing}`}>
+              {announcement.title}
+            </Link>
+          ) : (
+            announcement.title
+          )}
+        </h3>
+
+        {/* Clamped to 3 lines of running text; the toggle appears only when text is cut off */}
+        {announcement.body && (
+          <p
+            ref={bodyRef}
+            className={`mt-1 break-words text-[14.5px] leading-normal text-ink-2 ${
+              isExpanded ? "whitespace-pre-line" : "line-clamp-3"
+            }`}
+          >
+            {announcement.body}
+          </p>
+        )}
+        {(isClamped || isExpanded) && (
+          <button
+            type="button"
+            onClick={() => setIsExpanded((v) => !v)}
+            aria-expanded={isExpanded}
+            className={`mt-1.5 rounded text-[13px] font-[550] text-ink-2 transition-colors hover:text-ink ${focusRing}`}
+          >
+            {isExpanded ? "Show less" : "Show more"}
+          </button>
+        )}
+
+        {showImage && (
           <img
             src={announcement.image}
             alt=""
-            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-102"
             loading="lazy"
+            onError={onImageError}
+            className="mt-3.5 aspect-video w-full max-w-[460px] rounded-2xl bg-soft object-cover"
           />
-        </div>
-      )}
-
-      <div className="p-4 space-y-3">
-        {/* Feed layout Header */}
-        {isFeed && (
-          <div className="flex items-center justify-between gap-2">
-            <span
-              className={`flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-0.5 rounded-md border tracking-wide uppercase ${tConf.color}`}
-            >
-              <TypeIcon size={11} />
-              {tConf.label}
-            </span>
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] text-gray-400 font-medium">
-                {relativeTime(announcement.createdAt)}
-              </span>
-              {(isEligible || user?.role === "superadmin") && (
-                <button
-                  onClick={handleDeleteClick}
-                  aria-label="Delete announcement"
-                  className="text-gray-400 hover:text-red-500 p-1.5 rounded-xl hover:bg-red-50 transition-colors"
-                >
-                  <Trash2 size={13} />
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Detailed Layout View Header */}
-        {!isFeed && (
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2.5">
-              {/* Profile Image fallback layer */}
-              <div
-                className={`w-8 h-8 rounded-xl ${authorAvatarBg} flex items-center justify-center text-white text-xs font-black flex-shrink-0 overflow-hidden border border-black/5`}
-              >
-                {isPopulated && author.profilePicture ? (
-                  <img
-                    src={author.profilePicture}
-                    alt=""
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  authorInitials
-                )}
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs font-bold text-gray-800 leading-tight">
-                  {authorName}
-                </p>
-                <p className="text-[11px] text-gray-500 font-medium mt-px">
-                  {relativeTime(announcement.createdAt)}
-                </p>
-              </div>
-            </div>
-            {(isEligible || user?.role === "superadmin") && (
-              <button
-                onClick={handleDeleteClick}
-                aria-label="Delete announcement"
-                className="text-gray-400 hover:text-red-500 p-1.5 rounded-xl hover:bg-red-50 transition-colors"
-              >
-                <Trash2 size={13} />
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* Core content header title string block */}
-        <div className="space-y-1 min-w-0">
-          <h3 className="text-xs sm:text-sm font-bold text-gray-800 leading-snug tracking-tight break-words">
-            {announcement.title}
-          </h3>
-
-          {/* Body, clamped to 3 lines; the toggle appears only when text is cut off */}
-          {announcement.body && (
-            <div className="relative">
-              <p
-                ref={bodyRef}
-                className={`text-xs text-gray-500 font-medium leading-relaxed whitespace-pre-line break-words
-        ${!isExpanded ? "line-clamp-3" : ""}`}
-              >
-                {announcement.body}
-              </p>
-
-              {isClamped && (
-                <button
-                  onClick={toggleExpand}
-                  aria-expanded={isExpanded}
-                  className="flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-700 mt-1.5 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15 transition-colors"
-                >
-                  {isExpanded ? (
-                    <>
-                      Show less <ChevronUp size={12} />
-                    </>
-                  ) : (
-                    <>
-                      Show more <ChevronDown size={12} />
-                    </>
-                  )}
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Inline Content Attachment Image (Detail variant layout placement) */}
-        {!isFeed && announcement.image && (
-          <div className="w-full rounded-2xl overflow-hidden border border-gray-100 bg-gray-50/50">
-            <img
-              src={announcement.image}
-              alt=""
-              className="w-full h-auto max-h-80 object-contain mx-auto"
-              loading="lazy"
-            />
-          </div>
-        )}
-
-        {/* Feed Source Chip Summary Footer Block */}
-        {isFeed && sourceName && (
-          <div className="flex items-center gap-2 pt-3 border-t border-gray-50">
-            <div
-              className={`w-5 h-5 rounded-md ${sourceAvatarBg} flex items-center justify-center text-white font-black flex-shrink-0 border border-black/5`}
-              style={{ fontSize: "8px" }}
-            >
-              {sourceInitials}
-            </div>
-            <span className="text-[11px] font-semibold text-gray-400 truncate">
-              {sourceName}
-            </span>
-          </div>
         )}
       </div>
-    </div>
+
+      {(isEligible || user?.role === "superadmin") && (
+        <button
+          type="button"
+          onClick={handleDelete}
+          aria-label="Delete announcement"
+          className={`-mr-1.5 -mt-1 grid size-8 flex-none place-items-center rounded-lg text-ink-3 transition-colors hover:bg-soft hover:text-urgent ${focusRing}`}
+        >
+          <Trash2 size={15} aria-hidden="true" />
+        </button>
+      )}
+    </li>
   );
 };
 

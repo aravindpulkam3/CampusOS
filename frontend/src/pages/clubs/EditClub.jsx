@@ -1,98 +1,89 @@
 import { useState, useEffect } from "react";
-import { useNavigate, useLocation, useParams ,Link} from "react-router-dom";
-import { ArrowLeft, X, Plus, AlertTriangle ,ShieldAlert} from "lucide-react";
-import api from "../../api/axios"; 
-import ImageUploadZone from "../../components/forms/ImageUploadZone"; 
-import { updateClub } from "../../api/club.api";
-import { CLUB_CATEGORIES } from "../../constants/categories";
+import { useNavigate, useLocation, useParams, Link } from "react-router-dom";
+import { getClubDetails, updateClub } from "../../api/club.api";
+import { PageMessage, Switch, btn, btnGhost, crumbLink } from "../../components/common/ui";
+import { Busy, FormBar, FormSection, FormSheet, fixMessage, focusFirstError } from "../../components/forms/formBits";
+import ClubFields, { CLUB_ORDER, clubFieldId } from "./ClubFields";
 
-// ─── Constants ────────────────────────────────────────────────
-const categoryColor = {
-  Technical: "border-blue-200 bg-blue-50 text-blue-700",
-  Cultural: "border-purple-200 bg-purple-50 text-purple-700",
-  Creative: "border-orange-200 bg-orange-50 text-orange-700",
-  Business: "border-green-200 bg-green-50 text-green-700",
-  Sports: "border-emerald-200 bg-emerald-50 text-emerald-700",
-};
-
-// ─── Field Components ─────────────────────────────────────────
-const Label = ({ children, required, optional }) => (
-  <label className="block text-xs font-medium text-gray-700 mb-1.5">
-    {children}
-    {required && <span className="text-red-400 ml-0.5">*</span>}
-    {optional && <span className="text-gray-400 font-normal ml-1">(optional)</span>}
-  </label>
-);
-
-const FieldError = ({ message }) =>
-  message ? <p className="text-xs text-red-400 mt-1.5">{message}</p> : null;
-
-const Section = ({ title, subtitle, children }) => (
-  <div className="bg-white border border-gray-100 rounded-xl p-5 flex flex-col gap-4">
-    <div className="pb-2 border-b border-gray-50">
-      <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
-      {subtitle && <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>}
-    </div>
-    {children}
-  </div>
-);
-
-
+const formFrom = (club) => ({
+  clubName: club?.clubName || "",
+  description: club?.description || "",
+  category: club?.category || "",
+  logo: club?.logo || "",
+  banner: club?.banner || "",
+  isActive: club?.isActive ?? false,
+});
 
 // ─── Main Component ───────────────────────────────────────────
+// The club page hands the club and the viewer's admin status over in the
+// navigation state. When that is missing (the page was reloaded or opened
+// from a link), both are fetched instead.
 const EditClub = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { clubId } = useParams();
 
-  const existingClub = location.state?.club;
-  const isAdmin = location.state?.isAdmin;
-  console.log(isAdmin);
+  const handed = location.state?.club ? location.state : null;
+  const [club, setClub] = useState(handed?.club || null);
+  const [isAdmin, setIsAdmin] = useState(!!handed?.isAdmin);
+  const [checking, setChecking] = useState(!handed);
 
-  const [form, setForm] = useState({
-    clubName: existingClub?.clubName || "",
-    description: existingClub?.description || "",
-    category: existingClub?.category || "",
-    logo: existingClub?.logo || "",
-    banner: existingClub?.banner || "",
-    isActive: existingClub?.isActive ?? false,
-  });
-
-  const [admins, setAdmins] = useState(existingClub?.clubAdmins || []);
-  const [adminInput, setAdminInput] = useState("");
-
+  const [form, setForm] = useState(formFrom(handed?.club));
   const [errors, setErrors] = useState({});
   const [submitError, setSubmitError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  if (!existingClub || !isAdmin) {
+  useEffect(() => {
+    if (handed) return;
+    let alive = true;
+    getClubDetails(clubId)
+      .then((res) => {
+        if (!alive) return;
+        const { club: fetched, isAdmin: admin } = res.data.data;
+        setClub(fetched);
+        setIsAdmin(!!admin);
+        setForm(formFrom(fetched));
+      })
+      .catch((err) => console.error(err))
+      .finally(() => {
+        if (alive) setChecking(false);
+      });
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clubId]);
+
+  if (checking) {
     return (
-      <div className="max-w-md mx-auto my-20 bg-white border border-gray-100 rounded-2xl p-8 text-center shadow-2xs">
-        <div className="w-12 h-12 rounded-xl bg-red-50 flex items-center justify-center text-red-600 mx-auto mb-4 border border-red-100">
-          <ShieldAlert size={22} />
-        </div>
-        <h3 className="text-base font-semibold text-gray-900 mb-1.5">Access Denied</h3>
-        <p className="text-xs text-gray-400 leading-relaxed mb-6">
-          You do not have the required administrative permissions to modify the configuration properties for this club workspace.
-          If you believe this is an error, please verify your credentials with a platform superadmin.
-        </p>
-        <div className="flex gap-2">
-          <button
-            onClick={() => navigate(-1)}
-            className="flex-1 px-4 py-2 text-xs font-medium text-gray-700 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors flex items-center justify-center gap-1.5"
-          >
-            <ArrowLeft size={12} /> Go Back
-          </button>
-          <Link
-            to="/"
-            className="flex-1 px-4 py-2 text-xs font-medium text-white bg-gray-900 rounded-xl hover:bg-gray-800 transition-colors flex items-center justify-center"
-          >
-            Return Home
-          </Link>
-        </div>
+      <div className="max-w-[760px] animate-pulse pb-10" aria-busy="true">
+        <div className="mt-1 h-4 w-32 rounded bg-soft lg:mt-4" />
+        <div className="mt-2 h-9 w-56 rounded-lg bg-soft" />
+        <div className="mt-12 h-40 rounded-[11px] bg-soft" />
       </div>
     );
   }
+
+  if (!club || !isAdmin) {
+    return (
+      <PageMessage
+        title="You can't edit this club"
+        action={
+          <Link to={club ? `/community/clubs/${clubId}` : "/community/clubs"} className={btnGhost}>
+            {club ? "Back to the club" : "Back to clubs"}
+          </Link>
+        }
+      >
+        Only the club's admins can change its details. If you think that's wrong, ask a superadmin.
+      </PageMessage>
+    );
+  }
+
+  const setValue = (field, value) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+    setErrors((prev) => ({ ...prev, [field]: "" }));
+    setSubmitError("");
+  };
 
   const validate = () => {
     const e = {};
@@ -100,35 +91,33 @@ const EditClub = () => {
     if (!form.description.trim()) e.description = "Description is required";
     if (!form.category) e.category = "Category is required";
     return e;
-  }
-
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     const errs = validate();
     if (Object.keys(errs).length) {
       setErrors(errs);
+      focusFirstError(errs, CLUB_ORDER, clubFieldId);
       return;
     }
 
     setSubmitting(true);
     setSubmitError("");
     try {
-     
-      const payload = await updateClub(clubId, {
+      await updateClub(clubId, {
         clubName: form.clubName.trim(),
         description: form.description.trim(),
         category: form.category,
         logo: form.logo ? form.logo : null,
         banner: form.banner ? form.banner : null,
         isActive: form.isActive,
-        adminIds: admins.map((a) => a._id),
+        // The admin list is sent back unchanged; this page doesn't edit it.
+        adminIds: (club.clubAdmins || []).map((a) => a._id),
       });
-      
-      console.log("Update acknowledgment data context response:", payload.data);
-      
+
       navigate(`/community/clubs/${clubId}`, {
-        state: { toast: "Club updated successfully." },
+        state: { toast: "Club updated." },
       });
     } catch (err) {
       setSubmitError(
@@ -139,169 +128,43 @@ const EditClub = () => {
     }
   };
 
-  if (!existingClub || !isAdmin) return null;
-
   return (
-    
-    <div className="max-w-2xl mx-auto">
-      {/* Back */}
-      <button
-        onClick={() => navigate(-1)}
-        className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-700 transition-colors mb-6"
-      >
-        <ArrowLeft size={14} /> Back
-      </button>
+    <FormSheet
+      title="Edit club"
+      sub="Changes show to followers and members straight away."
+      crumb={
+        <>
+          <Link to="/community/clubs" className={crumbLink}>Clubs</Link> /{" "}
+          <Link to={`/community/clubs/${clubId}`} className={crumbLink}>{club.clubName}</Link>
+        </>
+      }
+    >
+      <form onSubmit={handleSubmit} noValidate>
+        <ClubFields form={form} errors={errors} setValue={setValue} />
 
-      {/* Header */}
-      <div className="mb-6">
-        <h2 className="text-lg font-semibold text-gray-900">Edit Club</h2>
-        <p className="text-xs text-gray-400 mt-0.5">
-          Changes will be visible to all followers and members.
-        </p>
-      </div>
-
-      {submitError && (
-        <div className="flex items-start gap-2.5 px-4 py-3 bg-red-50 border border-red-200 rounded-xl mb-4">
-          <AlertTriangle size={14} className="text-red-500 mt-0.5 flex-shrink-0" />
-          <p className="text-xs text-red-700">{submitError}</p>
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        {/* ── Basic Info ── */}
-        <Section title="Basic Information">
-          <div>
-            <Label required>Club Name</Label>
-            {/* ✅ Swapped out abstraction helper components to direct, responsive syntax setters */}
-            <input
-              type="text"
-              placeholder="e.g. WebDev Club, IEEE Chapter"
-              value={form.clubName}
-              onChange={(e) => {
-                setForm(prev => ({ ...prev, clubName: e.target.value }));
-                setErrors(prev => ({ ...prev, clubName: "" }));
-              }}
-              className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100 placeholder:text-gray-300 transition-colors"
-            />
-            <FieldError message={errors.clubName} />
+        <FormSection title="Status">
+          <div className="sm:col-span-2">
+            <Switch checked={form.isActive} onChange={(next) => setValue("isActive", next)}>
+              {form.isActive ? "Active" : "Inactive"}
+            </Switch>
+            <p className="mt-2 text-[13.5px] text-ink-2">
+              {form.isActive
+                ? "The club is visible and active on the platform."
+                : "The club is hidden. Only a superadmin can make it active again."}
+            </p>
           </div>
+        </FormSection>
 
-          <div>
-            <Label required>Description</Label>
-            {/* ✅ Swapped out abstraction helper components to direct, responsive syntax setters */}
-            <textarea
-              rows={5}
-              placeholder="What does your club do? What are your goals and activities?"
-              value={form.description}
-              onChange={(e) => {
-                setForm(prev => ({ ...prev, description: e.target.value }));
-                setErrors(prev => ({ ...prev, description: "" }));
-              }}
-              className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100 placeholder:text-gray-300 transition-colors resize-none"
-            />
-            <FieldError message={errors.description} />
-          </div>
-
-          <div>
-            <Label required>Category</Label>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-1">
-              {CLUB_CATEGORIES.map((cat) => (
-                <button
-                  key={cat}
-                  type="button"
-                  onClick={() => {
-                    setForm((prev) => ({ ...prev, category: cat }));
-                    setErrors((prev) => ({ ...prev, category: "" }));
-                  }}
-                  className={`py-2.5 px-3 rounded-xl border text-xs font-medium transition-all duration-150
-                    ${form.category === cat
-                        ? categoryColor[cat]
-                        : "bg-white text-gray-500 border-gray-200 hover:border-gray-400"
-                    }`}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
-            <FieldError message={errors.category} />
-          </div>
-        </Section>
-
-        {/* ── Branding ── */}
-        <Section title="Branding" subtitle="Upload club media assets cleanly into your system">
-          <div>
-            <ImageUploadZone
-              label="Club Icon / Logo"
-              value={form.logo}
-              folder="club-logos"
-              onChange={(uploadedUrl) => {
-                setForm((prev) => ({ ...prev, logo: uploadedUrl }));
-                setSubmitError("");
-              }}
-            />
-          </div>
-
-          <div>
-            <ImageUploadZone
-              label="Club Header Banner"
-              value={form.banner}
-              folder="clubs-banners"
-              onChange={(uploadedUrl) => {
-                setForm((prev) => ({ ...prev, banner: uploadedUrl }));
-                setSubmitError("");
-              }}
-            />
-          </div>
-        </Section>
-
-        {/* ── Status ── */}
-        <Section title="Club Status">
-          <label className="flex items-start gap-3 cursor-pointer group">
-            <div className="relative mt-0.5">
-              <input
-                type="checkbox"
-                checked={form.isActive}
-                onChange={(e) => setForm(prev => ({ ...prev, isActive: e.target.checked }))}
-                className="sr-only"
-              />
-              <div className={`w-9 h-5 rounded-full transition-colors duration-200 ${form.isActive ? "bg-gray-900" : "bg-gray-200"}`} />
-              <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200 ${form.isActive ? "translate-x-4" : "translate-x-0"}`} />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-gray-800">{form.isActive ? "Active" : "Inactive"}</p>
-              <p className="text-xs text-gray-400 mt-0.5">
-                {form.isActive ? "Club is visible and active on the platform." : "Club is hidden. Only Super Admin can activate it."}
-              </p>
-            </div>
-          </label>
-        </Section>
-
-        {/* ── Actions ── */}
-        <div className="flex items-center justify-end gap-3 pt-2 pb-6">
-          <button
-            type="button"
-            onClick={() => navigate(-1)}
-            className="px-4 py-2 text-sm font-medium text-gray-500 border border-gray-200 rounded-lg hover:border-gray-400 hover:text-gray-700 transition-colors"
-          >
+        <FormBar message={submitError || fixMessage(errors)}>
+          <button type="button" onClick={() => navigate(-1)} className={btnGhost}>
             Cancel
           </button>
-          <button
-            type="submit"
-            disabled={submitting}
-            className="flex items-center gap-2 px-5 py-2 text-sm font-medium bg-gray-900 text-white rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {submitting ? (
-              <>
-                <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Saving...
-              </>
-            ) : (
-              "Save Changes"
-            )}
+          <button type="submit" disabled={submitting} className={btn}>
+            {submitting ? <Busy>Saving…</Busy> : "Save changes"}
           </button>
-        </div>
+        </FormBar>
       </form>
-    </div>
+    </FormSheet>
   );
 };
 

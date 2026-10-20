@@ -1,26 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
-import {
-  ArrowLeft,
-  ArrowRight,
-  Ban,
-  CalendarDays,
-  Check,
-  CheckCircle2,
-  ChevronDown,
-  ChevronUp,
-  Clock,
-  Loader2,
-  Lock,
-  MapPin,
-  Megaphone,
-  Pencil,
-  Plus,
-  Sparkles,
-  Timer,
-  UserCheck,
-  Users,
-} from "lucide-react";
+import { useParams, Link } from "react-router-dom";
+import { Ban, CheckCircle2, Loader2, Pencil, Plus } from "lucide-react";
 import {
   getEventById,
   registerForEvent,
@@ -33,174 +13,30 @@ import {
 import useAuth from "../../hooks/useAuth";
 import useIsClamped from "../../hooks/useIsClamped";
 import useImageOk from "../../hooks/useImageOk";
-import { focusRing, SectionHeader, ManageLink } from "../../components/common/SectionBits";
+import useNow from "../../hooks/useNow";
+import {
+  Facts,
+  LoadError,
+  LoadMore,
+  LogoTile,
+  PageMessage,
+  PageTitle,
+  Row,
+  Rows,
+  SectionHead,
+  btnGhost,
+  btnGhostSm,
+  btnLg,
+  crumbLink,
+  focusRing,
+  note,
+  panel,
+  tone,
+} from "../../components/common/ui";
 import NoticeFeed from "../../components/cards/NoticeFeed";
 import AnnouncementCard from "../announcements/AnnouncementCard";
-import { formatShortDate, formatTime24 } from "../../utils/formatDate";
+import { formatClock, formatShortDate } from "../../utils/formatDate";
 import { formatEventDay, registrationCutoff } from "./eventDates";
-
-// ─── Event accent ─────────────────────────────────────────────
-// Each category's accent, written out as complete class strings: Tailwind only
-// generates classes it can find verbatim, so never build these from parts.
-// The CTA sits on the dark banner; its white label is >= 4.5:1 on every fill.
-// The About surface stays a whisper of the hue (-50 at <= 40%).
-const categoryAccent = {
-  Technical: {
-    chip: "bg-blue-600 text-white",
-    cta: "bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-black/30",
-    ring: "focus-visible:ring-blue-300",
-    fallback: "bg-blue-700",
-    line: "bg-blue-600",
-    progress: "bg-blue-400",
-    dot: "bg-blue-500",
-    countFlash: "text-blue-300",
-    iconOnDark: "bg-blue-500/20 text-blue-200",
-    iconBadge: "bg-blue-50 text-blue-600",
-    aboutIcon: "bg-white text-blue-600 ring-1 ring-blue-100",
-    aboutSurface: "bg-blue-50/40 ring-1 ring-blue-100/70",
-    aboutDivider: "lg:border-blue-100",
-    eyebrow: "text-blue-700",
-    link: "text-blue-700 hover:text-blue-800",
-    check: "text-blue-600",
-    pill: "bg-white text-blue-800 ring-1 ring-blue-200",
-    tagPill: "bg-white/70 text-gray-600 ring-1 ring-blue-100",
-    sectionIcon: "text-blue-600",
-    avatarBg: "bg-blue-600",
-  },
-  Cultural: {
-    chip: "bg-purple-600 text-white",
-    cta: "bg-purple-600 hover:bg-purple-700 text-white shadow-lg shadow-black/30",
-    ring: "focus-visible:ring-purple-300",
-    fallback: "bg-purple-700",
-    line: "bg-purple-600",
-    progress: "bg-purple-400",
-    dot: "bg-purple-500",
-    countFlash: "text-purple-300",
-    iconOnDark: "bg-purple-500/20 text-purple-200",
-    iconBadge: "bg-purple-50 text-purple-600",
-    aboutIcon: "bg-white text-purple-600 ring-1 ring-purple-100",
-    aboutSurface: "bg-purple-50/40 ring-1 ring-purple-100/70",
-    aboutDivider: "lg:border-purple-100",
-    eyebrow: "text-purple-700",
-    link: "text-purple-700 hover:text-purple-800",
-    check: "text-purple-600",
-    pill: "bg-white text-purple-800 ring-1 ring-purple-200",
-    tagPill: "bg-white/70 text-gray-600 ring-1 ring-purple-100",
-    sectionIcon: "text-purple-600",
-    avatarBg: "bg-purple-600",
-  },
-  Creative: {
-    chip: "bg-orange-700 text-white",
-    cta: "bg-orange-700 hover:bg-orange-800 text-white shadow-lg shadow-black/30",
-    ring: "focus-visible:ring-orange-300",
-    fallback: "bg-orange-700",
-    line: "bg-orange-500",
-    progress: "bg-orange-400",
-    dot: "bg-orange-500",
-    countFlash: "text-orange-300",
-    iconOnDark: "bg-orange-500/20 text-orange-200",
-    iconBadge: "bg-orange-50 text-orange-700",
-    aboutIcon: "bg-white text-orange-700 ring-1 ring-orange-100",
-    aboutSurface: "bg-orange-50/40 ring-1 ring-orange-100/70",
-    aboutDivider: "lg:border-orange-100",
-    eyebrow: "text-orange-700",
-    link: "text-orange-700 hover:text-orange-800",
-    check: "text-orange-600",
-    pill: "bg-white text-orange-800 ring-1 ring-orange-200",
-    tagPill: "bg-white/70 text-gray-600 ring-1 ring-orange-100",
-    sectionIcon: "text-orange-600",
-    avatarBg: "bg-orange-700",
-  },
-  Business: {
-    chip: "bg-green-700 text-white",
-    cta: "bg-green-700 hover:bg-green-800 text-white shadow-lg shadow-black/30",
-    ring: "focus-visible:ring-green-300",
-    fallback: "bg-green-700",
-    line: "bg-green-600",
-    progress: "bg-green-400",
-    dot: "bg-green-500",
-    countFlash: "text-green-300",
-    iconOnDark: "bg-green-500/20 text-green-200",
-    iconBadge: "bg-green-50 text-green-700",
-    aboutIcon: "bg-white text-green-700 ring-1 ring-green-100",
-    aboutSurface: "bg-green-50/40 ring-1 ring-green-100/70",
-    aboutDivider: "lg:border-green-100",
-    eyebrow: "text-green-700",
-    link: "text-green-700 hover:text-green-800",
-    check: "text-green-600",
-    pill: "bg-white text-green-800 ring-1 ring-green-200",
-    tagPill: "bg-white/70 text-gray-600 ring-1 ring-green-100",
-    sectionIcon: "text-green-600",
-    avatarBg: "bg-green-700",
-  },
-  Sports: {
-    chip: "bg-emerald-700 text-white",
-    cta: "bg-emerald-700 hover:bg-emerald-800 text-white shadow-lg shadow-black/30",
-    ring: "focus-visible:ring-emerald-300",
-    fallback: "bg-emerald-700",
-    line: "bg-emerald-600",
-    progress: "bg-emerald-400",
-    dot: "bg-emerald-500",
-    countFlash: "text-emerald-300",
-    iconOnDark: "bg-emerald-500/20 text-emerald-200",
-    iconBadge: "bg-emerald-50 text-emerald-700",
-    aboutIcon: "bg-white text-emerald-700 ring-1 ring-emerald-100",
-    aboutSurface: "bg-emerald-50/40 ring-1 ring-emerald-100/70",
-    aboutDivider: "lg:border-emerald-100",
-    eyebrow: "text-emerald-700",
-    link: "text-emerald-700 hover:text-emerald-800",
-    check: "text-emerald-600",
-    pill: "bg-white text-emerald-800 ring-1 ring-emerald-200",
-    tagPill: "bg-white/70 text-gray-600 ring-1 ring-emerald-100",
-    sectionIcon: "text-emerald-600",
-    avatarBg: "bg-emerald-700",
-  },
-  Other: {
-    chip: "bg-gray-700 text-white",
-    cta: "bg-white hover:bg-gray-100 text-gray-900 shadow-lg shadow-black/30",
-    ring: "focus-visible:ring-white",
-    fallback: "bg-gray-800",
-    line: "bg-gray-400",
-    progress: "bg-gray-300",
-    dot: "bg-gray-400",
-    countFlash: "text-gray-300",
-    iconOnDark: "bg-white/10 text-gray-200",
-    iconBadge: "bg-gray-100 text-gray-600",
-    aboutIcon: "bg-white text-gray-600 ring-1 ring-gray-200",
-    aboutSurface: "bg-gray-100/50 ring-1 ring-gray-200/70",
-    aboutDivider: "lg:border-gray-200",
-    eyebrow: "text-gray-600",
-    link: "text-gray-700 hover:text-gray-900",
-    check: "text-gray-600",
-    pill: "bg-white text-gray-700 ring-1 ring-gray-200",
-    tagPill: "bg-white/70 text-gray-600 ring-1 ring-gray-200",
-    sectionIcon: "text-gray-500",
-    avatarBg: "bg-gray-900",
-  },
-};
-
-const accentFor = (category) => categoryAccent[category] ?? categoryAccent.Other;
-
-const statusStyle = {
-  upcoming: { label: "Upcoming", className: "bg-white text-gray-900" },
-  ongoing: { label: "Live now", className: "bg-emerald-400 text-emerald-950" },
-  completed: {
-    label: "Completed",
-    className: "bg-white/15 text-white ring-1 ring-inset ring-white/25",
-  },
-  cancelled: { label: "Cancelled", className: "bg-red-600 text-white" },
-};
-
-const chipBase =
-  "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-bold uppercase tracking-wide whitespace-nowrap";
-
-// Focus ring for controls sitting on the dark banner.
-const darkFocus =
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70";
-
-// Non-action registration states, as quiet pills on the banner.
-const statePill =
-  "flex min-h-11 w-full items-center justify-center gap-2 rounded-xl px-4 py-2 text-center text-sm font-bold";
 
 // ─── Helpers ──────────────────────────────────────────────────
 const idOf = (x) => String(x?._id ?? x);
@@ -229,99 +65,32 @@ const fmtYears = (years) => {
 
 const URGENT_MS = 48 * 60 * 60 * 1000;
 
-// Re-renders every `interval` ms so countdowns and progress stay current.
-const useNow = (interval) => {
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), interval);
-    return () => clearInterval(timer);
-  }, [interval]);
-  return now;
-};
-
-const clubInitials = (name) =>
-  name
-    ?.split(" ")
-    .map((w) => w[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
-
 // ─── Building blocks ──────────────────────────────────────────
 const Skeleton = () => (
-  <div
-    className="max-w-5xl mx-auto space-y-5"
-    aria-busy="true"
-    aria-label="Loading event"
-  >
-    <div className="w-12 h-3 bg-gray-200 rounded motion-safe:animate-pulse" />
-    <div className="rounded-2xl overflow-hidden border border-gray-200/70 bg-white motion-safe:animate-pulse">
-      <div className="min-h-44 sm:min-h-52 lg:min-h-60 bg-gray-800 flex flex-col justify-end gap-3 p-4 sm:p-6 lg:p-8">
-        <div className="flex gap-2">
-          <div className="h-6 w-20 rounded-md bg-white/10" />
-          <div className="h-6 w-20 rounded-md bg-white/10" />
-        </div>
-        <div className="h-8 w-2/3 rounded-lg bg-white/15" />
-        <div className="h-4 w-40 rounded bg-white/10" />
-      </div>
-      <div className="h-1 bg-gray-200" />
-      <div className="grid gap-4 p-4 lg:grid-cols-3 sm:p-5">
-        {[0, 1, 2].map((i) => (
-          <div key={i} className="h-11 rounded-lg bg-gray-100" />
-        ))}
-      </div>
-    </div>
-    <div className="space-y-5 motion-safe:animate-pulse">
-      <div className="h-44 bg-gray-100/70 rounded-2xl" />
-      <div className="h-20 bg-amber-50/50 border border-amber-200/70 rounded-2xl" />
-      <div className="h-24 bg-white border border-gray-100 rounded-2xl" />
+  <div className="animate-pulse pb-10" aria-busy="true" aria-label="Loading event">
+    <div className="aspect-[16/10] rounded-[18px] bg-soft lg:aspect-[21/8] lg:rounded-3xl" />
+    <div className="mt-9 h-4 w-32 rounded bg-soft" />
+    <div className="mt-3 h-10 w-2/3 rounded-lg bg-soft" />
+    <div className="mt-9 h-24 rounded-panel bg-soft" />
+    <div className="mt-14 space-y-3">
+      <div className="h-4 w-full max-w-xl rounded bg-soft" />
+      <div className="h-4 w-full max-w-lg rounded bg-soft" />
+      <div className="h-4 w-full max-w-md rounded bg-soft" />
     </div>
   </div>
 );
 
-const StatusPill = ({ phase, accent }) => {
-  const style = statusStyle[phase];
-  return (
-    <span className={`${chipBase} ${style.className}`}>
-      {phase === "ongoing" ? (
-        <span className="relative flex h-2 w-2" aria-hidden="true">
-          <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-950/50 motion-safe:animate-ping" />
-          <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-950" />
-        </span>
-      ) : phase === "upcoming" ? (
-        <span className={`h-2 w-2 rounded-full ${accent.dot}`} aria-hidden="true" />
-      ) : phase === "cancelled" ? (
-        <Ban size={12} aria-hidden="true" />
-      ) : null}
-      {style.label}
-    </span>
-  );
-};
-
-// One item of the info rail. dt/dd must be direct children of the item (valid
-// <dl>), so the icon lives inside the <dt>, positioned into the left gutter.
-const FactItem = ({ icon: Icon, label, value, detail, accent, className = "" }) => (
-  <div className={`relative min-w-0 border-gray-100 py-3 pr-4 pl-15 sm:py-4 sm:pr-5 sm:pl-16 ${className}`}>
-    <dt className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
-      <span
-        className={`absolute left-4 top-3.5 sm:left-5 sm:top-4.5 flex h-8 w-8 items-center justify-center rounded-lg ${accent.iconBadge}`}
-        aria-hidden="true"
-      >
-        <Icon size={16} />
-      </span>
-      {label}
-    </dt>
-    <dd className="mt-0.5 text-sm font-semibold leading-snug text-gray-900 break-words">
-      {value}
-    </dd>
-    {detail && <dd className="text-xs font-medium text-gray-500">{detail}</dd>}
-  </div>
+// A label on the left, its value on the right ("Branches … All branches").
+const Pair = ({ label, value }) => (
+  <li className="flex min-h-14 items-center justify-between gap-6 py-3">
+    <span className="text-[15px] font-semibold tracking-[-0.018em] text-ink">{label}</span>
+    <span className="min-w-0 break-words text-right text-[13.5px] text-ink-2">{value}</span>
+  </li>
 );
 
 // ─── Page ─────────────────────────────────────────────────────
 export default function EventDetail() {
   const { id } = useParams();
-  const navigate = useNavigate();
   const { user, setUser } = useAuth();
   const now = useNow(60_000);
 
@@ -351,7 +120,6 @@ export default function EventDetail() {
   const activeEventRef = useRef(id);
 
   const [showBanner, onBannerError] = useImageOk(event?.banner);
-  const [showClubLogo, onClubLogoError] = useImageOk(event?.organizerClub?.logo);
 
   const descriptionRef = useRef(null);
   const descriptionClamped = useIsClamped(
@@ -509,36 +277,31 @@ export default function EventDetail() {
 
   if (loading) return <Skeleton />;
   if (loadError || !event)
-    return (
-      <div className="max-w-md mx-auto text-center py-20 px-4 space-y-3">
-        <p className="text-sm font-semibold text-gray-700">
-          {loadError === "failed" ? "Couldn't load this event" : "Event not found"}
-        </p>
-        <p className="text-xs text-gray-500">
-          {loadError === "failed"
-            ? "Check your connection and try again."
-            : "It may have been removed, or the link is incorrect."}
-        </p>
-        {loadError === "failed" ? (
-          <button
-            onClick={() => setReloadKey((k) => k + 1)}
-            className={`px-3.5 py-2 text-xs font-bold rounded-xl border border-gray-200 text-gray-600 bg-white hover:border-gray-400 hover:text-gray-900 transition-colors ${focusRing}`}
-          >
+    return loadError === "failed" ? (
+      <PageMessage
+        title="Couldn't load this event"
+        action={
+          <button type="button" onClick={() => setReloadKey((k) => k + 1)} className={btnGhost}>
             Try again
           </button>
-        ) : (
-          <Link
-            to="/community/events"
-            className={`inline-block px-3.5 py-2 text-xs font-bold rounded-xl border border-gray-200 text-gray-600 bg-white hover:border-gray-400 hover:text-gray-900 transition-colors ${focusRing}`}
-          >
+        }
+      >
+        Check your connection and try again.
+      </PageMessage>
+    ) : (
+      <PageMessage
+        title="Event not found"
+        action={
+          <Link to="/community/events" className={btnGhost}>
             Back to events
           </Link>
-        )}
-      </div>
+        }
+      >
+        It may have been removed, or the link is incorrect.
+      </PageMessage>
     );
 
   // ── Derived state ──
-  const accent = accentFor(event.category);
   const start = new Date(event.startDateTime);
   const end = new Date(event.endDateTime);
   const cutoff = registrationCutoff(event);
@@ -554,10 +317,6 @@ export default function EventDetail() {
   const regOpen = !isCancelled && now < cutoff;
   const closingSoon = regOpen && cutoff - now < URGENT_MS;
   const sameDay = start.toDateString() === end.toDateString();
-  const progress =
-    phase === "ongoing"
-      ? Math.min(100, Math.max(0, Math.round(((now - start) / (end - start)) * 100)))
-      : 0;
 
   const branches = event.eligibleBranches || [];
   const years = [...(event.eligibleYears || [])].sort((a, b) => a - b);
@@ -571,78 +330,90 @@ export default function EventDetail() {
     years.length > 0 && fmtYears(years),
   ]
     .filter(Boolean)
-    .join(" · ");
+    .join(", ");
 
   const club = event.organizerClub;
   const tags = (event.tags || []).filter(Boolean);
 
-  // ── Registration: action + subline for the current state ──
-  let action;
+  // The line under the title: where the event is in time.
+  const timing =
+    phase === "cancelled"
+      ? { text: "Cancelled", className: tone.urgent }
+      : phase === "upcoming"
+        ? { text: start - now < 60_000 ? "Starting now" : `Starts in ${fmtSpan(start - now)}` }
+        : phase === "ongoing"
+          ? {
+              text: `Happening now, ends ${
+                sameDay ? `at ${formatClock(end)}` : `${formatShortDate(end)}, ${formatClock(end)}`
+              }`,
+              className: tone.live,
+            }
+          : { text: `Ended ${formatShortDate(end)}` };
+
+  // ── Registration: headline, line under it and the action for the current state ──
+  let headline;
+  let headlineTone = "text-ink";
   let subline = null;
+  let sublineTone = "text-ink-2";
+  let action = null;
   if (isCancelled) {
-    action = (
-      <p className={`${statePill} bg-red-500/20 text-red-100 ring-1 ring-inset ring-red-300/30`}>
-        <Ban size={16} aria-hidden="true" />
-        Event cancelled
-      </p>
-    );
+    headline = "Event cancelled";
+    headlineTone = "text-urgent";
     subline = "The organizers cancelled this event.";
   } else if (registered) {
-    action = (
-      <p className={`${statePill} bg-emerald-400/15 text-emerald-200 ring-1 ring-inset ring-emerald-300/40`}>
-        <Check size={16} strokeWidth={3} aria-hidden="true" />
-        You're registered
-      </p>
-    );
+    headline = "You're going";
+    headlineTone = "text-live";
     subline =
       phase === "ongoing"
         ? "Happening now"
         : phase === "completed"
           ? "This event has ended."
           : regOpen
-            ? `See you on ${formatEventDay(start)}`
+            ? `You can cancel until registration closes on ${formatEventDay(cutoff)}.`
             : "Registration is closed.";
-  } else {
-    const closed = (label, line) => {
-      action = (
-        <p className={`${statePill} bg-white/10 text-white/85 ring-1 ring-inset ring-white/15`}>
-          <Lock size={15} aria-hidden="true" />
-          {label}
-        </p>
-      );
-      subline = line;
-    };
-    if (phase === "completed") closed("This event has ended", null);
-    else if (phase === "ongoing") closed("Registration closed", "This event has already started.");
-    else if (!regOpen) closed("Registration closed", `Closed on ${formatShortDate(cutoff)}`);
-    else if (ineligible) closed("Not eligible", `Open to ${eligibilityText}`);
-    else {
+    if (regOpen)
       action = (
         <button
-          onClick={handleRegister}
+          type="button"
+          onClick={handleUnregister}
           disabled={!!pending}
-          aria-busy={pending === "register"}
-          className={`group/cta flex h-12 w-full items-center justify-center gap-2 rounded-xl text-sm font-bold transition duration-150 motion-safe:active:scale-[.98] disabled:cursor-wait disabled:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-950 ${accent.ring} ${accent.cta}`}
+          className={`mt-5 w-full ${btnGhost}`}
         >
-          {pending === "register" ? (
-            <>
-              <Loader2 size={16} className="animate-spin" aria-hidden="true" />
-              Registering…
-            </>
-          ) : (
-            <>
-              Register now
-              <ArrowRight
-                size={16}
-                aria-hidden="true"
-                className="motion-safe:transition-transform motion-safe:group-hover/cta:translate-x-0.5"
-              />
-            </>
-          )}
+          {pending === "unregister" && <Loader2 size={14} className="animate-spin" aria-hidden="true" />}
+          {pending === "unregister" ? "Cancelling…" : "Cancel registration"}
         </button>
       );
-      // The close time lives in the info rail; urgency gets the pill below.
+  } else if (phase === "completed") {
+    headline = "This event has ended";
+  } else if (phase === "ongoing") {
+    headline = "Registration closed";
+    subline = "This event has already started.";
+  } else if (!regOpen) {
+    headline = "Registration closed";
+    subline = `Closed on ${formatShortDate(cutoff)}`;
+  } else if (ineligible) {
+    headline = "Not open to you";
+    subline = `Open to ${eligibilityText}`;
+  } else {
+    headline = "Registration is open";
+    if (closingSoon) {
+      subline = `Closes in ${fmtSpan(cutoff - now)}`;
+      sublineTone = tone.warn;
+    } else {
+      subline = hasDeadline ? `Closes ${formatEventDay(cutoff)}` : "Open until the event starts";
     }
+    action = (
+      <button
+        type="button"
+        onClick={handleRegister}
+        disabled={!!pending}
+        aria-busy={pending === "register"}
+        className={`mt-5 w-full ${btnLg}`}
+      >
+        {pending === "register" && <Loader2 size={16} className="animate-spin" aria-hidden="true" />}
+        {pending === "register" ? "Registering…" : "Register"}
+      </button>
+    );
   }
 
   const zeroCountText =
@@ -652,460 +423,222 @@ export default function EventDetail() {
         ? "No registrations yet"
         : "No registrations";
 
+  const facts = [
+    { label: "When", value: [formatEventDay(start), formatClock(start)] },
+    { label: "Until", value: sameDay ? formatClock(end) : [formatEventDay(end), formatClock(end)] },
+    { label: "Venue", value: event.venue || "To be announced" },
+    {
+      label: "Registration closes",
+      value: hasDeadline ? [formatEventDay(cutoff), formatClock(cutoff)] : "When the event starts",
+      detail: !isCancelled && !regOpen ? "Closed" : null,
+    },
+  ];
+
   return (
-    <div className="max-w-5xl mx-auto space-y-5">
-      {/* Back + (organizers) compact manage links — kept off the hero. */}
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-        <button
-          onClick={() => navigate(-1)}
-          className={`inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-gray-800 rounded transition-colors ${focusRing}`}
-        >
-          <ArrowLeft size={13} aria-hidden="true" /> Back
-        </button>
+    <div className="pb-10 lg:pb-20">
+      {showBanner && (
+        <img
+          src={event.banner}
+          alt=""
+          onError={onBannerError}
+          className="mb-5 mt-1 aspect-[16/10] w-full rounded-[18px] object-cover shadow-[0_1px_2px_rgb(14_15_17/0.06),0_36px_60px_-36px_rgb(14_15_17/0.5)] lg:aspect-[21/8] lg:rounded-3xl"
+        />
+      )}
+
+      <PageTitle
+        large
+        crumb={
+          <>
+            <Link to="/community/events" className={crumbLink}>
+              Events
+            </Link>{" "}
+            / {event.category}
+          </>
+        }
+        title={
+          isCancelled ? (
+            <span className="line-through decoration-urgent/60">{event.eventName}</span>
+          ) : (
+            event.eventName
+          )
+        }
+        sub={<span className={timing.className}>{timing.text}</span>}
+      >
         {isOrganizer && (
-          <nav aria-label="Manage event" className="flex flex-wrap items-center gap-0.5">
-            <span className="hidden sm:inline px-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-500">
-              Manage
-            </span>
-            <ManageLink to={`/community/events/${id}/edit`} state={{ event }} icon={Pencil}>
-              Edit event
-            </ManageLink>
-            <ManageLink to={`/events/${id}/create-notice`} icon={Plus}>
-              Post notice
-            </ManageLink>
-            <ManageLink to={`/community/event/${id}/announcements/create`} icon={Plus}>
-              Post announcement
-            </ManageLink>
+          <nav aria-label="Manage event" className="flex flex-wrap items-center gap-2">
+            <Link to={`/community/events/${id}/edit`} state={{ event }} className={btnGhostSm}>
+              <Pencil size={13} aria-hidden="true" /> Edit event
+            </Link>
+            <Link to={`/events/${id}/create-notice`} className={btnGhostSm}>
+              <Plus size={14} aria-hidden="true" /> Post notice
+            </Link>
+            <Link to={`/community/event/${id}/announcements/create`} className={btnGhostSm}>
+              <Plus size={14} aria-hidden="true" /> Post announcement
+            </Link>
           </nav>
         )}
-      </div>
+      </PageTitle>
 
-      {/* ── Hero: banner (title + registration) over a compact info rail ── */}
-      <header className="group overflow-hidden rounded-2xl border border-gray-200/70 bg-white shadow-sm">
-        <div className="relative isolate flex min-h-44 sm:min-h-52 lg:min-h-60 flex-col justify-end overflow-hidden bg-gray-950">
-          {showBanner ? (
-            <img
-              src={event.banner}
-              alt=""
-              onError={onBannerError}
-              className="absolute inset-0 -z-10 h-full w-full object-cover motion-safe:transition-transform motion-safe:duration-[1200ms] motion-safe:group-hover:scale-[1.03]"
-            />
-          ) : (
-            <div aria-hidden="true" className={`absolute inset-0 -z-10 ${accent.fallback}`}>
-              <CalendarDays
-                size={200}
-                strokeWidth={1.25}
-                className="absolute -right-8 -top-8 text-white/10"
-              />
-            </div>
-          )}
-          <div
-            aria-hidden="true"
-            className="absolute inset-0 -z-10 bg-linear-to-t from-gray-950 via-gray-950/70 to-gray-950/5"
-          />
+      <Facts className="mt-9" facts={facts} />
 
-          <div className="grid gap-5 px-4 pt-12 pb-5 sm:px-6 sm:pb-6 lg:grid-cols-[minmax(0,1fr)_17rem] lg:items-end lg:gap-8 lg:px-8">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className={`${chipBase} ${accent.chip}`}>{event.category}</span>
-                <StatusPill phase={phase} accent={accent} />
-              </div>
-
-              <h1
-                className={`mt-3 text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight text-white leading-[1.1] break-words text-balance text-shadow-lg ${
-                  isCancelled ? "line-through decoration-red-400/70" : ""
-                }`}
-              >
-                {event.eventName}
-              </h1>
-
-              {/* Organizer + timing strip (the page's live pulse). */}
-              <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2">
-                {club && (
-                  <Link
-                    to={`/community/clubs/${club._id}`}
-                    className={`group/club inline-flex items-center gap-2 rounded-lg text-sm font-medium text-white/80 hover:text-white transition-colors ${darkFocus}`}
-                  >
-                    <span
-                      className={`flex h-6 w-6 flex-none items-center justify-center overflow-hidden rounded-md text-[10px] font-black ${
-                        showClubLogo ? "bg-white" : "bg-white/15 text-white"
-                      }`}
-                      aria-hidden="true"
-                    >
-                      {showClubLogo ? (
-                        <img
-                          src={club.logo}
-                          alt=""
-                          onError={onClubLogoError}
-                          className="h-full w-full object-contain"
-                        />
-                      ) : (
-                        clubInitials(club.clubName)
-                      )}
-                    </span>
-                    <span className="min-w-0 break-words">
-                      by{" "}
-                      <span className="font-bold text-white underline-offset-4 decoration-white/50 group-hover/club:underline">
-                        {club.clubName}
-                      </span>
-                    </span>
-                  </Link>
-                )}
-
-                {phase === "upcoming" && (
-                  <p className="inline-flex items-center gap-1.5 text-sm font-semibold text-white/85">
-                    <Clock size={15} aria-hidden="true" className="text-white/60" />
-                    {start - now < 60_000 ? (
-                      "Starting now"
-                    ) : (
-                      <>
-                        Starts in{" "}
-                        <strong className="font-black text-white tabular-nums">
-                          {fmtSpan(start - now)}
-                        </strong>
-                      </>
-                    )}
-                  </p>
-                )}
-                {phase === "ongoing" && (
-                  <div className="flex min-w-0 flex-1 basis-56 max-w-sm items-center gap-3 text-sm font-semibold text-white/85">
-                    <div
-                      role="progressbar"
-                      aria-label="Event progress"
-                      aria-valuemin={0}
-                      aria-valuemax={100}
-                      aria-valuenow={progress}
-                      className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/15"
-                    >
-                      <div
-                        className={`h-full rounded-full ${accent.progress} motion-safe:transition-[width] motion-safe:duration-700`}
-                        style={{ width: `${progress}%` }}
-                      />
-                    </div>
-                    <span className="whitespace-nowrap">
-                      Ends {sameDay ? `at ${formatTime24(end)}` : `${formatShortDate(end)} · ${formatTime24(end)}`}
-                    </span>
-                  </div>
-                )}
-                {phase === "completed" && (
-                  <p className="text-sm font-semibold text-white/70">Ended {formatShortDate(end)}</p>
-                )}
-              </div>
-            </div>
-
-            {/* Registration: straight on the banner, no box of its own. */}
-            <section aria-labelledby="event-registration" className="min-w-0">
-              <h2 id="event-registration" className="sr-only">
-                Registration
-              </h2>
-              <div className="flex items-center gap-3" aria-live="polite" aria-atomic="true">
-                <span
-                  className={`flex h-10 w-10 flex-none items-center justify-center rounded-xl ${accent.iconOnDark}`}
-                  aria-hidden="true"
-                >
-                  <Users size={19} />
-                </span>
-                {count > 0 ? (
-                  <p className="flex min-w-0 flex-wrap items-baseline gap-x-1.5">
-                    <span
-                      className={`text-3xl sm:text-4xl font-black leading-none tracking-tight tabular-nums transition-colors duration-500 ${
-                        countFlash ? accent.countFlash : "text-white"
-                      }`}
-                    >
-                      {countFormat.format(count)}
-                    </span>
-                    <span className="text-sm font-semibold text-white/75">registered</span>
-                  </p>
-                ) : (
-                  <p className="text-base font-bold leading-tight text-white">{zeroCountText}</p>
-                )}
-              </div>
-
-              <div className="mt-3">{action}</div>
-
-              {(subline || closingSoon || (registered && regOpen)) && (
-                <div className="mt-2.5 flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 text-center text-xs font-medium text-white/75">
-                  {closingSoon && !registered && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-400 px-2.5 py-1 text-[11px] font-bold text-amber-950">
-                      <Timer size={12} aria-hidden="true" />
-                      Closes in {fmtSpan(cutoff - now)}
-                    </span>
-                  )}
-                  {subline && <span>{subline}</span>}
-                  {registered && regOpen && (
-                    <button
-                      onClick={handleUnregister}
-                      disabled={!!pending}
-                      className={`inline-flex items-center gap-1 rounded px-1 py-1 font-semibold text-white/75 underline underline-offset-2 hover:text-white disabled:cursor-wait disabled:opacity-60 transition-colors ${darkFocus}`}
-                    >
-                      {pending === "unregister" && (
-                        <Loader2 size={12} className="animate-spin" aria-hidden="true" />
-                      )}
-                      {pending === "unregister" ? "Cancelling…" : "Cancel registration"}
-                    </button>
-                  )}
-                </div>
-              )}
-
-              {actionError && (
-                <p role="alert" className="mt-2 text-center text-xs font-semibold text-red-300">
-                  {actionError}
-                </p>
-              )}
-            </section>
-          </div>
-        </div>
-
-        <div aria-hidden="true" className={`h-1 ${accent.line}`} />
-
-        {/* Compact info rail: stacked rows on phones, When | Venue with the
-            deadline spanning below on tablets, three across on desktop.
-            Per-item borders keep the dividers right at every breakpoint. */}
-        <dl className="grid sm:grid-cols-2 lg:grid-cols-3">
-          <FactItem
-            icon={CalendarDays}
-            label="When"
-            value={sameDay ? formatEventDay(start) : `${formatEventDay(start)} · ${formatTime24(start)}`}
-            detail={
-              sameDay
-                ? `${formatTime24(start)} – ${formatTime24(end)} · ${fmtSpan(end - start)}`
-                : `until ${formatEventDay(end)} · ${formatTime24(end)}`
-            }
-            accent={accent}
-          />
-          <FactItem
-            icon={MapPin}
-            label="Venue"
-            value={event.venue || "To be announced"}
-            accent={accent}
-            className="border-t sm:border-t-0 sm:border-l"
-          />
-          <FactItem
-            className="border-t sm:col-span-2 lg:col-span-1 lg:border-t-0 lg:border-l"
-            icon={Timer}
-            label="Registration closes"
-            value={hasDeadline ? `${formatEventDay(cutoff)} · ${formatTime24(cutoff)}` : "When the event starts"}
-            detail={!isCancelled && !regOpen ? "Closed" : null}
-            accent={accent}
-          />
-        </dl>
-      </header>
-
-      {/* ── About: a whisper-tinted editorial block, calmer than the hero ── */}
-      <section
-        aria-labelledby="event-about"
-        className={`rounded-2xl p-5 sm:p-7 ${accent.aboutSurface}`}
-      >
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_16rem] lg:gap-10">
-          <div className="min-w-0">
-            <p
-              className={`flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider ${accent.eyebrow}`}
-            >
-              <Sparkles size={13} aria-hidden="true" />
-              {event.category && event.category !== "Other"
-                ? `${event.category} event`
-                : "Campus event"}
-            </p>
-            <h2 id="event-about" className="mt-1.5 text-xl font-bold tracking-tight text-gray-900">
-              About this event
-            </h2>
+      <div className="mt-9 grid grid-cols-1 gap-y-11 lg:mt-14 lg:grid-cols-[minmax(0,1fr)_352px] lg:gap-x-[72px]">
+        <div className="min-w-0 space-y-11 lg:space-y-14">
+          <section aria-labelledby="event-about">
+            <SectionHead id="event-about" title="About" />
             {event.description ? (
               <>
                 <p
                   ref={descriptionRef}
-                  className={`mt-3 max-w-prose text-[15px] leading-7 text-gray-700 whitespace-pre-line break-words ${
-                    aboutExpanded ? "" : "line-clamp-6"
+                  className={`max-w-[62ch] whitespace-pre-line break-words text-[15.5px] leading-[1.65] text-ink/90 ${
+                    aboutExpanded ? "" : "line-clamp-[8]"
                   }`}
                 >
                   {event.description}
                 </p>
-                {descriptionClamped && (
+                {(descriptionClamped || aboutExpanded) && (
                   <button
+                    type="button"
                     onClick={() => setAboutExpanded((v) => !v)}
                     aria-expanded={aboutExpanded}
-                    className={`mt-2 inline-flex items-center gap-1 rounded text-[13px] font-semibold transition-colors ${accent.link} ${focusRing}`}
+                    className={`mt-2 rounded text-[13.5px] font-[550] text-ink-2 transition-colors hover:text-ink ${focusRing}`}
                   >
-                    {aboutExpanded ? (
-                      <>
-                        Show less <ChevronUp size={14} aria-hidden="true" />
-                      </>
-                    ) : (
-                      <>
-                        Show more <ChevronDown size={14} aria-hidden="true" />
-                      </>
-                    )}
+                    {aboutExpanded ? "Show less" : "Show more"}
                   </button>
                 )}
               </>
             ) : (
-              <p className="mt-3 text-sm text-gray-500">No description yet.</p>
+              <p className={note}>No description yet.</p>
             )}
-
             {tags.length > 0 && (
-              <ul className="mt-4 flex flex-wrap gap-1.5" aria-label="Tags">
+              <ul aria-label="Tags" className="mt-[18px] flex flex-wrap gap-x-3.5 gap-y-1 text-[14.5px] text-ink-3">
                 {tags.map((t) => (
-                  <li
-                    key={t}
-                    className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${accent.tagPill}`}
-                  >
-                    #{t}
-                  </li>
+                  <li key={t}>#{t}</li>
                 ))}
               </ul>
             )}
-          </div>
+          </section>
 
-          <div
-            className={`min-w-0 border-t border-gray-200/70 pt-5 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-8 ${accent.aboutDivider}`}
-          >
-            <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-900">
-              <span
-                className={`flex h-7 w-7 items-center justify-center rounded-lg ${accent.aboutIcon}`}
-                aria-hidden="true"
-              >
-                <UserCheck size={15} />
-              </span>
-              Who can join
-            </h3>
-
-            {!restricted ? (
-              <p className="mt-3 flex items-start gap-2">
-                <CheckCircle2 size={18} className={`mt-0.5 flex-none ${accent.check}`} aria-hidden="true" />
-                <span>
-                  <span className="block text-base font-bold text-gray-900">Everyone</span>
-                  <span className="text-xs font-medium text-gray-600">All branches and years</span>
-                </span>
+          <section aria-labelledby="event-who">
+            <SectionHead id="event-who" title="Who can join" />
+            <ul className="divide-y divide-line">
+              <Pair label="Branches" value={branches.length > 0 ? branches.join(", ") : "All branches"} />
+              <Pair label="Years" value={years.length > 0 ? fmtYears(years) : "All years"} />
+            </ul>
+            {restricted && user && (
+              <p className={`mt-2 text-[13.5px] ${ineligible ? "text-ink-2" : tone.live}`}>
+                {ineligible ? "You're not eligible for this event." : "You're eligible."}
               </p>
-            ) : (
+            )}
+          </section>
+
+          <NoticeFeed
+            targetType="events"
+            targetId={id}
+            title="Notices"
+            canPost={isOrganizer}
+            showActions={isOrganizer}
+          />
+
+          <section aria-labelledby="event-announcements" className="min-w-0">
+            <SectionHead id="event-announcements" title="Announcements" />
+            {feedLoading && announcements.length === 0 ? (
+              <div className="animate-pulse space-y-3 py-1.5" aria-busy="true">
+                <div className="h-4 w-1/3 rounded bg-soft" />
+                <div className="h-4 w-2/3 rounded bg-soft" />
+              </div>
+            ) : announcements.length > 0 ? (
               <>
-                <dl className="mt-3 space-y-3">
-                  {branches.length > 0 && (
-                    <div>
-                      <dt className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
-                        Branches
-                      </dt>
-                      <dd className="mt-1.5 flex flex-wrap gap-1.5">
-                        {branches.map((b) => (
-                          <span
-                            key={b}
-                            className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${accent.pill}`}
-                          >
-                            {b}
-                          </span>
-                        ))}
-                      </dd>
-                    </div>
-                  )}
-                  {years.length > 0 && (
-                    <div>
-                      <dt className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
-                        Year
-                      </dt>
-                      <dd className="mt-1 text-sm font-semibold text-gray-900">{fmtYears(years)}</dd>
-                    </div>
-                  )}
-                </dl>
-                {user && (
-                  <p
-                    className={`mt-4 flex items-center gap-1.5 text-xs font-semibold ${
-                      ineligible ? "text-gray-600" : "text-emerald-700"
-                    }`}
-                  >
-                    {ineligible ? (
-                      <Lock size={13} aria-hidden="true" />
-                    ) : (
-                      <CheckCircle2 size={14} aria-hidden="true" />
-                    )}
-                    {ineligible ? "You're not eligible" : "You're eligible"}
-                  </p>
+                <ul className="divide-y divide-line">
+                  {announcements.map((a) => (
+                    <AnnouncementCard
+                      key={a._id}
+                      announcement={a}
+                      variant="detail"
+                      isEligible={isOrganizer}
+                      onDelete={handleDeleteAnnouncement}
+                    />
+                  ))}
+                </ul>
+                {feedError && (
+                  <div className="mt-4">
+                    <LoadError>Couldn't load more announcements.</LoadError>
+                  </div>
+                )}
+                {hasMore && (
+                  <LoadMore onClick={handleLoadMore} loading={loadMoreLoading} failed={feedError} />
                 )}
               </>
-            )}
-          </div>
-        </div>
-      </section>
-
-      {/* ── Notices ── */}
-      <section
-        aria-label="Event notices"
-        className="rounded-2xl border border-amber-200/70 bg-amber-50/50 p-4 sm:p-5"
-      >
-        <NoticeFeed
-          targetType="events"
-          targetId={id}
-          title="Notices"
-          canPost={isOrganizer}
-          showActions={isOrganizer}
-          compact={true}
-        />
-      </section>
-
-      {/* ── Announcements ── */}
-      <section aria-labelledby="event-announcements" className="min-w-0">
-        <SectionHeader
-          id="event-announcements"
-          icon={Megaphone}
-          title="Announcements"
-          iconClassName={accent.sectionIcon}
-          titleClassName="text-base font-bold text-gray-900"
-        />
-        {feedLoading && announcements.length === 0 ? (
-          <div className="space-y-3 motion-safe:animate-pulse">
-            <div className="h-24 bg-white border border-gray-100 rounded-2xl" />
-            <div className="h-24 bg-white border border-gray-100 rounded-2xl" />
-          </div>
-        ) : announcements.length > 0 ? (
-          <div className="space-y-3">
-            {announcements.map((a) => (
-              <AnnouncementCard
-                key={a._id}
-                announcement={a}
-                variant="detail"
-                avatarBg={accent.avatarBg}
-                isEligible={isOrganizer}
-                onDelete={handleDeleteAnnouncement}
-              />
-            ))}
-            {feedError && (
-              <p className="text-center text-xs text-red-600">
-                Couldn't load more announcements.
+            ) : feedError ? (
+              <LoadError onRetry={() => fetchAnnouncements(0, false)}>
+                Couldn't load announcements.
+              </LoadError>
+            ) : (
+              <p className={note}>
+                No announcements yet. Updates from the organizers will appear here.
               </p>
             )}
-            {hasMore && (
-              <button
-                onClick={handleLoadMore}
-                disabled={loadMoreLoading}
-                className={`flex items-center justify-center gap-2 w-full py-2.5 text-xs font-bold text-gray-600 bg-white border border-gray-200 rounded-xl hover:border-gray-400 hover:text-gray-900 transition-colors disabled:opacity-60 ${focusRing}`}
-              >
-                {loadMoreLoading ? (
-                  <>
-                    <Loader2 size={13} className="animate-spin text-gray-400" aria-hidden="true" />{" "}
-                    Loading…
-                  </>
-                ) : feedError ? (
-                  "Try again"
+          </section>
+        </div>
+
+        {/* Registration leads on phones; on desktop it stays in view beside the page. */}
+        <aside className="min-w-0 max-lg:order-first lg:sticky lg:top-6 lg:self-start">
+          <section aria-labelledby="event-registration" className={`p-6 ${panel}`}>
+            <h2 id="event-registration" className="sr-only">
+              Registration
+            </h2>
+            <div aria-live="polite" aria-atomic="true">
+              <p className={`flex items-center gap-2 text-[17px] font-[650] tracking-[-0.025em] ${headlineTone}`}>
+                {isCancelled ? (
+                  <Ban size={18} aria-hidden="true" />
                 ) : (
-                  "Load more"
+                  registered && <CheckCircle2 size={19} aria-hidden="true" />
                 )}
-              </button>
+                {headline}
+              </p>
+              {subline && <p className={`mt-1.5 text-[14.5px] ${sublineTone}`}>{subline}</p>}
+            </div>
+
+            {action}
+
+            {actionError && (
+              <p role="alert" className="mt-3 text-[13.5px] text-urgent">
+                {actionError}
+              </p>
             )}
-          </div>
-        ) : feedError ? (
-          <div className="flex items-center justify-between gap-3 px-4 py-4 bg-white border border-gray-100 rounded-2xl">
-            <p className="text-xs text-gray-500">Couldn't load announcements.</p>
-            <button
-              onClick={() => fetchAnnouncements(0, false)}
-              className={`px-3 py-1.5 text-xs font-bold rounded-xl border border-gray-200 text-gray-600 bg-white hover:border-gray-400 hover:text-gray-900 transition-colors ${focusRing}`}
-            >
-              Try again
-            </button>
-          </div>
-        ) : (
-          <p className="px-4 py-4 text-xs text-gray-500 bg-white border border-gray-100 rounded-2xl">
-            No announcements yet. Updates from the organizers will appear here.
-          </p>
-        )}
-      </section>
+
+            <p className="mt-4 border-t border-line pt-4 text-[14.5px] text-ink-2">
+              {count > 0 ? (
+                <>
+                  <b
+                    className={`font-[650] tabular-nums transition-colors duration-500 ${
+                      countFlash ? "text-live" : "text-ink"
+                    }`}
+                  >
+                    {countFormat.format(count)}
+                  </b>{" "}
+                  {count === 1 ? "student is going" : "students are going"}
+                </>
+              ) : (
+                zeroCountText
+              )}
+            </p>
+          </section>
+
+          {club && (
+            <section aria-labelledby="event-host" className="mt-11">
+              <SectionHead id="event-host" title="Hosted by" />
+              <Rows>
+                <Row
+                  to={`/community/clubs/${club._id}`}
+                  lead={<LogoTile src={club.logo} name={club.clubName} />}
+                  title={club.clubName}
+                  meta="View club"
+                />
+              </Rows>
+            </section>
+          )}
+        </aside>
+      </div>
     </div>
   );
 }

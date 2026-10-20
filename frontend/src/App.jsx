@@ -23,7 +23,6 @@ import CreateClub from "./pages/clubs/CreateClub";
 import Events from "./pages/events/Events.jsx";
 import EventDetail from "./pages/events/EventDetail.jsx";
 import EventForm from "./pages/events/EventForm.jsx";
-import MyEvents from "./pages/events/MyEvents.jsx";
 import AnnouncementForm from "./pages/announcements/AnnouncementForm.jsx";
 
 // Academics workspace
@@ -63,12 +62,14 @@ const adminTabs = [
 ];
 
 function App() {
-  const { loading } = useAuth(); // 2. FIXED: Added parenthesis to invoke hook properly
+  const { loading } = useAuth();
 
+  // Until the session check answers, nothing can decide which page to show.
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen w-screen bg-gray-50">
-        <div className="w-6 h-6 border-2 border-gray-900 border-t-transparent rounded-full animate-spin" />
+      <div role="status" className="grid h-dvh w-screen place-items-center bg-white">
+        <div className="size-6 animate-spin rounded-full border-2 border-ink border-t-transparent" />
+        <span className="sr-only">Loading</span>
       </div>
     );
   }
@@ -142,7 +143,14 @@ function App() {
           {/* Career workspace */}
           <Route path="/career" element={<CareerDashboard />} />
           <Route path="/career/drives" element={<DrivesList />} />
-          <Route path="/career/drives/create" element={<CreateDrive />} />
+          <Route
+            path="/career/drives/create"
+            element={
+              <ProtectedRoute allowedRoles={["superadmin", "placementCoordinator"]}>
+                <CreateDrive />
+              </ProtectedRoute>
+            }
+          />
           <Route path="/career/drives/:id" element={<DriveDetail />} />
           <Route path="/career/my-applications" element={<MyApplications />} />
 

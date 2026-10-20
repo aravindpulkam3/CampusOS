@@ -1,28 +1,16 @@
-import { NavLink, Outlet } from 'react-router-dom'
+import { Outlet } from 'react-router-dom'
+import SectionTabs from './SectionTabs'
 
+// A workspace with its own tab row (the admin area). The negative margin lifts
+// the tabs up against the top bar, where the shell puts every other section's.
 const WorkspaceLayout = ({ tabs }) => {
   return (
     <div className="flex flex-col h-full">
-
-      {/* Tab Bar */}
-      {/* Scrolls on its own when the tabs don't fit, so the page never pans sideways */}
-      <div className="flex items-center gap-1 border-b border-gray-100 bg-white -mx-6 -mt-6 px-6 mb-6 overflow-x-auto">
-        {tabs.map(({ label, path, end }) => (
-          <NavLink
-            key={path}
-            to={path}
-            end={end}
-            className={({ isActive }) =>
-              `px-4 py-3 text-sm font-medium border-b-2 transition-all duration-150 whitespace-nowrap flex-shrink-0
-              ${isActive
-                ? 'border-gray-900 text-gray-900'
-                : 'border-transparent text-gray-400 hover:text-gray-700 hover:border-gray-300'
-              }`
-            }
-          >
-            {label}
-          </NavLink>
-        ))}
+      <div className="-mt-6 mb-6">
+        <SectionTabs
+          tabs={tabs.map(({ label, path, end }) => ({ label, to: path, end }))}
+          label="Admin"
+        />
       </div>
 
       {/* Tab Content */}

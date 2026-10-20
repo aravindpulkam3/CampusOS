@@ -1,166 +1,146 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import {
-  Mail,
-  Hash,
-  BookOpen,
-  Calendar,
-  MapPin,
-  ChevronRight,
-  Users,
-  Briefcase,
-  MessageSquare,
-  GraduationCap,
-  LogOut,
-  KeyRound,
-  Pencil,
-  Camera,
-  CheckCircle2,
-  X,
-  Eye,
-  EyeOff,
-  AlertTriangle,
-  GitFork,
-  UserCheck,
-  Globe,
-  FileText,
-} from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 import useAuth from "../../hooks/useAuth";
+import useImageOk from "../../hooks/useImageOk";
 import useIsClassRep from "../../hooks/useIsClassRep";
 import { changePasswordApi, getProfile, logoutApi, updateProfile } from "../../api/auth.api";
 import ImageUploadZone from "../../components/forms/ImageUploadZone.jsx";
-import EmptyState from "../../components/common/EmptyState";
+import {
+  Alert,
+  DateTile,
+  Facts,
+  LoadError,
+  LogoTile,
+  Modal,
+  PageTitle,
+  Pill,
+  Row,
+  Rows,
+  SectionHead,
+  Tag,
+  btn,
+  btnGhost,
+  btnGhostSm,
+  btnSm,
+  fieldInput,
+  fieldInputError,
+  fieldLabel,
+  focusRing,
+  note,
+  textLink,
+} from "../../components/common/ui";
 import safeHref from "../../utils/safeHref";
-import { formatDate } from "../../utils/formatDate";
+import { daysFromToday, describeWhen } from "../../utils/formatDate";
+import { APPLICATION_STATUS } from "../career/format";
 
 // ─── Helpers ──────────────────────────────────────────────────
-const statusConfig = {
-  active: { label: "Active", color: "bg-blue-50 text-blue-700" },
-  selected: { label: "Selected", color: "bg-green-50 text-green-700" },
-  rejected: { label: "Rejected", color: "bg-red-50 text-red-700" },
-};
-
-const clubBg = [
-  "bg-gray-900",
-  "bg-blue-600",
-  "bg-purple-600",
-  "bg-green-600",
-  "bg-orange-500",
-  "bg-rose-600",
-];
-
-const clubInitials = (name) =>
-  name
-    ?.split(" ")
-    .map((w) => w[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase() || "?";
-
 // "classrep" is deliberately not a role here — see useIsClassRep, which
 // resolves it from Classroom.classRepresentative instead.
-const roleLabel = {
-  student: "Student",
-  placementCoordinator: "Placement Coordinator",
-  superadmin: "Super Admin",
+const staffLabel = {
+  placementCoordinator: "Placement coordinator",
+  superadmin: "Super admin",
 };
 
-const roleBadge = {
-  student: "bg-gray-100 text-gray-600",
-  placementCoordinator: "bg-purple-50 text-purple-700",
-  superadmin: "bg-red-50 text-red-700",
+const BIO_MAX = 300; // the User schema's limit
+const LIST_SHOWN = 5;
+
+// What the student can edit here. Everything else on the page is the roster's.
+const EDITABLE = ["profilePicture", "bio", "github", "linkedin", "portfolio", "resumeUrl"];
+const LINKS = ["github", "linkedin", "portfolio"];
+
+// "https://www.github.com/aravind/" → "github.com/aravind"
+const prettyUrl = (url) => {
+  try {
+    const { host, pathname } = new URL(url);
+    return host.replace("www.", "") + (pathname === "/" ? "" : pathname.replace(/\/$/, ""));
+  } catch {
+    return url;
+  }
 };
+
+const missing = <span className="font-medium text-ink-3">Not on record</span>;
+const inlineLink = `rounded font-[550] text-ink underline decoration-ink/25 underline-offset-[3px] hover:decoration-ink ${focusRing}`;
 
 // ─── Skeleton ─────────────────────────────────────────────────
 const Skeleton = () => (
-  <div className="max-w-5xl mx-auto animate-pulse">
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-      <div className="lg:col-span-1 space-y-4">
-        <div className="bg-white border border-gray-100 rounded-xl p-6">
-          <div className="flex flex-col items-center gap-3">
-            <div className="w-20 h-20 rounded-2xl bg-gray-100" />
-            <div className="w-32 h-5 bg-gray-100 rounded" />
-            <div className="w-24 h-3 bg-gray-100 rounded" />
-            <div className="w-full h-8 bg-gray-100 rounded-lg mt-2" />
-          </div>
-        </div>
-        <div className="bg-white border border-gray-100 rounded-xl p-5 space-y-3">
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="w-full h-4 bg-gray-100 rounded" />
-          ))}
-        </div>
+  <div className="animate-pulse pb-10" aria-busy="true" aria-label="Loading profile">
+    <div className="flex items-center gap-5 pt-1 lg:pt-4">
+      <div className="size-[60px] flex-none rounded-full bg-soft lg:size-[84px]" />
+      <div className="space-y-2.5">
+        <div className="h-8 w-56 rounded-lg bg-soft" />
+        <div className="h-4 w-40 rounded bg-soft" />
       </div>
-      <div className="lg:col-span-2 space-y-4">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {[...Array(4)].map((_, i) => (
-            <div
-              key={i}
-              className="bg-white border border-gray-100 rounded-xl p-4 h-20"
-            />
-          ))}
-        </div>
-        <div className="bg-white border border-gray-100 rounded-xl p-5 h-40" />
-        <div className="bg-white border border-gray-100 rounded-xl p-5 h-40" />
-      </div>
+    </div>
+    <div className="mt-9 h-28 rounded-panel bg-soft" />
+    <div className="mt-14 space-y-3">
+      <div className="h-4 w-24 rounded bg-soft" />
+      <div className="h-3.5 w-2/3 rounded bg-soft" />
+      <div className="h-3.5 w-1/2 rounded bg-soft" />
     </div>
   </div>
 );
 
 // ─── Avatar ───────────────────────────────────────────────────
+// The stored picture when it loads, otherwise the initials.
 const Avatar = ({ user }) => {
-  const initials =
-    `${user?.firstName?.[0] || ""}${user?.lastName?.[0] || ""}`.toUpperCase();
-
+  const [showPicture, onPictureError] = useImageOk(user?.profilePicture);
+  const initials = `${user?.firstName?.[0] || ""}${user?.lastName?.[0] || ""}`.toUpperCase();
   return (
-    <div className="relative w-20 h-20 mx-auto">
-      {user?.profilePicture ? (
-        <img
-          src={user.profilePicture}
-          alt="Avatar"
-          className="w-20 h-20 rounded-2xl object-cover border border-gray-100 shadow-sm"
-        />
+    <span
+      aria-hidden="true"
+      className="grid size-[60px] flex-none place-items-center overflow-hidden rounded-full bg-ink text-[21px] font-[650] tracking-[-0.03em] text-white lg:size-[84px] lg:text-[28px]"
+    >
+      {showPicture ? (
+        <img src={user.profilePicture} alt="" onError={onPictureError} className="size-full object-cover" />
       ) : (
-        <div className="w-20 h-20 rounded-2xl bg-gray-900 flex items-center justify-center text-white text-2xl font-bold shadow-sm">
-          {initials}
-        </div>
+        initials
       )}
-    </div>
+    </span>
   );
 };
 
 // ─── Edit Profile Modal ───────────────────────────────────────
 const EditProfileModal = ({ user, onClose, onSave }) => {
-  const [form, setForm] = useState({
-    profilePicture: user?.profilePicture || "",
-    github: user?.github || "", // Double check these fallbacks are active
-    linkedin: user?.linkedin || "",
-    portfolio: user?.portfolio || "",
-    resumeUrl: user?.resumeUrl || "",
-    bio: user?.bio || "",
-  });
+  const initial = Object.fromEntries(EDITABLE.map((key) => [key, user?.[key] || ""]));
+  const [form, setForm] = useState(initial);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [linkErrors, setLinkErrors] = useState({});
+
+  const set = (field) => (e) => {
+    setForm((p) => ({ ...p, [field]: e.target.value }));
+    setLinkErrors((p) => ({ ...p, [field]: undefined }));
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    // Only what changed is sent, so a field this form never touched can't be
+    // overwritten with a stale value. Names, CGPA and backlogs are never sent:
+    // they come from the college roster and the server rejects them here.
+    const changed = Object.fromEntries(
+      EDITABLE.map((key) => [key, form[key].trim()]).filter(([key, value]) => value !== initial[key]),
+    );
+    if (Object.keys(changed).length === 0) return onClose();
+
+    // The server takes only http(s) links; say so under the field rather than
+    // after a round trip.
+    const badLinks = Object.fromEntries(
+      LINKS.filter((key) => changed[key] && !safeHref(changed[key])).map((key) => [
+        key,
+        "Use a full web address starting with https://",
+      ]),
+    );
+    if (Object.keys(badLinks).length) {
+      setLinkErrors(badLinks);
+      document.getElementById(`profile-${Object.keys(badLinks)[0]}`)?.focus();
+      return;
+    }
+
     setLoading(true);
+    setError("");
     try {
-      console.log(form);
-      const res = await updateProfile({
-        // Names are not sent: they come from the college roster and the
-        // server rejects them here.
-        profilePicture: form.profilePicture.trim(),
-
-        // ─── FIXED: Changed keys to lowercase to match backend destructuring ───
-        github: form.github ? form.github.trim() : "",
-        linkedin: form.linkedin ? form.linkedin.trim() : "",
-
-        portfolio: form.portfolio.trim(),
-        resumeUrl: form.resumeUrl.trim(),
-        bio: form.bio.trim(),
-        // CGPA/backlogs are not sent: they are maintained by the placement
-        // office (college roster) and the server rejects them here.
-      });
+      const res = await updateProfile(changed);
       onSave(res.data.data);
       onClose();
     } catch (err) {
@@ -170,193 +150,125 @@ const EditProfileModal = ({ user, onClose, onSave }) => {
     }
   };
 
+  const linkField = (key, label, placeholder) => (
+    <div>
+      <label htmlFor={`profile-${key}`} className={fieldLabel}>
+        {label}
+      </label>
+      <input
+        id={`profile-${key}`}
+        type="url"
+        value={form[key]}
+        onChange={set(key)}
+        placeholder={placeholder}
+        aria-invalid={linkErrors[key] ? true : undefined}
+        aria-describedby={linkErrors[key] ? `profile-${key}-error` : undefined}
+        className={linkErrors[key] ? fieldInputError : fieldInput}
+      />
+      {linkErrors[key] && (
+        <p id={`profile-${key}-error`} className="mt-1.5 text-[13px] text-urgent">
+          {linkErrors[key]}
+        </p>
+      )}
+    </div>
+  );
+
   return (
-    <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-xl w-full max-w-md my-8">
-        <div className="flex items-center justify-between p-5 border-b border-gray-100">
-          <h3 className="text-sm font-semibold text-gray-900">
-            Edit Profile Details
-          </h3>
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            className="p-1.5 -m-1.5 rounded-lg text-gray-400 hover:text-gray-700 transition-colors"
-          >
-            <X size={16} />
+    <Modal title="Edit profile" onClose={onClose} wide>
+      <form onSubmit={handleSubmit} noValidate className="space-y-4">
+        <div className="w-32 max-w-full">
+          <ImageUploadZone
+            label="Profile picture"
+            value={form.profilePicture}
+            folder="user-profiles"
+            onChange={(uploadedUrl) => setForm((p) => ({ ...p, profilePicture: uploadedUrl }))}
+          />
+        </div>
+
+        <div>
+          <div className="flex items-baseline justify-between gap-4">
+            <label htmlFor="profile-bio" className={fieldLabel}>
+              About you
+            </label>
+            <span className="text-xs tabular-nums text-ink-3">
+              {form.bio.length}/{BIO_MAX}
+            </span>
+          </div>
+          <textarea
+            id="profile-bio"
+            value={form.bio}
+            onChange={set("bio")}
+            maxLength={BIO_MAX}
+            rows={3}
+            placeholder="A line or two about yourself"
+            className={`${fieldInput} resize-none py-2.5 leading-[1.55]`}
+          />
+        </div>
+
+        {linkField("github", "GitHub", "https://github.com/username")}
+        {linkField("linkedin", "LinkedIn", "https://linkedin.com/in/username")}
+        {linkField("portfolio", "Portfolio", "https://your-site.com")}
+
+        <div>
+          <ImageUploadZone
+            label="Resume"
+            value={form.resumeUrl}
+            folder="student-resumes"
+            onChange={(uploadedUrl) => setForm((p) => ({ ...p, resumeUrl: uploadedUrl }))}
+          />
+          <p className="mt-1.5 text-[13px] text-ink-3">
+            Uploads are images only for now, so save your resume as a PNG or JPG.
+          </p>
+        </div>
+
+        {/* Beside the buttons, where the eye is after pressing Save: the
+            dialog scrolls, and a message at its top would be out of view. */}
+        {error && <Alert>{error}</Alert>}
+
+        <div className="flex justify-end gap-2 pt-1">
+          <button type="button" onClick={onClose} className={btnGhostSm}>
+            Cancel
+          </button>
+          <button type="submit" disabled={loading} className={btnSm}>
+            {loading ? "Saving..." : "Save changes"}
           </button>
         </div>
-        <form
-          onSubmit={handleSubmit}
-          className="p-5 space-y-4 max-h-[75vh] overflow-y-auto"
-        >
-          {error && (
-            <div className="flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg">
-              <AlertTriangle size={13} className="text-red-500 flex-shrink-0" />
-              <p className="text-xs text-red-700">{error}</p>
-            </div>
-          )}
-
-          {/* Profile Picture Upload Section (Small/Compact Size) */}
-          <div className="border border-gray-50 rounded-xl p-3 bg-gray-50/50">
-            <label className="block text-xs font-semibold text-gray-700 mb-2">
-              Profile Avatar Picture
-            </label>
-            <div className="w-28 max-w-full">
-              <ImageUploadZone
-                label="Avatar"
-                value={form.profilePicture}
-                folder="user-profiles"
-                onChange={(uploadedUrl) =>
-                  setForm((p) => ({ ...p, profilePicture: uploadedUrl }))
-                }
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1.5">
-              Name
-            </label>
-            <p className="w-full px-3 py-2 text-sm text-gray-600 bg-gray-50 border border-gray-100 rounded-lg">
-              {`${user?.firstName || ""} ${user?.lastName || ""}`.trim() || "—"}
-            </p>
-            <p className="mt-1 text-xs text-gray-400">
-              From the college roster — contact the administration to correct it.
-            </p>
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1.5">
-              Bio
-            </label>
-            <textarea
-              value={form.bio}
-              onChange={(e) => setForm((p) => ({ ...p, bio: e.target.value }))}
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100 resize-none"
-              placeholder="Tell us a bit about yourself..."
-              rows={2}
-            />
-          </div>
-
-          {/* Placement profile — drives drive eligibility on the dashboard */}
-          <div className="space-y-3 pt-2 border-t border-gray-50">
-            <div>
-              <h4 className="text-xs font-semibold text-gray-900">
-                Placement Profile
-              </h4>
-              <p className="text-xs text-gray-400 mt-0.5">
-                Used to work out which drives you're eligible for. Maintained by
-                the placement office — contact them if something is wrong.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <p className="block text-xs font-medium text-gray-700 mb-1.5">CGPA</p>
-                <p className="w-full px-3 py-2 text-sm border border-gray-100 bg-gray-50 rounded-lg text-gray-700">
-                  {user?.cgpa ?? "Not on file"}
-                </p>
-              </div>
-              <div>
-                <p className="block text-xs font-medium text-gray-700 mb-1.5">
-                  Active Backlogs
-                </p>
-                <p className="w-full px-3 py-2 text-sm border border-gray-100 bg-gray-50 rounded-lg text-gray-700">
-                  {user?.backlogs ?? "Not on file"}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-3 pt-2 border-t border-gray-50">
-            <h4 className="text-xs font-semibold text-gray-900">
-              Professional Links & Assets
-            </h4>
-
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1.5 flex items-center gap-1">
-                <GitFork size={12} className="text-gray-400" /> GitHub URL
-              </label>
-              <input
-                type="url"
-                value={form.github || ""} // 👈 ADD "|| ''" FALLBACK HERE
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, github: e.target.value }))
-                }
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
-                placeholder="https://github.com/username"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1.5 flex items-center gap-1">
-                <UserCheck size={12} className="text-gray-400" /> LinkedIn URL
-              </label>
-              <input
-                type="url"
-                value={form.linkedin || ""} // 👈 ADD "|| ''" FALLBACK HERE
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, linkedin: e.target.value }))
-                }
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
-                placeholder="https://linkedin.com/in/username"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1.5 flex items-center gap-1">
-                <Globe size={12} className="text-gray-400" /> Portfolio Website
-              </label>
-              <input
-                type="url"
-                value={form.portfolio || ""} // 👈 ADD "|| ''" FALLBACK HERE
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, portfolio: e.target.value }))
-                }
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
-                placeholder="https://portfolio.com"
-              />
-            </div>
-
-            {/* Resume File URL Asset Handler */}
-            <div className="pt-1">
-              <label className="block text-xs font-medium text-gray-700 mb-1.5 flex items-center gap-1">
-                <FileText size={12} className="text-gray-400" /> Resume PDF URL
-              </label>
-              <ImageUploadZone
-                label="Resume PDF"
-                value={form.resumeUrl}
-                folder="student-resumes"
-                onChange={(uploadedUrl) =>
-                  setForm((p) => ({ ...p, resumeUrl: uploadedUrl }))
-                }
-              />
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-3 pt-3 border-t border-gray-100">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-gray-500 border border-gray-200 rounded-lg hover:border-gray-400 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-4 py-2 text-sm font-medium bg-gray-900 text-white rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50"
-            >
-              {loading ? "Saving..." : "Save Changes"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+      </form>
+    </Modal>
   );
 };
 
 // ─── Change Password Modal ────────────────────────────────────
+// Declared at module level: defined inside the dialog it would be a new
+// component on every keystroke and the input would lose focus each time.
+const PasswordField = ({ id, label, value, onChange, shown, onToggle, placeholder, autoComplete }) => (
+  <div>
+    <label htmlFor={id} className={fieldLabel}>
+      {label}
+    </label>
+    <div className="relative">
+      <input
+        id={id}
+        type={shown ? "text" : "password"}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        autoComplete={autoComplete}
+        className={`${fieldInput} pr-11`}
+      />
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-label={shown ? `Hide: ${label}` : `Show: ${label}`}
+        aria-pressed={shown}
+        className={`absolute right-1.5 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-lg text-ink-3 transition-colors hover:text-ink ${focusRing}`}
+      >
+        {shown ? <EyeOff size={15} aria-hidden="true" /> : <Eye size={15} aria-hidden="true" />}
+      </button>
+    </div>
+  </div>
+);
+
 const ChangePasswordModal = ({ onClose }) => {
   const { setUser } = useAuth();
   const navigate = useNavigate();
@@ -409,177 +321,103 @@ const ChangePasswordModal = ({ onClose }) => {
     }
   };
 
-  const PwInput = ({ field, placeholder }) => (
-    <div className="relative">
-      <input
-        type={show[field] ? "text" : "password"}
-        value={form[field]}
-        onChange={(e) => setForm((p) => ({ ...p, [field]: e.target.value }))}
-        placeholder={placeholder}
-        className="w-full px-3 py-2 pr-9 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100 placeholder:text-gray-300"
-      />
-      <button
-        type="button"
-        onClick={() => toggle(field)}
-        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-      >
-        {show[field] ? <EyeOff size={13} /> : <Eye size={13} />}
-      </button>
-    </div>
+  const field = (key, label, placeholder, autoComplete) => (
+    <PasswordField
+      id={`password-${key}`}
+      label={label}
+      value={form[key]}
+      onChange={(e) => setForm((p) => ({ ...p, [key]: e.target.value }))}
+      shown={show[key]}
+      onToggle={() => toggle(key)}
+      placeholder={placeholder}
+      autoComplete={autoComplete}
+    />
   );
 
   return (
-    <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-xl w-full max-w-sm">
-        <div className="flex items-center justify-between p-5 border-b border-gray-100">
-          <h3 className="text-sm font-semibold text-gray-900">
-            Change Password
-          </h3>
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            className="p-1.5 -m-1.5 rounded-lg text-gray-400 hover:text-gray-700"
-          >
-            <X size={16} />
+    <Modal title="Change password" onClose={onClose}>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {error && <Alert>{error}</Alert>}
+        {success && <Alert kind="success">Password changed. Signing you out…</Alert>}
+        {field("current", "Current password", "", "current-password")}
+        {field("newPw", "New password", "At least 8 characters", "new-password")}
+        {field("confirm", "Confirm new password", "Repeat new password", "new-password")}
+        <p className="text-[13px] text-ink-3">Changing it signs you out on every device.</p>
+        <div className="flex justify-end gap-2 pt-1">
+          <button type="button" onClick={onClose} className={btnGhostSm}>
+            Cancel
+          </button>
+          <button type="submit" disabled={loading || success} className={btnSm}>
+            {loading ? "Updating..." : "Update password"}
           </button>
         </div>
-        <form onSubmit={handleSubmit} className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
-          {error && (
-            <div className="flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg">
-              <AlertTriangle size={13} className="text-red-500 flex-shrink-0" />
-              <p className="text-xs text-red-700">{error}</p>
-            </div>
-          )}
-          {success && (
-            <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-200 rounded-lg">
-              <CheckCircle2
-                size={13}
-                className="text-green-600 flex-shrink-0"
-              />
-              <p className="text-xs text-green-700">
-                Password changed. Signing you out…
-              </p>
-            </div>
-          )}
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1.5">
-              Current Password
-            </label>
-            <PwInput field="current" placeholder="Enter current password" />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1.5">
-              New Password
-            </label>
-            <PwInput field="newPw" placeholder="Min 8 characters" />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1.5">
-              Confirm New Password
-            </label>
-            <PwInput field="confirm" placeholder="Repeat new password" />
-          </div>
-          <div className="flex justify-end gap-3 pt-1">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-gray-500 border border-gray-200 rounded-lg hover:border-gray-400 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading || success}
-              className="px-4 py-2 text-sm font-medium bg-gray-900 text-white rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50"
-            >
-              {loading ? "Updating..." : "Update Password"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+      </form>
+    </Modal>
   );
 };
 
-// ─── Section wrapper ──────────────────────────────────────────
-const Section = ({ title, linkTo, linkLabel, children }) => (
-  <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
-    <div className="flex items-center justify-between px-5 py-4 border-b border-gray-50">
-      <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
-      {linkTo && (
-        <Link
-          to={linkTo}
-          className="flex items-center gap-1 text-xs font-medium text-gray-400 hover:text-gray-900 transition-colors"
+// ─── One link the student can add ─────────────────────────────
+// A stored URL that is not http(s) is shown as missing rather than linked.
+const LinkRow = ({ label, url, text, onAdd }) => {
+  const href = safeHref(url);
+  return (
+    <li className="grid min-h-14 grid-cols-[84px_minmax(0,1fr)_auto] items-center gap-x-4 py-2.5 sm:grid-cols-[110px_minmax(0,1fr)_auto]">
+      <span className="text-[14.5px] text-ink-2">{label}</span>
+      {href ? (
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={`justify-self-start truncate rounded text-[14.5px] text-ink underline decoration-line-2 underline-offset-4 hover:decoration-ink-3 ${focusRing} max-w-full`}
         >
-          {linkLabel || "View all"} <ChevronRight size={12} />
-        </Link>
+          {text || prettyUrl(href)}
+          <span className="sr-only"> (opens in a new tab)</span>
+        </a>
+      ) : (
+        <span className="text-[14.5px] text-ink-3">Not added yet</span>
       )}
-    </div>
-    <div className="p-5">{children}</div>
-  </div>
-);
-
-
-// ─── Info Row ─────────────────────────────────────────────────
-const InfoRow = ({ icon: Icon, label, value, isLink, url }) => (
-  <div className="flex items-center gap-3 py-2.5 border-b border-gray-50 last:border-0">
-    <Icon size={13} className="text-gray-400 flex-shrink-0" />
-    <span className="text-xs text-gray-400 w-24 flex-shrink-0">{label}</span>
-    {isLink && safeHref(url) ? (
-      <a
-        href={safeHref(url)}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="text-xs font-medium text-blue-600 hover:underline truncate max-w-[180px] sm:max-w-none"
-      >
-        {value || "View Link"}
-      </a>
-    ) : (
-      <span className="text-xs font-medium text-gray-800 truncate max-w-[180px] sm:max-w-none">
-        {value || "—"}
-      </span>
-    )}
-  </div>
-);
-
-// ─── Stat Card ────────────────────────────────────────────────
-const StatCard = ({ label, value, icon: Icon, color }) => (
-  <div className="bg-white border border-gray-100 rounded-xl p-4 text-center">
-    <div
-      className={`w-8 h-8 rounded-lg ${color} flex items-center justify-center mx-auto mb-2`}
-    >
-      <Icon size={15} />
-    </div>
-    <p className="text-xl font-bold text-gray-900">{value ?? 0}</p>
-    <p className="text-xs text-gray-400 mt-0.5 leading-tight">{label}</p>
-  </div>
-);
+      {!href && (
+        <button
+          type="button"
+          onClick={onAdd}
+          aria-label={`Add: ${label}`}
+          className={`rounded text-[14.5px] font-[550] text-ink underline-offset-[3px] hover:underline ${focusRing}`}
+        >
+          Add
+        </button>
+      )}
+    </li>
+  );
+};
 
 // ─── Main ─────────────────────────────────────────────────────
 const Profile = () => {
-  const { user: authUser, logout } = useAuth();
+  const { user: authUser, setUser, logout } = useAuth();
   const { isClassRep } = useIsClassRep();
   const navigate = useNavigate();
 
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showAllClubs, setShowAllClubs] = useState(false);
+  const [showAllEvents, setShowAllEvents] = useState(false);
   const [editModal, setEditModal] = useState(false);
   const [pwModal, setPwModal] = useState(false);
 
-  useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        const res = await getProfile();
-        setProfile(res.data.data);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchProfile();
+  const fetchProfile = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await getProfile();
+      setProfile(res.data.data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchProfile();
+  }, [fetchProfile]);
 
   const handleLogout = async () => {
     try {
@@ -592,389 +430,237 @@ const Profile = () => {
   if (loading) return <Skeleton />;
   if (!profile)
     return (
-      <div className="max-w-5xl mx-auto text-center py-20">
-        <p className="text-sm text-gray-400">Failed to load profile.</p>
+      <div className="pb-10">
+        <PageTitle title="Profile" />
+        <div className="mt-9">
+          <LoadError onRetry={fetchProfile}>Could not load your profile.</LoadError>
+        </div>
       </div>
     );
 
   const {
-    user,
-    stats,
     classroom,
     followedClubs = [],
     registeredEvents = [],
     recentApplications = [],
   } = profile;
 
+  // GET /auth/profile leaves out the bio, the links and the resume, so those
+  // come from the signed-in user (GET /auth/me), which carries them. After a
+  // save both copies hold the server's reply.
+  const own = Object.fromEntries(EDITABLE.map((key) => [key, authUser?.[key]]));
+  const user = { ...own, ...profile.user };
+
   const fullName = `${user.firstName} ${user.lastName}`;
-  // A missing CGPA is "not provided", not "bad" — it must stay neutral grey,
-  // never the red that a genuinely low score gets.
-  const hasCgpa = user.cgpa != null;
-  const cgpaColor = !hasCgpa
-    ? "text-gray-400"
-    : user.cgpa >= 8
-      ? "text-green-600"
-      : user.cgpa >= 6
-        ? "text-amber-600"
-        : "text-red-500";
-  const cgpaLabel = hasCgpa ? user.cgpa.toFixed(2) : "Not set";
-  const visibleClubs = showAllClubs ? followedClubs : followedClubs.slice(0, 6);
+  const visibleClubs = showAllClubs ? followedClubs : followedClubs.slice(0, LIST_SHOWN);
+  // The page lists what is still ahead, soonest first; the rest are counted.
+  const upcoming = registeredEvents
+    .filter((event) => event && daysFromToday(event.startDateTime) >= 0)
+    .sort((a, b) => new Date(a.startDateTime) - new Date(b.startDateTime));
+  const pastCount = registeredEvents.length - upcoming.length;
+  const visibleEvents = showAllEvents ? upcoming : upcoming.slice(0, LIST_SHOWN);
+  const applications = recentApplications.filter((app) => app.drive);
+
+  const handleSaved = (updated) => {
+    setProfile((p) => ({ ...p, user: { ...p.user, ...updated } }));
+    // The top bar's avatar and this page's links read the signed-in user.
+    setUser((current) => (current ? { ...current, ...updated } : current));
+  };
 
   return (
-    <div className="max-w-5xl mx-auto">
+    <div className="pb-10 lg:pb-20">
       {editModal && (
-        <EditProfileModal
-          user={user}
-          onClose={() => setEditModal(false)}
-          onSave={(updated) =>
-            setProfile((p) => ({ ...p, user: { ...p.user, ...updated } }))
-          }
-        />
+        <EditProfileModal user={user} onClose={() => setEditModal(false)} onSave={handleSaved} />
       )}
       {pwModal && <ChangePasswordModal onClose={() => setPwModal(false)} />}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* ── Left Column ── */}
-        <div className="lg:col-span-1 space-y-4">
-          {/* Profile Card */}
-          <div className="bg-white border border-gray-100 rounded-xl p-6">
-            <div className="flex flex-col items-center text-center">
-              <Avatar user={user} />
+      <PageTitle
+        lead={<Avatar user={user} />}
+        title={fullName}
+        sub={
+          <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+            <span className="break-all">{user.email}</span>
+            {staffLabel[user.role] && <Tag>{staffLabel[user.role]}</Tag>}
+            {isClassRep && <Tag>Class representative</Tag>}
+          </span>
+        }
+      >
+        {/* Phones: the two quiet buttons share a row, the main one takes the next */}
+        <div className="flex w-full flex-wrap gap-2 lg:w-auto">
+          <button type="button" onClick={handleLogout} className={`max-lg:flex-1 ${btnGhost}`}>
+            Log out
+          </button>
+          <button type="button" onClick={() => setPwModal(true)} className={`max-lg:flex-1 ${btnGhost}`}>
+            Change password
+          </button>
+          <button type="button" onClick={() => setEditModal(true)} className={`max-lg:w-full ${btn}`}>
+            Edit profile
+          </button>
+        </div>
+      </PageTitle>
 
-              <div className="mt-4">
-                <h2 className="text-base font-semibold text-gray-900">
-                  {fullName}
-                </h2>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  {user.rollNumber}
-                </p>
-              </div>
+      <Facts
+        className="mt-9"
+        facts={[
+          { label: "Roll number", value: user.rollNumber || missing },
+          { label: "Branch", value: `${user.branch}, section ${user.section}` },
+          { label: "Year", value: `Year ${user.year}` },
+          { label: "CGPA", value: user.cgpa != null ? user.cgpa.toFixed(2) : missing },
+          { label: "Backlogs", value: user.backlogs ?? missing },
+        ]}
+      />
+      <p className="mt-3.5 text-[13.5px] leading-[1.55] text-ink-3">
+        Name, roll number, branch, year, CGPA and backlogs come from the college roster and can only
+        be changed by the placement office.{" "}
+        {classroom ? (
+          <>
+            Your classroom is{" "}
+            <Link
+              to={`/academics/classroom/${classroom._id}`}
+              className={`rounded text-ink-2 underline decoration-line-2 underline-offset-[3px] hover:text-ink ${focusRing}`}
+            >
+              {classroom.branch} {classroom.batch}, Section {classroom.section}
+            </Link>
+            .
+          </>
+        ) : (
+          "You are not assigned to a classroom yet."
+        )}
+      </p>
 
-              <div className="mt-2 flex items-center gap-1.5">
-                <span
-                  className={`text-xs font-medium px-2.5 py-1 rounded-full ${roleBadge[user.role] || roleBadge.student}`}
-                >
-                  {roleLabel[user.role] || "Student"}
-                </span>
-                {isClassRep && (
-                  <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-blue-50 text-blue-700">
-                    Class Representative
-                  </span>
-                )}
-              </div>
-
-              {/* Bio Sub-text Section */}
-              {user.bio && (
-                <p className="text-xs text-gray-500 mt-3 border-t border-gray-50 pt-3 italic line-clamp-3 w-full">
-                  "{user.bio}"
-                </p>
-              )}
-
-              {/* CGPA pill */}
-              <div className="mt-3 flex items-center gap-2">
-                <span className={`text-sm font-bold ${cgpaColor}`}>
-                  {cgpaLabel}
-                </span>
-                <span className="text-xs text-gray-400">CGPA</span>
-                {user.backlogs != null && user.backlogs > 0 && (
-                  <span className="text-xs text-gray-400">
-                    · {user.backlogs} backlog{user.backlogs > 1 ? "s" : ""}
-                  </span>
-                )}
-              </div>
-
-              {/* Actions */}
-              <div className="w-full mt-5 space-y-2">
-                <button
-                  onClick={() => setEditModal(true)}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2 text-xs font-medium border border-gray-200 text-gray-700 rounded-lg hover:border-gray-400 hover:text-gray-900 transition-all"
-                >
-                  <Pencil size={12} /> Edit Profile
+      <div className="mt-11 grid grid-cols-1 gap-y-11 lg:mt-14 lg:grid-cols-[minmax(0,1fr)_352px] lg:gap-x-[72px]">
+        <div className="min-w-0 space-y-11 lg:space-y-14">
+          <section>
+            <SectionHead title="About" />
+            {user.bio ? (
+              <p className="max-w-[64ch] whitespace-pre-line break-words text-base leading-[1.6] text-ink/90">
+                {user.bio}
+              </p>
+            ) : (
+              <p className={note}>
+                Nothing here yet.{" "}
+                <button type="button" onClick={() => setEditModal(true)} className={inlineLink}>
+                  Add a line about yourself
                 </button>
-                <button
-                  onClick={() => setPwModal(true)}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2 text-xs font-medium border border-gray-200 text-gray-700 rounded-lg hover:border-gray-400 hover:text-gray-900 transition-all"
-                >
-                  <KeyRound size={12} /> Change Password
-                </button>
-                <button
-                  onClick={handleLogout}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2 text-xs font-medium border border-red-100 text-red-600 rounded-lg hover:bg-red-50 hover:border-red-300 transition-all"
-                >
-                  <LogOut size={12} /> Logout
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Account & Social Info */}
-          <div className="bg-white border border-gray-100 rounded-xl p-5">
-            <h3 className="text-sm font-semibold text-gray-900 mb-3">
-              Account & Social Info
-            </h3>
-            <InfoRow icon={Mail} label="Email" value={user.email} />
-            <InfoRow icon={Hash} label="Roll No." value={user.rollNumber} />
-            <InfoRow icon={BookOpen} label="Branch" value={user.branch} />
-            <InfoRow icon={Calendar} label="Year" value={`Year ${user.year}`} />
-            <InfoRow
-              icon={MapPin}
-              label="Section"
-              value={`Section ${user.section}`}
-            />
-
-            {/* Added Social Media Rows */}
-            <InfoRow
-              icon={GitFork}
-              label="GitHub"
-              value={user.github ? "View GitHub" : "—"}
-              isLink={!!user.github}
-              url={user.github}
-            />
-            <InfoRow
-              icon={UserCheck}
-              label="LinkedIn"
-              value={user.linkedin ? "View Profile" : "—"}
-              isLink={!!user.linkedin}
-              url={user.linkedin}
-            />
-            <InfoRow
-              icon={Globe}
-              label="Portfolio"
-              value={user.portfolio ? "View Portfolio" : "—"}
-              isLink={!!user.portfolio}
-              url={user.portfolio}
-            />
-            <InfoRow
-              icon={FileText}
-              label="Resume"
-              value={user.resumeUrl ? "Download Resume" : "—"}
-              isLink={!!user.resumeUrl}
-              url={user.resumeUrl}
-            />
-          </div>
-
-          {/* Academic */}
-          <div className="bg-white border border-gray-100 rounded-xl p-5">
-            <h3 className="text-sm font-semibold text-gray-900 mb-3">
-              Academics
-            </h3>
-            <div className="flex items-center justify-between py-2.5 border-b border-gray-50">
-              <div className="flex items-center gap-2">
-                <GraduationCap size={13} className="text-gray-400" />
-                <span className="text-xs text-gray-500">Classroom</span>
-              </div>
-              <span className="text-xs font-medium text-gray-800">
-                {classroom ? `${classroom.branch} ${classroom.batch} - ${classroom.section}` : "Not assigned"}
-              </span>
-            </div>
-            <div className="flex items-center justify-between py-2.5">
-              <div className="flex items-center gap-2">
-                <BookOpen size={13} className="text-gray-400" />
-                <span className="text-xs text-gray-500">CGPA</span>
-              </div>
-              <span className={`text-xs font-bold ${cgpaColor}`}>
-                {cgpaLabel}
-              </span>
-            </div>
-            <div className="flex items-center justify-between py-2.5">
-              <div className="flex items-center gap-2">
-                <BookOpen size={13} className="text-gray-400" />
-                <span className="text-xs text-gray-500">Active Backlogs</span>
-              </div>
-              <span
-                className={`text-xs font-bold ${
-                  user.backlogs == null ? "text-gray-400" : "text-gray-800"
-                }`}
-              >
-                {user.backlogs ?? "Not set"}
-              </span>
-            </div>
-            {classroom && (
-              <Link
-                to="/academics"
-                className="mt-3 w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium border border-gray-200 text-gray-600 rounded-lg hover:border-gray-400 hover:text-gray-900 transition-all"
-              >
-                Go to Classroom <ChevronRight size={12} />
-              </Link>
+              </p>
             )}
-          </div>
+          </section>
+
+          <section>
+            <SectionHead title="Links" />
+            <ul className="divide-y divide-line">
+              <LinkRow
+                label="Resume"
+                url={user.resumeUrl}
+                text="Open resume"
+                onAdd={() => setEditModal(true)}
+              />
+              <LinkRow label="GitHub" url={user.github} onAdd={() => setEditModal(true)} />
+              <LinkRow label="LinkedIn" url={user.linkedin} onAdd={() => setEditModal(true)} />
+              <LinkRow label="Portfolio" url={user.portfolio} onAdd={() => setEditModal(true)} />
+            </ul>
+          </section>
+
+          {(user.role === "student" || applications.length > 0) && (
+            <section>
+              <SectionHead
+                title="Applications"
+                linkTo="/career/my-applications"
+                linkLabel="All applications"
+              />
+              {applications.length > 0 ? (
+                <Rows>
+                  {applications.map((app) => {
+                    const status = APPLICATION_STATUS[app.status] ?? APPLICATION_STATUS.active;
+                    return (
+                      <Row
+                        key={app._id}
+                        to={`/career/drives/${app.drive._id}`}
+                        lead={<LogoTile src={app.drive.companyLogo} name={app.drive.companyName} />}
+                        title={app.drive.companyName}
+                        meta={app.drive.role}
+                        end={<Pill tone={status.tone}>{status.label}</Pill>}
+                      />
+                    );
+                  })}
+                </Rows>
+              ) : (
+                <p className={note}>You haven't applied to any placement drives yet.</p>
+              )}
+            </section>
+          )}
         </div>
 
-        {/* ── Right Column ── */}
-        <div className="lg:col-span-2 space-y-4">
-          {/* Stats */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <StatCard
-              label="Clubs Following"
-              value={stats?.clubsFollowing}
-              icon={Users}
-              color="bg-blue-50 text-blue-600"
-            />
-            <StatCard
-              label="Events Registered"
-              value={stats?.eventsRegistered}
-              icon={Calendar}
-              color="bg-purple-50 text-purple-600"
-            />
-            <StatCard
-              label="Discussions"
-              value={stats?.discussionsCreated}
-              icon={MessageSquare}
-              color="bg-green-50 text-green-600"
-            />
-            <StatCard
-              label="Applications"
-              value={stats?.placementApplications}
-              icon={Briefcase}
-              color="bg-amber-50 text-amber-600"
-            />
-          </div>
-
-          {/* Following Clubs */}
-          <Section
-            title="Following Clubs"
-            linkTo="/community/clubs"
-            linkLabel="Explore clubs"
-          >
+        <div className="min-w-0 space-y-11 lg:space-y-14">
+          <section>
+            <SectionHead title="Clubs you follow" linkTo="/community/clubs" linkLabel="All clubs" />
             {followedClubs.length > 0 ? (
               <>
-                <div className="flex flex-wrap gap-2">
-                  {visibleClubs.map((club, i) => (
-                    <Link
+                <Rows>
+                  {visibleClubs.map((club) => (
+                    <Row
                       key={club._id}
                       to={`/community/clubs/${club._id}`}
-                      className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-100 rounded-lg hover:border-gray-300 transition-all group"
-                    >
-                      <div
-                        className={`w-5 h-5 rounded flex items-center justify-center text-white text-xs font-bold flex-shrink-0 ${clubBg[i % clubBg.length]}`}
-                      >
-                        {club.logo ? (
-                          <img
-                            src={club.logo}
-                            alt=""
-                            className="w-full h-full object-cover rounded"
-                          />
-                        ) : (
-                          <span style={{ fontSize: "8px" }}>
-                            {clubInitials(club.clubName)}
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-xs font-medium text-gray-700 group-hover:text-gray-900 whitespace-nowrap">
-                        {club.clubName}
-                      </span>
-                    </Link>
+                      lead={<LogoTile src={club.logo} name={club.clubName} cover />}
+                      title={club.clubName}
+                    />
                   ))}
-                </div>
-                {followedClubs.length > 6 && (
+                </Rows>
+                {followedClubs.length > LIST_SHOWN && (
                   <button
+                    type="button"
                     onClick={() => setShowAllClubs((p) => !p)}
-                    className="mt-3 text-xs font-medium text-gray-500 hover:text-gray-900 transition-colors"
+                    aria-expanded={showAllClubs}
+                    className={`mt-2 ${textLink}`}
                   >
-                    {showAllClubs
-                      ? "Show less"
-                      : `Show ${followedClubs.length - 6} more`}
+                    {showAllClubs ? "Show fewer" : `Show ${followedClubs.length - LIST_SHOWN} more`}
                   </button>
                 )}
               </>
             ) : (
-              <EmptyState message="You're not following any clubs yet." />
+              <p className={note}>You're not following any clubs yet.</p>
             )}
-          </Section>
+          </section>
 
-          {/* Registered Events */}
-          <Section
-            title="Registered Events"
-            linkTo="/community/events"
-            linkLabel="Browse events"
-          >
-            {registeredEvents.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {registeredEvents.slice(0, 6).map((event) => (
-                  <Link
-                    key={event._id}
-                    to={`/community/events/${event._id}`}
-                    className="flex items-center gap-3 p-3 bg-gray-50 border border-gray-100 rounded-xl hover:border-gray-300 transition-all group"
+          <section>
+            <SectionHead
+              title="Events you're going to"
+              linkTo="/community/events"
+              linkLabel="All events"
+            />
+            {upcoming.length > 0 ? (
+              <>
+                <Rows>
+                  {visibleEvents.map((event) => (
+                    <Row
+                      key={event._id}
+                      to={`/community/events/${event._id}`}
+                      lead={<DateTile date={event.startDateTime} />}
+                      title={event.eventName}
+                      meta={[describeWhen(event.startDateTime), event.venue].filter(Boolean).join(", ")}
+                    />
+                  ))}
+                </Rows>
+                {upcoming.length > LIST_SHOWN && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllEvents((p) => !p)}
+                    aria-expanded={showAllEvents}
+                    className={`mt-2 ${textLink}`}
                   >
-                    <div className="flex-shrink-0 w-9 text-center">
-                      <p className="text-xs text-gray-400 uppercase leading-none">
-                        {new Date(event.startDateTime).toLocaleDateString(
-                          "en-IN",
-                          { month: "short" },
-                        )}
-                      </p>
-                      <p className="text-base font-bold text-gray-900 leading-none mt-0.5">
-                        {new Date(event.startDateTime).getDate()}
-                      </p>
-                    </div>
-                    <div className="w-px self-stretch bg-gray-200 flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-gray-900 truncate group-hover:text-gray-700">
-                        {event.eventName}
-                      </p>
-                      <p className="text-xs text-gray-400 truncate">
-                        {event.venue}
-                      </p>
-                    </div>
-                  </Link>
-                ))}
-              </div>
+                    {showAllEvents ? "Show fewer" : `Show ${upcoming.length - LIST_SHOWN} more`}
+                  </button>
+                )}
+              </>
             ) : (
-              <EmptyState message="No registered events." />
+              <p className={note}>You're not registered for any upcoming events.</p>
             )}
-          </Section>
-
-          {/* Career / Applications */}
-          <Section
-            title="Placement Applications"
-            linkTo="/career/my-applications"
-            linkLabel="View all"
-          >
-            {recentApplications.length > 0 ? (
-              <div className="space-y-2">
-                {recentApplications.map((app) => {
-                  const cfg =
-                    statusConfig[app.status] || statusConfig.active;
-                  return (
-                    <Link
-                      key={app._id}
-                      to={`/career/drives/${app.drive?._id}`}
-                      className="flex items-center gap-3 p-3 bg-gray-50 border border-gray-100 rounded-xl hover:border-gray-300 transition-all group"
-                    >
-                      <div className="w-9 h-9 rounded-lg bg-white border border-gray-200 flex items-center justify-center flex-shrink-0 overflow-hidden">
-                        {app.drive?.companyLogo ? (
-                          <img
-                            src={app.drive.companyLogo}
-                            alt=""
-                            className="w-full h-full object-contain p-1"
-                          />
-                        ) : (
-                          <span className="text-xs font-bold text-gray-500">
-                            {app.drive?.companyName?.slice(0, 2).toUpperCase()}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold text-gray-900 truncate group-hover:text-gray-700">
-                          {app.drive?.companyName}
-                        </p>
-                        <p className="text-xs text-gray-400 truncate">
-                          {app.drive?.role}
-                        </p>
-                      </div>
-                      <span
-                        className={`text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0 ${cfg.color}`}
-                      >
-                        {cfg.label}
-                      </span>
-                    </Link>
-                  );
-                })}
-              </div>
-            ) : (
-              <EmptyState message="You haven't applied to any placement drives yet." />
+            {pastCount > 0 && (
+              <p className="mt-2 text-[13.5px] text-ink-3">
+                Plus {pastCount} earlier {pastCount === 1 ? "event" : "events"} you registered for.
+              </p>
             )}
-          </Section>
+          </section>
         </div>
       </div>
     </div>

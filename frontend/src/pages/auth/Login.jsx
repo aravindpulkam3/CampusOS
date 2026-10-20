@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { loginApi } from "../../api/auth.api.js";
 import useAuth from "../../hooks/useAuth.js";
+import { Alert, focusRing } from "../../components/common/ui";
+import AuthShell, { AuthField, AuthSubmit, authLink } from "./AuthShell";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -38,135 +40,62 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-white flex">
-      {/* Left panel */}
-      <div className="hidden lg:flex lg:w-1/2 bg-gray-950 flex-col justify-between p-14">
-        <div>
-          <span className="text-white text-xl font-semibold tracking-tight">
-            EventSphere
-          </span>
-        </div>
-        <div>
-          <h1 className="text-white text-4xl font-light leading-tight mb-6">
-            Your campus,
-            <br />
-            <span className="font-semibold">centralised.</span>
-          </h1>
-          <p className="text-gray-400 text-sm leading-relaxed max-w-xs">
-            Events, clubs, placements, academics — everything your college life
-            runs on, in one place.
-          </p>
-        </div>
-        <p className="text-gray-600 text-xs">
-          © {new Date().getFullYear()} EventSphere
-        </p>
-      </div>
+    <AuthShell
+      title="Sign in"
+      sub="Use your college email address."
+      footer={
+        <>
+          First time here?{" "}
+          <Link to="/signup" className={authLink}>
+            Activate your account
+          </Link>{" "}
+          with the email on the college roster.
+        </>
+      }
+    >
+      <form onSubmit={handleSubmit} className="space-y-5">
+        {justActivated && !error && (
+          <Alert kind="success">Account activated. Sign in with your new password.</Alert>
+        )}
+        {notice && !error && <Alert kind="success">{notice}</Alert>}
+        {error && <Alert>{error}</Alert>}
 
-      {/* Right panel */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center px-6 py-12">
-        <div className="w-full max-w-sm">
-          {/* Mobile logo */}
-          <div className="lg:hidden mb-10">
-            <span className="text-gray-900 text-xl font-semibold tracking-tight">
-              EventSphere
-            </span>
-          </div>
-
-          <div className="mb-8">
-            <h2 className="text-2xl font-semibold text-gray-900 mb-1">
-              Sign in
-            </h2>
-            <p className="text-sm text-gray-500">
-              Welcome back. Enter your credentials to continue.
-            </p>
-          </div>
-
-          {justActivated && !error && (
-            <div className="mb-5 px-4 py-3 bg-green-50 border border-green-200 rounded-lg">
-              <p className="text-sm text-green-800">
-                Account activated. Sign in with your new password.
-              </p>
-            </div>
-          )}
-
-          {notice && !error && (
-            <div className="mb-5 px-4 py-3 bg-green-50 border border-green-200 rounded-lg">
-              <p className="text-sm text-green-800">{notice}</p>
-            </div>
-          )}
-
-          {error && (
-            <div className="mb-5 px-4 py-3 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-sm text-red-700">{error}</p>
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1.5">
-                Email address
-              </label>
-              <input
-                type="email"
-                name="email"
-                value={form.email}
-                onChange={handleChange}
-                required
-                placeholder="you@college.edu"
-                className="w-full px-3.5 py-2.5 text-sm border border-gray-200 rounded-lg outline-none focus:border-gray-900 focus:ring-2 focus:ring-gray-900/5 transition-all placeholder:text-gray-300"
-              />
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-medium text-gray-700">
-                  Password
-                </label>
-                <Link
-                  to="/forgot-password"
-                  className="text-xs text-gray-500 hover:text-gray-900 hover:underline underline-offset-2"
-                >
-                  Forgot password?
-                </Link>
-              </div>
-              <input
-                type="password"
-                name="password"
-                value={form.password}
-                onChange={handleChange}
-                required
-                placeholder="••••••••"
-                className="w-full px-3.5 py-2.5 text-sm border border-gray-200 rounded-lg outline-none focus:border-gray-900 focus:ring-2 focus:ring-gray-900/5 transition-all placeholder:text-gray-300"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-gray-900 text-white text-sm font-medium py-2.5 rounded-lg hover:bg-gray-800 active:bg-gray-950 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              {loading ? (
-                <>
-                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Signing in...
-                </>
-              ) : (
-                "Sign in"
-              )}
-            </button>
-          </form>
-
-          <p className="mt-6 text-sm text-gray-500 text-center">
-            First time here?{" "}
+        <AuthField
+          id="login-email"
+          label="Email"
+          type="email"
+          name="email"
+          autoComplete="username"
+          value={form.email}
+          onChange={handleChange}
+          required
+          placeholder="you@college.edu"
+        />
+        <AuthField
+          id="login-password"
+          label="Password"
+          aside={
             <Link
-              to="/signup"
-              className="text-gray-900 font-medium hover:underline underline-offset-2"
+              to="/forgot-password"
+              className={`rounded text-[13.5px] text-ink-2 transition-colors hover:text-ink ${focusRing}`}
             >
-              Activate your account
+              Forgot password?
             </Link>
-          </p>
+          }
+          type="password"
+          name="password"
+          autoComplete="current-password"
+          value={form.password}
+          onChange={handleChange}
+          required
+        />
+
+        <div className="pt-2">
+          <AuthSubmit loading={loading} busyLabel="Signing in...">
+            Sign in
+          </AuthSubmit>
         </div>
-      </div>
-    </div>
+      </form>
+    </AuthShell>
   );
 }

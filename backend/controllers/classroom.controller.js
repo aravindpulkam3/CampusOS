@@ -20,6 +20,7 @@ const DAYS = [
   "Thursday",
   "Friday",
   "Saturday",
+  "Sunday",
 ];
 
 const unassignedResponse = (res) =>

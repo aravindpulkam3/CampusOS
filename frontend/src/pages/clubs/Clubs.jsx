@@ -1,30 +1,25 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
-import { Search, X, Users, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { getAllClubs, followClub, unfollowClub } from "../../api/club.api";
 import useAuth from "../../hooks/useAuth";
+import useImageOk from "../../hooks/useImageOk";
 import { CLUB_CATEGORIES } from "../../constants/categories";
+import {
+  Chips,
+  LoadError,
+  LogoTile,
+  PageTitle,
+  SearchField,
+  btn,
+  btnGhostSm,
+  btnSm,
+  focusRing,
+  note,
+} from "../../components/common/ui";
 
-// ✅ Included Sports category cleanly in definition array
-const CATEGORIES = ["All", ...CLUB_CATEGORIES];
-
-// ✅ Configured unique matching layout theme for Sports cards
-const categoryColor = {
-  Technical: "bg-blue-50 text-blue-700 border-blue-100",
-  Cultural: "bg-purple-50 text-purple-700 border-purple-100",
-  Creative: "bg-orange-50 text-orange-700 border-orange-100",
-  Business: "bg-green-50 text-green-700 border-green-100",
-  Sports: "bg-emerald-50 text-emerald-700 border-emerald-100",
-};
-
-const clubBg = [
-  "bg-gray-900",
-  "bg-blue-600",
-  "bg-purple-600",
-  "bg-emerald-600",
-  "bg-amber-500",
-  "bg-rose-600",
-];
+// "Following" narrows to the student's own clubs; the rest are club categories.
+const FILTERS = ["All", "Following", ...CLUB_CATEGORIES];
 
 const clubInitials = (name) =>
   name
@@ -34,98 +29,96 @@ const clubInitials = (name) =>
     .join("")
     .toUpperCase() || "?";
 
-// ─── Club Card ────────────────────────────────────────────────
-const ClubCard = ({ club, index, followed, pending, onFollow }) => {
+// The club's banner. Without one, its logo or initials on a quiet block.
+const Banner = ({ club }) => {
+  const [showBanner, onBannerError] = useImageOk(club.banner);
+  const [showLogo, onLogoError] = useImageOk(club.logo);
+  if (showBanner)
+    return (
+      <img
+        src={club.banner}
+        alt=""
+        loading="lazy"
+        onError={onBannerError}
+        className="aspect-[2/1] w-full rounded-2xl object-cover"
+      />
+    );
   return (
-    <div className="bg-white border border-gray-100 rounded-2xl p-5 hover:border-gray-300 hover:shadow-xs transition-all duration-200 flex flex-col gap-4 group relative overflow-hidden">
-      {/* Top row — avatar + category */}
-      <div className="flex items-start justify-between gap-2">
-        <div
-          className={`w-12 h-12 rounded-xl ${clubBg[index % clubBg.length]} flex items-center justify-center text-white text-base font-black flex-shrink-0 overflow-hidden border border-black/5 transition-transform group-hover:scale-102`}
-        >
-          {club.logo ? (
-            <img
-              src={club.logo}
-              alt=""
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            clubInitials(club.clubName)
-          )}
-        </div>
-        {club.category && (
-          <span
-            className={`text-[10px] font-bold px-2 py-0.5 rounded-md border tracking-wide whitespace-nowrap ${categoryColor[club.category] || "bg-gray-50 text-gray-600"}`}
-          >
-            {club.category}
-          </span>
-        )}
-      </div>
-
-      {/* Club info */}
-      <div className="flex-1 space-y-1">
-        <h3 className="font-bold text-gray-800 text-sm leading-snug group-hover:text-blue-600 transition-colors line-clamp-1">
-          {club.clubName}
-        </h3>
-        <p className="text-xs text-gray-400 font-medium leading-relaxed line-clamp-2">
-          {club.description || "No description available."}
-        </p>
-      </div>
-
-      {/* Followers count */}
-      <div className="flex items-center gap-1.5 text-[11px] text-gray-400 font-medium">
-        <Users size={12} className="text-gray-300" />
-        <span>{club.followerCount ?? 0} active followers</span>
-      </div>
-
-      {/* Actions */}
-      <div className="flex items-center gap-2 pt-3 border-t border-gray-50">
-        <button
-          type="button"
-          onClick={() => onFollow(club._id, followed)}
-          disabled={pending}
-          className={`flex-1 py-1.5 text-xs font-bold rounded-xl border transition-all duration-150 disabled:opacity-60 disabled:cursor-wait
-            ${
-              followed
-                ? "border-gray-200 text-gray-400 bg-gray-50 hover:border-red-200 hover:text-red-500 hover:bg-red-50/30"
-                : "border-gray-900 bg-gray-900 text-white hover:bg-gray-800"
-            }`}
-        >
-          {followed ? "Following" : "Follow"}
-        </button>
-        <Link
-          to={`/community/clubs/${club._id}`}
-          className="flex-1 py-1.5 text-xs font-bold rounded-xl border border-gray-200 text-gray-600 bg-white hover:border-gray-400 hover:text-gray-900 transition-all text-center"
-        >
-          View club
-        </Link>
-      </div>
+    <div
+      aria-hidden="true"
+      className="grid aspect-[2/1] w-full place-items-center rounded-2xl bg-soft ring-1 ring-inset ring-line"
+    >
+      {showLogo ? (
+        <img src={club.logo} alt="" onError={onLogoError} className="h-16 max-w-[40%] object-contain" />
+      ) : (
+        <span className="text-[44px] font-[680] tracking-[-0.04em] text-ink/15">
+          {clubInitials(club.clubName)}
+        </span>
+      )}
     </div>
   );
 };
 
-// ─── Empty State ──────────────────────────────────────────────
-const EmptyState = ({ search, category }) => (
-  <div className="col-span-1 sm:col-span-2 lg:col-span-3 flex flex-col items-center justify-center py-20 text-center bg-white border border-gray-100 rounded-2xl">
-    <div className="w-10 h-10 bg-gray-50 border border-gray-100 rounded-full flex items-center justify-center mb-3">
-      <Users size={16} className="text-gray-400" />
+// The whole card opens the club; Follow sits above that link as its own target.
+const ClubCard = ({ club, followed, pending, onFollow }) => (
+  <li className="group relative min-w-0">
+    <Banner club={club} />
+    <div className="mt-4 flex items-center gap-3">
+      <LogoTile src={club.logo} name={club.clubName} />
+      <div className="min-w-0 flex-1">
+        <h3 className="truncate text-[17.5px] font-[650] leading-tight tracking-[-0.028em] text-ink">
+          <Link
+            to={`/community/clubs/${club._id}`}
+            className={`rounded decoration-ink/25 underline-offset-4 after:absolute after:inset-0 group-hover:underline ${focusRing}`}
+          >
+            {club.clubName}
+          </Link>
+        </h3>
+        <p className="truncate text-[13.5px] text-ink-3">
+          {club.category}
+          {club.isActive === false && ", pending approval"}
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={() => onFollow(club._id, followed)}
+        disabled={pending}
+        aria-pressed={followed}
+        className={`relative z-10 flex-none ${followed ? btnGhostSm : btnSm}`}
+      >
+        {followed ? "Following" : "Follow"}
+      </button>
     </div>
-    <p className="text-sm font-bold text-gray-700 mb-0.5">No matching clubs</p>
-    <p className="text-xs text-gray-400 font-medium">
-      {search
-        ? `No results for "${search}"`
-        : `No ${category !== "All" ? category : ""} hubs found active yet.`}
+    <p className="mt-3 line-clamp-2 text-[14.5px] leading-normal text-ink-2">
+      {club.description || "No description yet."}
     </p>
+    <p className="mt-2.5 text-[13.5px] text-ink-3">
+      {club.followerCount ?? 0} {club.followerCount === 1 ? "follower" : "followers"}
+    </p>
+  </li>
+);
+
+const CardSkeleton = () => (
+  <div className="animate-pulse">
+    <div className="aspect-[2/1] rounded-2xl bg-soft" />
+    <div className="mt-4 flex items-center gap-3">
+      <div className="size-10 rounded-[11px] bg-soft" />
+      <div className="flex-1 space-y-2">
+        <div className="h-4 w-1/2 rounded bg-soft" />
+        <div className="h-3 w-1/4 rounded bg-soft" />
+      </div>
+    </div>
+    <div className="mt-4 h-3 w-full rounded bg-soft" />
+    <div className="mt-2 h-3 w-2/3 rounded bg-soft" />
   </div>
 );
 
-// ─── Main Page ────────────────────────────────────────────────
 const Clubs = () => {
   const [clubs, setClubs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [search, setSearch] = useState("");
-  const [activeCategory, setActiveCategory] = useState("All");
+  const [activeFilter, setActiveFilter] = useState("All");
   const { user, setUser } = useAuth();
   // Clubs with a follow/unfollow request in flight: their button stays
   // disabled until it settles, so responses can't arrive out of order.
@@ -167,134 +160,71 @@ const Clubs = () => {
     }
   };
 
+  const isFollowed = (club) =>
+    user?.followedClubs?.some((id) => String(id?._id ?? id) === String(club._id)) ?? false;
+
+  const term = search.trim().toLowerCase();
   const filtered = clubs.filter((club) => {
-    const matchesCategory =
-      activeCategory === "All" || club.category === activeCategory;
+    const matchesFilter =
+      activeFilter === "All" ||
+      (activeFilter === "Following" ? isFollowed(club) : club.category === activeFilter);
     const matchesSearch =
-      !search ||
-      club.clubName?.toLowerCase().includes(search.toLowerCase()) ||
-      club.description?.toLowerCase().includes(search.toLowerCase());
-    return matchesCategory && matchesSearch;
+      !term ||
+      club.clubName?.toLowerCase().includes(term) ||
+      club.description?.toLowerCase().includes(term);
+    return matchesFilter && matchesSearch;
   });
 
   return (
-    <div className="max-w-6xl mx-auto space-y-5">
-      {/* Page Header */}
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-1">
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900">
-            Clubs
-          </h2>
-          <p className="text-xs text-gray-400 mt-0.5">
-            {loading
-              ? "Loading..."
-              : loadError
-                ? "Could not load clubs"
-              : `${clubs.length} ${clubs.length === 1 ? "club" : "clubs"}`}
-          </p>
-        </div>
+    <div className="pb-10 lg:pb-20">
+      <PageTitle title="Clubs">
         {user?.role === "superadmin" && (
-          <Link
-            to="/community/clubs/create"
-            className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold bg-gray-900 text-white rounded-xl hover:bg-gray-800 transition whitespace-nowrap"
-          >
-            <Plus size={13} /> Create club
+          <Link to="/community/clubs/create" className={btn}>
+            <Plus size={15} aria-hidden="true" /> Create club
           </Link>
         )}
+      </PageTitle>
+
+      <div className="mt-6 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between lg:gap-5">
+        <Chips label="Filter clubs" options={FILTERS} value={activeFilter} onChange={setActiveFilter} />
+        <SearchField value={search} onChange={setSearch} label="Search clubs" placeholder="Search clubs" />
       </div>
 
-      {/* Search + Filter Action Header Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white border border-gray-100 p-3 rounded-2xl">
-        <div className="relative w-full md:w-72">
-          <Search
-            size={14}
-            className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
-          />
-          <input
-            type="text"
-            aria-label="Search clubs"
-            placeholder="Search clubs..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-8 py-2 text-xs bg-gray-50 border border-gray-100 rounded-xl focus:outline-none focus:border-gray-300 placeholder:text-gray-400 transition-colors"
-          />
-          {search && (
-            <button
-              aria-label="Clear club search"
-              onClick={() => setSearch("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-            >
-              <X size={13} />
-            </button>
-          )}
-        </div>
-
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 max-w-full">
-          {CATEGORIES.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setActiveCategory(cat)}
-              className={`px-3.5 py-1.5 text-xs font-semibold rounded-full border whitespace-nowrap transition-all duration-150
-                ${
-                  activeCategory === cat
-                    ? "bg-gray-900 text-white border-gray-900"
-                    : "bg-white text-gray-500 border-gray-200 hover:border-gray-400 hover:text-gray-800"
-                }`}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Club Responsive Layout Grid */}
       {loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {[...Array(6)].map((_, i) => (
-            <div
-              key={i}
-              className="bg-white border border-gray-100 rounded-2xl p-5 animate-pulse space-y-4"
-            >
-              <div className="flex justify-between items-start">
-                <div className="w-12 h-12 bg-gray-100 rounded-xl" />
-                <div className="w-16 h-5 bg-gray-100 rounded-md" />
-              </div>
-              <div className="space-y-2">
-                <div className="w-32 h-4 bg-gray-100 rounded" />
-                <div className="w-full h-3 bg-gray-50 rounded" />
-                <div className="w-3/4 h-3 bg-gray-50 rounded" />
-              </div>
-              <div className="w-24 h-3 bg-gray-100 rounded pt-1" />
-              <div className="h-8 bg-gray-100 rounded-xl pt-2" />
-            </div>
+        <div className="mt-11 grid grid-cols-1 gap-x-7 gap-y-9 sm:grid-cols-2 lg:grid-cols-3 lg:gap-y-12" aria-busy="true">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <CardSkeleton key={i} />
           ))}
         </div>
       ) : loadError ? (
-        <div role="alert" className="rounded-xl border border-red-100 bg-red-50 px-5 py-8 text-center text-sm text-red-700">
-          Could not load clubs. Please try again.
-          <button onClick={fetchAllClubs} className="ml-2 font-semibold underline">Try again</button>
+        <div className="mt-9">
+          <LoadError onRetry={fetchAllClubs}>Could not load clubs.</LoadError>
         </div>
+      ) : filtered.length > 0 ? (
+        <>
+        <h2 className="sr-only">All clubs</h2>
+        <ul className="mt-11 grid grid-cols-1 gap-x-7 gap-y-9 sm:grid-cols-2 lg:grid-cols-3 lg:gap-y-12">
+          {filtered.map((club) => (
+            <ClubCard
+              key={club._id}
+              club={club}
+              followed={isFollowed(club)}
+              pending={pendingIds.has(club._id)}
+              onFollow={handleFollow}
+            />
+          ))}
+        </ul>
+        </>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filtered.length > 0 ? (
-            filtered.map((club, i) => (
-              <ClubCard
-                key={club._id}
-                club={club}
-                index={i}
-                followed={
-                  user?.followedClubs?.some(
-                    (id) => id.toString() === club._id.toString(),
-                  ) ?? false
-                }
-                pending={pendingIds.has(club._id)}
-                onFollow={handleFollow}
-              />
-            ))
-          ) : (
-            <EmptyState search={search} category={activeCategory} />
-          )}
-        </div>
+        <p className={`mt-9 ${note}`}>
+          {term
+            ? `No clubs match "${search.trim()}".`
+            : activeFilter === "Following"
+              ? "You are not following any clubs yet."
+              : activeFilter === "All"
+                ? "There are no clubs yet."
+                : `There are no ${activeFilter.toLowerCase()} clubs yet.`}
+        </p>
       )}
     </div>
   );

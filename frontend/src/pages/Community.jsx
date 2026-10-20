@@ -1,16 +1,4 @@
-import { useNavigate, Link } from "react-router-dom";
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  Search,
-  X,
-  Calendar,
-  MapPin,
-  Loader2,
-  Users,
-  ChevronRight,
-  Megaphone,
-  ArrowUpRight,
-} from "lucide-react";
 import { getCommunityFeed } from "../api/announcement.api";
 import { getPopularClubs } from "../api/club.api";
 import { getUpcomingEvents } from "../api/event.api";
@@ -18,171 +6,42 @@ import useAuth from "../hooks/useAuth";
 import useDebounce from "../hooks/useDebounce";
 import AnnouncementCard from "./announcements/AnnouncementCard";
 import NoticeFeed from "../components/cards/NoticeFeed";
-import { formatShortDate } from "../utils/formatDate";
+import {
+  Chips,
+  LoadError,
+  LoadMore,
+  LogoTile,
+  PageTitle,
+  Row,
+  Rows,
+  SearchField,
+  SectionHead,
+  note,
+} from "../components/common/ui";
+import { EventRow } from "../components/events/eventBits";
 
-const clubBg = [
-  "bg-gray-900",
-  "bg-blue-600",
-  "bg-purple-600",
-  "bg-emerald-600",
-  "bg-amber-500",
-  "bg-rose-600",
+const TYPES = [
+  { value: "All", label: "All activity" },
+  { value: "club", label: "Clubs" },
+  { value: "event", label: "Events" },
 ];
 
-// ─── Upcoming Events Widget (Enhanced Design) ─────────────────
-const UpcomingEventsWidget = ({ events, loading }) => {
-  const formatWidgetDate = (d) => {
-    if (!d) return "";
-    return formatShortDate(d);
-  };
-
-  return (
-    <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-2xs">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <Calendar size={15} className="text-gray-400" />
-          <h3 className="text-sm font-bold text-gray-900">Upcoming Events</h3>
+const RowsSkeleton = () => (
+  <div className="animate-pulse" aria-busy="true">
+    {[0, 1, 2].map((i) => (
+      <div key={i} className="flex h-16 items-center gap-4 border-t border-line first:border-t-0">
+        <div className="size-10 flex-none rounded-[11px] bg-soft" />
+        <div className="flex-1 space-y-2">
+          <div className="h-3.5 w-1/2 rounded bg-soft" />
+          <div className="h-3 w-1/3 rounded bg-soft" />
         </div>
-        <span className="text-[10px] bg-gray-50 border border-gray-100 text-gray-500 font-semibold px-2 py-0.5 rounded-full">
-          Coming up
-        </span>
       </div>
-
-      {loading ? (
-        <div className="space-y-3 animate-pulse">
-          {[...Array(2)].map((_, i) => (
-            <div key={i} className="h-28 bg-gray-50 rounded-xl" />
-          ))}
-        </div>
-      ) : events.length > 0 ? (
-        <div className="space-y-3.5">
-          {events.slice(0, 3).map((event) => (
-            <Link
-              key={event._id}
-              to={`/community/events/${event._id}`}
-              className="block group bg-gray-50/40 border border-gray-100 rounded-xl overflow-hidden hover:border-gray-300 hover:bg-white hover:shadow-xs transition-all duration-200"
-            >
-              {/* Event Banner */}
-              <div className="h-24 w-full bg-gray-100 relative overflow-hidden">
-                {event.banner ? (
-                  <img
-                    src={event.banner}
-                    alt=""
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-700 to-gray-900 text-white/20 font-black tracking-wider uppercase text-xs">
-                    Event
-                  </div>
-                )}
-                <div className="absolute top-2.5 right-2.5 bg-white/95 backdrop-blur-xs text-[10px] font-bold px-2 py-0.5 rounded-md text-gray-800">
-                  {formatWidgetDate(event.startDateTime)}
-                </div>
-              </div>
-
-              {/* Body */}
-              <div className="p-3">
-                <h4 className="text-xs font-bold text-gray-800 group-hover:text-blue-600 line-clamp-1 transition-colors">
-                  {event.eventName}
-                </h4>
-                <div className="flex items-center gap-1 mt-1 text-[11px] text-gray-400">
-                  <MapPin size={10} className="flex-shrink-0" />
-                  <span className="truncate">
-                    {event.venue || "Campus grounds"}
-                  </span>
-                </div>
-              </div>
-            </Link>
-          ))}
-        </div>
-      ) : (
-        <p className="text-xs text-gray-400 text-center py-6">
-          No scheduled entries active.
-        </p>
-      )}
-
-      <Link
-        to="/community/events"
-        className="flex items-center justify-center gap-1 w-full mt-4 py-2 text-xs font-semibold text-gray-600 bg-gray-50 hover:bg-gray-100 border border-gray-100 rounded-xl transition-colors group"
-      >
-        View all events
-        <ArrowUpRight
-          size={12}
-          className="text-gray-400 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform"
-        />
-      </Link>
-    </div>
-  );
-};
-
-// ─── Trending Clubs Widget ────────────────────────────────────
-const TrendingClubsWidget = ({ clubs, loading }) => (
-  <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-2xs">
-    <div className="flex items-center gap-2 mb-4">
-      <Users size={15} className="text-gray-400" />
-      <h3 className="text-sm font-bold text-gray-900">Popular Clubs</h3>
-    </div>
-
-    {loading ? (
-      <div className="space-y-3 animate-pulse">
-        {[...Array(3)].map((_, i) => (
-          <div key={i} className="flex items-center gap-3 py-1">
-            <div className="w-9 h-9 bg-gray-100 rounded-xl" />
-            <div className="flex-1 space-y-1.5">
-              <div className="h-3 bg-gray-100 rounded w-24" />
-              <div className="h-2 bg-gray-100 rounded w-12" />
-            </div>
-          </div>
-        ))}
-      </div>
-    ) : clubs.length > 0 ? (
-      <div className="space-y-1">
-        {clubs.slice(0, 4).map((club, i) => (
-          <Link
-            key={club._id}
-            to={`/community/clubs/${club._id}`}
-            className="flex items-center gap-3 p-2 border border-transparent rounded-xl hover:bg-gray-50 hover:border-gray-100 transition-all group"
-          >
-            <div
-              className={`w-9 h-9 rounded-xl ${clubBg[i % clubBg.length]} flex items-center justify-center text-white text-xs font-black flex-shrink-0 overflow-hidden border border-black/5`}
-            >
-              {club.logo ? (
-                <img
-                  src={club.logo}
-                  alt=""
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                club.clubName?.[0]?.toUpperCase()
-              )}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-bold text-gray-800 group-hover:text-gray-900 truncate">
-                {club.clubName}
-              </p>
-              <p className="text-[11px] text-gray-400 font-medium mt-px">
-                {club.followerCount || 0} active followers
-              </p>
-            </div>
-            <ChevronRight
-              size={13}
-              className="text-gray-300 group-hover:text-gray-500 group-hover:translate-x-0.5 transition-all flex-shrink-0"
-            />
-          </Link>
-        ))}
-      </div>
-    ) : (
-      <p className="text-xs text-gray-400 text-center py-4">
-        No discovered networks.
-      </p>
-    )}
+    ))}
   </div>
 );
 
-// ─── Main View ────────────────────────────────────────────────
 const Community = () => {
   const { user } = useAuth();
-  const navigate = useNavigate();
 
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 400);
@@ -309,152 +168,125 @@ const Community = () => {
     fetchFeed(offsets, append);
   };
 
-  const types = ["All", "club", "event"];
-  const typeLabels = {
-    All: "All Activity",
-    club: "Clubs Only",
-    event: "Events Only",
-  };
+  const now = new Date();
 
   return (
-    <div className="max-w-6xl mx-auto">
-      {/* Search Header Action Panels */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 bg-white border border-gray-100 p-3 rounded-2xl">
-        <div className="relative w-full sm:w-80">
-          <Search
-            size={14}
-            className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
-          />
-          <input
-            type="text"
-            aria-label="Search community updates"
-            placeholder="Search the feed..."
-            value={search}
-            onChange={(e) => { searchRef.current = e.target.value; resetFeed(); setSearch(e.target.value); }}
-            className="w-full pl-9 pr-8 py-2 text-xs bg-gray-50 border border-gray-100 rounded-xl focus:outline-none focus:border-gray-300 placeholder:text-gray-400 transition-colors"
-          />
-          {search && (
-            <button
-              aria-label="Clear community search"
-              onClick={() => { searchRef.current = ""; resetFeed(); setSearch(""); }}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-            >
-              <X size={13} />
-            </button>
-          )}
-        </div>
+    <div className="pb-10 lg:pb-20">
+      <PageTitle title="Community" />
 
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
-          {types.map((type) => (
-            <button
-              key={type}
-              onClick={() => { if (type !== activeType) { resetFeed(); setActiveType(type); } }}
-              className={`px-3.5 py-1.5 text-xs font-semibold rounded-full border whitespace-nowrap transition-all duration-150
-                ${
-                  activeType === type
-                    ? "bg-gray-900 text-white border-gray-900"
-                    : "bg-white text-gray-500 border-gray-200 hover:border-gray-400 hover:text-gray-800"
-                }`}
-            >
-              {typeLabels[type]}
-            </button>
-          ))}
-        </div>
+      <div className="mt-6 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between lg:gap-5">
+        <Chips
+          label="Show"
+          options={TYPES}
+          value={activeType}
+          onChange={(type) => {
+            if (type !== activeType) {
+              resetFeed();
+              setActiveType(type);
+            }
+          }}
+        />
+        <SearchField
+          value={search}
+          onChange={(value) => {
+            searchRef.current = value;
+            resetFeed();
+            setSearch(value);
+          }}
+          label="Search community updates"
+          placeholder="Search the feed"
+        />
       </div>
 
-      {/* Primary Layout Engine */}
-      <div className="flex flex-col lg:flex-row gap-6 items-start">
-        {/* Left Feed */}
-        <div className="flex-1 w-full min-w-0 order-2 lg:order-1">
-          <div className="flex items-center justify-between mb-4 px-1">
-            <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider">
-              Latest activity
-            </h2>
-            {!feedLoading && !feedError && (
-              <span className="text-xs text-gray-400 font-medium">
-                {feedItems.length} shown
-              </span>
-            )}
-          </div>
-
-          {!feedLoading && feedError && (
-            <div role="alert" className="mb-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-xs text-red-700">
-              Could not load community updates. Please try again.
-              <button onClick={retryFeed} className="ml-3 font-semibold underline">Try again</button>
-            </div>
-          )}
+      {/* Two columns from lg up. On phones the side column dissolves, so notices
+          can come first and the events and clubs lists after the feed. */}
+      <div className="mt-9 flex flex-col gap-y-11 lg:mt-14 lg:grid lg:grid-cols-[minmax(0,1fr)_352px] lg:items-start lg:gap-x-[72px]">
+        <section className="order-2 min-w-0 lg:order-none">
+          <SectionHead title="Latest activity" />
           {feedLoading ? (
-            <div className="space-y-4">
-              <div className="h-32 bg-gray-50 border border-gray-100 animate-pulse rounded-2xl" />
-              <div className="h-32 bg-gray-100 animate-pulse rounded-2xl" />
-            </div>
-          ) : feedError && feedItems.length === 0 ? null : feedItems.length > 0 ? (
-            <div className="space-y-3.5">
-              {feedItems.map((item) => (
-                <AnnouncementCard
-                  key={item._id}
-                  announcement={item}
-                  variant="feed"
-                  onClick={() =>
-                    navigate(
-                      item.targetType === "event"
-                        ? `/community/events/${item.event?._id}`
-                        : `/community/clubs/${item.club?._id}`,
-                    )
-                  }
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center py-20 bg-white border border-gray-100 rounded-2xl text-center">
-              <div className="w-10 h-10 bg-gray-50 border border-gray-100 rounded-full flex items-center justify-center mb-3">
-                <Megaphone size={15} className="text-gray-400" />
-              </div>
-              <p className="text-sm font-bold text-gray-800">
-                No synchronized updates active
-              </p>
-              <p className="text-xs text-gray-400 mt-0.5">
-                {search
-                  ? "Try rewriting search matching criteria filter nodes."
-                  : "Follow extra campus networks to inflate timelines."}
-              </p>
-            </div>
-          )}
-          {!feedLoading && !feedError && hasMore && (
-            <button
-              onClick={handleLoadMore}
-              disabled={loadMoreLoading}
-              className="flex items-center justify-center gap-2 w-full py-3 mt-4 text-xs font-bold text-gray-700 bg-white border border-gray-200/80 rounded-xl hover:border-gray-400 hover:bg-gray-50/50 active:bg-gray-50 transition-all disabled:opacity-50"
-            >
-              {loadMoreLoading ? (
-                <><Loader2 size={13} className="animate-spin text-gray-400" />{" "}Loading...</>
-              ) : (
-                "Load More Activity Updates"
+            <RowsSkeleton />
+          ) : feedError && feedItems.length === 0 ? (
+            <LoadError onRetry={retryFeed}>Could not load community updates.</LoadError>
+          ) : feedItems.length > 0 ? (
+            <>
+              <ul className="divide-y divide-line">
+                {feedItems.map((item) => (
+                  <AnnouncementCard key={item._id} announcement={item} variant="feed" />
+                ))}
+              </ul>
+              {feedError && (
+                <div className="mt-4">
+                  <LoadError>Could not load more updates.</LoadError>
+                </div>
               )}
-            </button>
+              {hasMore && (
+                <LoadMore onClick={feedError ? retryFeed : handleLoadMore} loading={loadMoreLoading} failed={feedError}>
+                  Load more updates
+                </LoadMore>
+              )}
+            </>
+          ) : (
+            <p className={note}>
+              {search.trim()
+                ? `No updates match "${search.trim()}".`
+                : "Nothing here yet. Follow more clubs to see their updates."}
+            </p>
           )}
-        </div>
+        </section>
 
-        {/* Right Modular Sidebar (Sticky desktop, stacks fluidly on mobile) */}
-        <div className="w-full lg:w-80 flex-shrink-0 flex flex-col gap-5 order-1 lg:order-2 lg:sticky lg:top-4">
-          <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-2xs">
+        <div className="contents lg:flex lg:min-w-0 lg:flex-col lg:gap-14">
+          <div className="order-1 min-w-0 lg:order-none">
             <NoticeFeed
               targetType="community"
-              compact={true}
-              title="Community Notices"
+              title="Notices"
               canPost={false}
               showActions={false}
             />
           </div>
+
           {widgetError ? (
-            <div role="alert" className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-xs text-red-700">
-              Could not load community highlights.
-              <button onClick={() => setWidgetReload((value) => value + 1)} className="ml-2 font-semibold underline">Try again</button>
+            <div className="order-3 lg:order-none">
+              <LoadError onRetry={() => setWidgetReload((value) => value + 1)}>
+                Could not load upcoming events and popular clubs.
+              </LoadError>
             </div>
           ) : (
             <>
-              <UpcomingEventsWidget events={upcomingEvents} loading={widgetLoading} />
-              <TrendingClubsWidget clubs={trendingClubs} loading={widgetLoading} />
+              <section className="order-3 min-w-0 lg:order-none">
+                <SectionHead title="Coming up" linkTo="/community/events" linkLabel="All events" />
+                {widgetLoading ? (
+                  <RowsSkeleton />
+                ) : upcomingEvents.length > 0 ? (
+                  <Rows>
+                    {upcomingEvents.slice(0, 3).map((event) => (
+                      <EventRow key={event._id} event={event} user={user} now={now} compact />
+                    ))}
+                  </Rows>
+                ) : (
+                  <p className={note}>No events are coming up right now.</p>
+                )}
+              </section>
+
+              <section className="order-4 min-w-0 lg:order-none">
+                <SectionHead title="Popular clubs" linkTo="/community/clubs" linkLabel="All clubs" />
+                {widgetLoading ? (
+                  <RowsSkeleton />
+                ) : trendingClubs.length > 0 ? (
+                  <Rows>
+                    {trendingClubs.slice(0, 4).map((club) => (
+                      <Row
+                        key={club._id}
+                        to={`/community/clubs/${club._id}`}
+                        lead={<LogoTile src={club.logo} name={club.clubName} />}
+                        title={club.clubName}
+                        meta={`${club.followerCount || 0} ${club.followerCount === 1 ? "follower" : "followers"}`}
+                      />
+                    ))}
+                  </Rows>
+                ) : (
+                  <p className={note}>No clubs yet.</p>
+                )}
+              </section>
             </>
           )}
         </div>

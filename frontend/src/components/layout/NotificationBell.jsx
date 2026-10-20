@@ -1,16 +1,20 @@
-import { useState, useEffect, useRef } from "react";
-import { Bell, Check } from "lucide-react";
+import { useState, useEffect, useId, useRef } from "react";
+import { Bell, CheckCheck } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import useNotifications from "../../hooks/useNotifications";
 import NotificationItem from "../cards/NotificationItem";
 import { getNotificationPath } from "../../utils/notificationNavigation";
+import { LoadError, focusRing, textLink } from "../common/ui";
 
 const NotificationBell = () => {
   const navigate = useNavigate();
-  const { notifications, unreadCount, loading, error, markRead, markAllRead } =
+  const { notifications, unreadCount, loading, error, markRead, markAllRead, refetch } =
     useNotifications();
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef(null);
+  const buttonRef = useRef(null);
+  const panelId = useId();
+  const titleId = useId();
 
   useEffect(() => {
     const handler = (e) => {
@@ -21,6 +25,18 @@ const NotificationBell = () => {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  // Escape closes the panel and hands focus back to the bell.
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e) => {
+      if (e.key !== "Escape") return;
+      setIsOpen(false);
+      buttonRef.current?.focus();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [isOpen]);
+
   const handleNavigate = (notification) => {
     setIsOpen(false);
     navigate(getNotificationPath(notification));
@@ -29,66 +45,84 @@ const NotificationBell = () => {
   return (
     <div ref={containerRef} className="relative">
       <button
+        ref={buttonRef}
+        type="button"
         onClick={() => setIsOpen((p) => !p)}
-        aria-label="Notifications"
-        className="relative p-2 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+        aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"}
+        aria-expanded={isOpen}
+        aria-controls={isOpen ? panelId : undefined}
+        className={`relative grid size-9 place-items-center rounded-[10px] transition-colors ${focusRing} ${
+          isOpen ? "bg-ink/[0.06] text-ink" : "text-ink-2 hover:bg-ink/[0.04] hover:text-ink"
+        }`}
       >
-        <Bell size={17} />
+        <Bell size={18} aria-hidden="true" />
         {unreadCount > 0 && (
-          <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-red-500 rounded-full" />
+          <span
+            aria-hidden="true"
+            className="absolute right-0.5 top-0.5 h-4 min-w-4 rounded-full bg-urgent px-1 text-center text-[10px] font-bold leading-4 tabular-nums text-white ring-2 ring-white"
+          >
+            {unreadCount > 9 ? "9+" : unreadCount}
+          </span>
         )}
       </button>
 
       {isOpen && (
-        <div className="absolute top-[calc(100%+8px)] right-0 w-80 max-sm:fixed max-sm:top-16 max-sm:inset-x-4 max-sm:w-auto bg-white border border-gray-100 rounded-2xl shadow-xl overflow-hidden z-50 flex flex-col max-h-[min(520px,calc(100dvh-5rem))]">
+        <section
+          id={panelId}
+          aria-labelledby={titleId}
+          className="absolute right-0 top-[calc(100%+8px)] z-50 flex max-h-[min(520px,calc(100dvh-5rem))] w-[380px] flex-col overflow-hidden rounded-panel border border-line-2 bg-white shadow-panel max-sm:fixed max-sm:inset-x-4 max-sm:top-16 max-sm:w-auto"
+        >
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-50 flex-shrink-0">
-            <span className="text-xs font-semibold text-gray-900">Notifications</span>
+          <div className="flex min-h-12 flex-none items-center gap-2 border-b border-line py-2 pl-4 pr-3.5">
+            <h2 id={titleId} className="text-[15px] font-[650] tracking-[-0.02em] text-ink">
+              Notifications
+            </h2>
+            {unreadCount > 0 && <span className="text-[13px] text-ink-3">{unreadCount} new</span>}
             {unreadCount > 0 && (
-              <button
-                onClick={markAllRead}
-                className="flex items-center gap-1 text-[10px] font-semibold text-gray-400 hover:text-gray-700 transition-colors"
-              >
-                <Check size={11} /> Mark all read
+              <button type="button" onClick={markAllRead} className={`ml-auto flex items-center gap-1.5 ${textLink}`}>
+                <CheckCheck size={14} aria-hidden="true" /> Mark all as read
               </button>
             )}
           </div>
 
           {/* Body */}
-          <div className="overflow-y-auto flex-1">
+          <div className="flex-1 overflow-y-auto">
             {loading ? (
-              <div className="p-4 space-y-3">
-                {[72, 56, 64].map((w, i) => (
-                  <div key={i} className="flex items-center gap-3 animate-pulse">
-                    <div className="w-1.5 h-1.5 bg-gray-100 rounded-full flex-shrink-0" />
+              <div role="status" className="animate-pulse space-y-3.5 p-4">
+                <span className="sr-only">Loading notifications</span>
+                {[72, 56, 64].map((w) => (
+                  <div key={w} className="flex items-center gap-3">
+                    <div className="size-[30px] flex-none rounded-[9px] bg-soft" />
                     <div className="flex-1 space-y-1.5">
-                      <div className="h-2.5 bg-gray-100 rounded" style={{ width: `${w}%` }} />
-                      <div className="h-2 bg-gray-100 rounded w-1/2" />
+                      <div className="h-2.5 rounded bg-soft" style={{ width: `${w}%` }} />
+                      <div className="h-2 w-1/2 rounded bg-soft" />
                     </div>
                   </div>
                 ))}
               </div>
             ) : error ? (
-              <p className="text-xs text-red-400 px-4 py-6 text-center">{error}</p>
-            ) : notifications.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-10 gap-2.5">
-                <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center">
-                  <Bell size={16} className="text-gray-300" />
-                </div>
-                <p className="text-xs font-medium text-gray-500">No notifications yet</p>
+              <div className="px-4 py-4">
+                <LoadError onRetry={refetch}>Couldn't load notifications.</LoadError>
               </div>
+            ) : notifications.length === 0 ? (
+              <p className="px-4 py-5 text-[13.5px] leading-[1.5] text-ink-2">
+                <span className="font-semibold text-ink">You're all caught up.</span> New
+                notifications will show up here.
+              </p>
             ) : (
-              notifications.map((n) => (
-                <NotificationItem
-                  key={n._id}
-                  notification={n}
-                  onRead={markRead}
-                  onNavigate={handleNavigate}
-                />
-              ))
+              <div className="divide-y divide-line">
+                {notifications.map((n) => (
+                  <NotificationItem
+                    key={n._id}
+                    notification={n}
+                    onRead={markRead}
+                    onNavigate={handleNavigate}
+                  />
+                ))}
+              </div>
             )}
           </div>
-        </div>
+        </section>
       )}
     </div>
   );

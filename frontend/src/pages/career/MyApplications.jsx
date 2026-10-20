@@ -1,208 +1,216 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import {
-  Briefcase,
-  ChevronRight,
-  CheckCircle2,
-  ArrowRight,
-} from "lucide-react";
 import { getMyApplications } from "../../api/career.api";
-import { formatDate } from "../../utils/formatDate";
+import { formatDateTime, formatShortDate } from "../../utils/formatDate";
+import {
+  Chips,
+  LoadError,
+  LogoTile,
+  PageTitle,
+  Pill,
+  focusRing,
+  note,
+  panel,
+  textLink,
+  tone,
+} from "../../components/common/ui";
+import { APPLICATION_STATUS, ROUND_STATE, drivePay, formatRoundDate } from "./format";
 
-// ─── Helpers ──────────────────────────────────────────────────
-const formatDateTime = (d) =>
-  new Date(d).toLocaleString("en-IN", {
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
+const sameId = (a, b) => String(a) === String(b);
+
+// The application as a path: applying, then each of the drive's rounds in
+// order. Round names and their state come from the drive itself; there is no
+// fixed assessment/interview vocabulary.
+//   done  passed            now   where an active application stands
+//   todo  not reached yet   out   where a rejected one ended   won  selected
+const buildSteps = (application) => {
+  const { status, timeline = [], drive = {} } = application;
+  const rounds = drive.rounds || [];
+  const currentIndex = rounds.findIndex((r) => sameId(r._id, drive.currentRoundId));
+  const last = (wanted) => [...timeline].reverse().find((t) => t.status === wanted);
+
+  // For a rejected application, the round where it actually ended.
+  const rejection = status === "rejected" ? last("rejected") : null;
+  const rejectedIndex = rejection ? rounds.findIndex((r) => sameId(r._id, rejection.roundId)) : -1;
+
+  const steps = [
+    { key: "applied", title: "Applied", lines: [formatShortDate(application.appliedAt)], state: "done" },
+  ];
+
+  rounds.forEach((round, i) => {
+    const when = formatRoundDate(round.startDate);
+    let state = "todo";
+    let lines = [when];
+
+    if (status === "selected") {
+      state = "done";
+    } else if (status === "rejected") {
+      if (rejectedIndex === -1) lines = [when];
+      else if (i < rejectedIndex) state = "done";
+      else if (i === rejectedIndex) {
+        state = "out";
+        lines = [`Not shortlisted, ${formatShortDate(rejection.changedAt)}`];
+      } else lines = ["Not reached"];
+    } else if (currentIndex !== -1 && i < currentIndex) {
+      state = "done";
+    } else if (i === currentIndex) {
+      state = "now";
+      lines = [ROUND_STATE[round.derivedState]?.label || "Upcoming", round.startDate && when].filter(Boolean);
+    }
+
+    steps.push({ key: round._id, title: round.name, lines, state });
   });
 
-// Intentionally simple: active/rejected/selected only. No fixed round
-// vocabulary — round names and their state come from the drive itself.
-const statusConfig = {
-  active: { label: "Active", color: "bg-blue-50 text-blue-700", dot: "bg-blue-400" },
-  selected: { label: "Selected", color: "bg-green-50 text-green-700", dot: "bg-green-500" },
-  rejected: { label: "Rejected", color: "bg-red-50 text-red-700", dot: "bg-red-400" },
+  if (status === "selected") {
+    const selection = last("selected");
+    steps.push({
+      key: "selected",
+      title: "Selected",
+      lines: selection ? [formatShortDate(selection.changedAt)] : [],
+      state: "won",
+    });
+  }
+
+  return { steps, rounds, currentIndex, rejectedRound: rounds[rejectedIndex] };
 };
 
-const roundStateLabel = {
-  upcoming: "Upcoming",
-  ongoing: "Ongoing",
-  ended_awaiting: "Ended — Results Awaited",
-  processed: "Results Processed",
+const stepDot = {
+  done: "bg-ink",
+  now: "bg-white ring-[5px] ring-inset ring-ink",
+  todo: "bg-white ring-2 ring-inset ring-line-2",
+  out: "bg-urgent",
+  won: "bg-live",
 };
+const stepSaid = { done: "Done", now: "Current", todo: "Not reached yet", out: "Ended here", won: "Selected" };
 
-// ─── Application Card ─────────────────────────────────────────
+// Across the card from lg up; down the card on phones.
+const Steps = ({ steps }) => (
+  <ol className="mt-7 grid grid-cols-1 lg:auto-cols-fr lg:grid-flow-col lg:grid-cols-none">
+    {steps.map((step, i) => (
+      <li
+        key={step.key}
+        className="relative grid grid-cols-[18px_minmax(0,1fr)] gap-x-3.5 pb-[18px] last:pb-0 lg:block lg:pb-0 lg:pr-4"
+      >
+        {i < steps.length - 1 && (
+          <span
+            aria-hidden="true"
+            className={`absolute bottom-0 left-2 top-[18px] w-0.5 lg:bottom-auto lg:left-[18px] lg:right-0 lg:top-2 lg:h-0.5 lg:w-auto ${
+              step.state === "done" ? "bg-ink" : "bg-line-2"
+            }`}
+          />
+        )}
+        <span aria-hidden="true" className={`relative block size-[18px] rounded-full ${stepDot[step.state]}`} />
+        <div className="min-w-0">
+          <p
+            className={`-mt-0.5 break-words text-[14.5px] tracking-[-0.015em] lg:mt-3 ${
+              step.state === "todo" ? "font-medium text-ink-3" : "font-semibold text-ink"
+            }`}
+          >
+            <span className="sr-only">{stepSaid[step.state]}: </span>
+            {step.title}
+          </p>
+          {step.lines.map((line) => (
+            <p key={line} className="text-[13.5px] text-ink-2">
+              {line}
+            </p>
+          ))}
+        </div>
+      </li>
+    ))}
+  </ol>
+);
+
 const ApplicationCard = ({ application }) => {
   const [expanded, setExpanded] = useState(false);
-  const cfg = statusConfig[application.status] || statusConfig.active;
-  const isTerminal = application.status !== "active";
-  const isRejected = application.status === "rejected";
-  const isSelected = application.status === "selected";
+  const status = APPLICATION_STATUS[application.status] || APPLICATION_STATUS.active;
+  const drive = application.drive || {};
+  const { steps, rounds, currentIndex, rejectedRound } = buildSteps(application);
+  const timeline = application.timeline || [];
 
-  const rounds = application.drive?.rounds || [];
-  const currentRound = rounds.find(
-    (r) => String(r._id) === String(application.drive?.currentRoundId),
-  );
-
-  // For a rejected application, find the round where it actually ended —
-  // personalized copy, not the drive-wide round label.
-  const rejectionEntry = isRejected
-    ? [...(application.timeline || [])].reverse().find((t) => t.status === "rejected")
-    : null;
-  const rejectionRound = rejectionEntry
-    ? rounds.find((r) => String(r._id) === String(rejectionEntry.roundId))
-    : null;
+  const outcome =
+    application.status === "selected"
+      ? { text: "Congratulations! You have been selected.", className: tone.live }
+      : application.status === "rejected"
+        ? {
+            text: rejectedRound
+              ? `Not shortlisted after ${rejectedRound.name}.`
+              : "Application was not successful for this drive.",
+          }
+        : currentIndex === -1
+          ? { text: "Recruitment hasn't started yet. You're registered." }
+          : null;
 
   return (
-    <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
-      {/* Header */}
-      <div className="flex items-start gap-4 p-4">
-        <div className="w-12 h-12 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center flex-shrink-0 overflow-hidden">
-          {application.drive?.companyLogo ? (
-            <img
-              src={application.drive.companyLogo}
-              alt=""
-              className="w-full h-full object-contain p-1.5"
-            />
-          ) : (
-            <span className="text-sm font-bold text-gray-500">
-              {application.drive?.companyName?.slice(0, 2).toUpperCase()}
-            </span>
-          )}
+    <li className={`px-5 py-5 lg:px-7 lg:pb-7 lg:pt-[26px] ${panel}`}>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+        <LogoTile src={drive.companyLogo} name={drive.companyName} />
+        <div className="min-w-0 flex-1 basis-48">
+          <h2 className="truncate text-[18px] font-[650] tracking-[-0.03em] text-ink">
+            <Link
+              to={`/career/drives/${drive._id}`}
+              className={`rounded decoration-ink/25 underline-offset-4 hover:underline ${focusRing}`}
+            >
+              {drive.companyName}
+            </Link>
+          </h2>
+          <p className="text-[14.5px] text-ink-2">
+            {[drive.role, drivePay(drive)].filter(Boolean).join(", ")}. Applied{" "}
+            {formatShortDate(application.appliedAt)}.
+          </p>
         </div>
-
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <Link
-                to={`/career/drives/${application.drive?._id}`}
-                className="text-sm font-semibold text-gray-900 hover:text-gray-700 transition-colors truncate block"
-              >
-                {application.drive?.companyName}
-              </Link>
-              <p className="text-xs text-gray-400 mt-0.5">{application.drive?.role}</p>
-            </div>
-            <span className={`text-xs font-medium px-2.5 py-1 rounded-full flex-shrink-0 ${cfg.color}`}>
-              {cfg.label}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-3 mt-2">
-            <p className="text-xs text-gray-400">Applied {formatDate(application.appliedAt)}</p>
-          </div>
-        </div>
+        <Pill tone={status.tone}>{status.label}</Pill>
       </div>
 
-      {/* Current round — only for still-active applications */}
-      {!isTerminal && currentRound && (
-        <div className="mx-4 mb-4 px-3 py-2.5 bg-gray-50 border border-gray-100 rounded-lg">
-          <p className="text-xs font-semibold text-gray-800">{currentRound.name}</p>
-          <p className="text-xs text-gray-500 mt-0.5">
-            {roundStateLabel[currentRound.derivedState] || "Upcoming"}
-          </p>
-        </div>
-      )}
-      {!isTerminal && !currentRound && (
-        <div className="mx-4 mb-4 px-3 py-2.5 bg-gray-50 border border-gray-100 rounded-lg">
-          <p className="text-xs text-gray-500">Recruitment hasn't started yet — you're registered.</p>
-        </div>
+      <Steps steps={steps} />
+
+      {outcome && (
+        <p className={`mt-[22px] border-t border-line pt-[18px] text-[14.5px] ${outcome.className || "text-ink-2"}`}>
+          {outcome.text}
+        </p>
       )}
 
-      {/* Terminal states */}
-      {isSelected && (
-        <div className="mx-4 mb-4 flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-200 rounded-lg">
-          <CheckCircle2 size={14} className="text-green-600 flex-shrink-0" />
-          <p className="text-xs font-medium text-green-700">
-            Congratulations! You have been selected.
-          </p>
-        </div>
-      )}
-      {isRejected && (
-        <div className="mx-4 mb-4 px-3 py-2 bg-red-50 border border-red-100 rounded-lg">
-          <p className="text-xs text-red-600">
-            {rejectionRound
-              ? `Not shortlisted after ${rejectionRound.name}.`
-              : "Application was not successful for this drive."}
-          </p>
-        </div>
-      )}
-
-      {/* Expand timeline button */}
-      <button
-        onClick={() => setExpanded((p) => !p)}
-        className="w-full flex items-center justify-between px-4 py-2.5 border-t border-gray-50 text-xs text-gray-500 hover:bg-gray-50 transition-colors"
-      >
-        <span>{expanded ? "Hide" : "View"} timeline</span>
-        <ChevronRight
-          size={13}
-          className={`transition-transform ${expanded ? "rotate-90" : ""}`}
-        />
-      </button>
-
-      {expanded && (
-        <div className="px-4 pb-4 border-t border-gray-50 pt-4">
-          {application.timeline?.length > 0 ? (
-            <div className="space-y-3">
-              {application.timeline.map((entry, i) => {
-                const entryCfg = statusConfig[entry.status] || statusConfig.active;
-                const round = rounds.find((r) => String(r._id) === String(entry.roundId));
+      {timeline.length > 0 && (
+        <div className={outcome ? "mt-3" : "mt-[22px] border-t border-line pt-4"}>
+          <button
+            type="button"
+            onClick={() => setExpanded((p) => !p)}
+            aria-expanded={expanded}
+            className={textLink}
+          >
+            {expanded ? "Hide history" : "Show history"}
+          </button>
+          {expanded && (
+            <ol className="mt-3 space-y-3">
+              {timeline.map((entry, i) => {
+                const round = rounds.find((r) => sameId(r._id, entry.roundId));
                 return (
-                  <div key={i} className="flex gap-3">
-                    <div className="flex flex-col items-center">
-                      <div className={`w-2 h-2 rounded-full flex-shrink-0 mt-0.5 ${entryCfg.dot}`} />
-                      {i < application.timeline.length - 1 && (
-                        <div className="w-px flex-1 bg-gray-100 mt-1" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0 pb-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="text-xs font-semibold text-gray-900">
-                          {round ? round.name : entryCfg.label}
-                        </p>
-                        <p className="text-xs text-gray-400 flex-shrink-0">
-                          {formatDateTime(entry.changedAt)}
-                        </p>
-                      </div>
-                      {entry.note && (
-                        <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{entry.note}</p>
-                      )}
-                    </div>
-                  </div>
+                  <li key={i} className="text-[13.5px]">
+                    <p className="flex flex-wrap items-baseline gap-x-2">
+                      <span className="font-semibold text-ink">
+                        {round ? round.name : (APPLICATION_STATUS[entry.status] || APPLICATION_STATUS.active).label}
+                      </span>
+                      <span className="text-ink-3">{formatDateTime(entry.changedAt)}</span>
+                    </p>
+                    {entry.note && <p className="mt-0.5 leading-normal text-ink-2">{entry.note}</p>}
+                  </li>
                 );
               })}
-            </div>
-          ) : (
-            <p className="text-xs text-gray-400 text-center py-3">No timeline entries yet.</p>
+            </ol>
           )}
         </div>
       )}
-    </div>
+    </li>
   );
 };
 
-// ─── Skeleton ─────────────────────────────────────────────────
 const Skeleton = () => (
-  <div className="space-y-3">
-    {[...Array(3)].map((_, i) => (
-      <div key={i} className="bg-white border border-gray-100 rounded-xl p-4 animate-pulse">
-        <div className="flex gap-4">
-          <div className="w-12 h-12 bg-gray-100 rounded-xl flex-shrink-0" />
-          <div className="flex-1 space-y-2">
-            <div className="flex justify-between">
-              <div className="w-32 h-4 bg-gray-100 rounded" />
-              <div className="w-20 h-5 bg-gray-100 rounded-full" />
-            </div>
-            <div className="w-24 h-3 bg-gray-100 rounded" />
-          </div>
-        </div>
-      </div>
+  <div className="mt-8 animate-pulse space-y-5" aria-busy="true">
+    {[0, 1].map((i) => (
+      <div key={i} className="h-44 rounded-panel bg-soft" />
     ))}
   </div>
 );
 
-// ─── Main ─────────────────────────────────────────────────────
 const MyApplications = () => {
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -224,82 +232,52 @@ const MyApplications = () => {
     fetchApplications();
   }, []);
 
+  const count = (key) => applications.filter((a) => a.status === key).length;
   const filters = [
-    { key: "all", label: "All" },
-    { key: "active", label: "Active" },
-    { key: "selected", label: "Selected" },
-    { key: "rejected", label: "Rejected" },
+    { value: "all", label: `All ${applications.length}` },
+    { value: "active", label: `Active ${count("active")}` },
+    { value: "selected", label: `Selected ${count("selected")}` },
+    { value: "rejected", label: `Rejected ${count("rejected")}` },
   ];
 
-  const filtered = applications.filter((app) => {
-    if (filter === "all") return true;
-    return app.status === filter;
-  });
+  const filtered = applications.filter((app) => filter === "all" || app.status === filter);
 
   return (
-    <div className="max-w-3xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900">My Applications</h2>
-          <p className="text-xs text-gray-400 mt-0.5">
-            {loading ? "Loading..." : loadError ? "Could not load applications" : `${applications.length} total applications`}
-          </p>
-        </div>
-        <Link
-          to="/career/drives"
-          className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-900 transition-colors border border-gray-200 px-3 py-1.5 rounded-lg hover:border-gray-400"
-        >
-          Browse Drives <ArrowRight size={12} />
-        </Link>
-      </div>
+    <div className="pb-10 lg:pb-20">
+      <PageTitle title="My applications" />
 
-      <div className="flex flex-wrap gap-2 mb-6">
-        {filters.map((f) => (
-          <button
-            key={f.key}
-            onClick={() => setFilter(f.key)}
-            className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-all duration-150
-              ${
-                filter === f.key
-                  ? "bg-gray-900 text-white border-gray-900"
-                  : "bg-white text-gray-500 border-gray-200 hover:border-gray-400 hover:text-gray-700"
-              }`}
-          >
-            {f.label}
-            {f.key !== "all" && (
-              <span className="ml-1 opacity-70">
-                ({applications.filter((a) => a.status === f.key).length})
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
+      {!loading && !loadError && applications.length > 0 && (
+        <div className="mt-6">
+          <Chips label="Status" options={filters} value={filter} onChange={setFilter} />
+        </div>
+      )}
 
       {loading ? (
         <Skeleton />
       ) : loadError ? (
-        <p role="alert" className="rounded-xl border border-red-100 bg-red-50 px-5 py-8 text-center text-sm text-red-700">
-          Could not load your applications. Please refresh and try again.
-        </p>
+        <div className="mt-9">
+          <LoadError>Could not load your applications. Refresh the page to try again.</LoadError>
+        </div>
       ) : filtered.length > 0 ? (
-        <div className="space-y-3">
+        <ul className="mt-8 grid gap-5">
           {filtered.map((app) => (
             <ApplicationCard key={app._id} application={app} />
           ))}
-        </div>
+        </ul>
       ) : (
-        <div className="flex flex-col items-center justify-center py-20 bg-white border border-gray-100 rounded-xl text-center">
-          <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center mb-3">
-            <Briefcase size={16} className="text-gray-400" />
-          </div>
-          <p className="text-sm font-medium text-gray-600 mb-1">No applications yet</p>
-          <p className="text-xs text-gray-400 mb-4">
-            {filter !== "all" ? "No applications match this filter" : "Start applying to placement drives"}
-          </p>
-          <Link to="/career/drives" className="text-xs font-medium text-gray-900 underline underline-offset-2">
-            Browse open drives
-          </Link>
-        </div>
+        <p className={`mt-9 ${note}`}>
+          {applications.length > 0
+            ? "No applications match this filter."
+            : "You haven't applied to any drives yet. "}
+          {applications.length === 0 && (
+            <Link
+              to="/career/drives"
+              className={`rounded font-[550] text-ink underline decoration-ink/25 underline-offset-[3px] hover:decoration-ink ${focusRing}`}
+            >
+              Browse open drives
+            </Link>
+          )}
+        </p>
       )}
     </div>
   );

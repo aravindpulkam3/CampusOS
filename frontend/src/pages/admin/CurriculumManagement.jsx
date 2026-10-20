@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Plus, Trash2, RefreshCw, Pencil, Check, X } from "lucide-react";
+import { Plus } from "lucide-react";
 import {
   getCurricula,
   createCurriculum,
@@ -8,8 +8,25 @@ import {
   deleteSubject,
   deleteCurriculum,
 } from "../../api/curriculum.api";
+import {
+  Alert,
+  LoadError,
+  PageTitle,
+  btn,
+  btnGhostSm,
+  btnSm,
+  fieldInput,
+  fieldLabel,
+  focusRing,
+  note,
+  panel,
+  textLink,
+} from "../../components/common/ui";
 
 const emptyCreateForm = { branch: "", semesterNumber: "" };
+
+const rowAction = `rounded text-[13.5px] font-[550] transition-colors disabled:opacity-50 ${focusRing}`;
+const smallInput = `h-9 min-w-0 rounded-[9px] border border-line-2 bg-white px-2.5 text-[14px] text-ink outline-none placeholder:text-ink-3 focus:border-ink-3 focus:ring-2 focus:ring-ink/10`;
 
 const SubjectRow = ({ curriculumId, subject, onChanged }) => {
   const [editing, setEditing] = useState(false);
@@ -17,7 +34,8 @@ const SubjectRow = ({ curriculumId, subject, onChanged }) => {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const handleSave = async () => {
+  const handleSave = async (e) => {
+    e?.preventDefault();
     setBusy(true);
     setError("");
     try {
@@ -32,6 +50,7 @@ const SubjectRow = ({ curriculumId, subject, onChanged }) => {
   };
 
   const handleDelete = async () => {
+    if (!window.confirm(`Delete ${subject.name}?`)) return;
     setBusy(true);
     setError("");
     try {
@@ -43,48 +62,62 @@ const SubjectRow = ({ curriculumId, subject, onChanged }) => {
     }
   };
 
-  if (editing) {
-    return (
-      <div className="flex items-center gap-2 py-1.5">
-        <input
-          value={form.name}
-          onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-          className="flex-1 min-w-0 px-2 py-1 text-xs border border-gray-200 rounded-lg outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
-        />
-        <input
-          value={form.code}
-          onChange={(e) => setForm((p) => ({ ...p, code: e.target.value }))}
-          placeholder="Code"
-          className="w-20 px-2 py-1 text-xs border border-gray-200 rounded-lg outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
-        />
-        <button onClick={handleSave} disabled={busy} aria-label="Save subject" className="p-1.5 rounded text-green-600 hover:text-green-700">
-          <Check size={13} />
-        </button>
-        <button onClick={() => setEditing(false)} aria-label="Cancel editing" className="p-1.5 rounded text-gray-400 hover:text-gray-700">
-          <X size={13} />
-        </button>
-      </div>
-    );
-  }
-
   return (
-    <div>
-      <div className="flex items-center justify-between gap-2 py-0.5">
-        <div className="min-w-0 text-xs text-gray-700 break-words">
-          {subject.name}
-          {subject.code && <span className="text-gray-400"> ({subject.code})</span>}
-        </div>
-        <div className="flex items-center flex-shrink-0 -mr-1.5">
-          <button onClick={() => setEditing(true)} aria-label="Edit subject" className="p-1.5 rounded text-gray-400 hover:text-gray-900">
-            <Pencil size={12} />
+    <li className="py-2.5">
+      {editing ? (
+        <form onSubmit={handleSave} className="flex items-center gap-2">
+          <input
+            autoFocus
+            aria-label="Subject name"
+            value={form.name}
+            onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+            className={`${smallInput} flex-1`}
+          />
+          <input
+            aria-label="Subject code"
+            value={form.code}
+            onChange={(e) => setForm((p) => ({ ...p, code: e.target.value }))}
+            placeholder="Code"
+            className={`${smallInput} w-24`}
+          />
+          <button type="submit" disabled={busy} className={btnSm}>
+            Save
           </button>
-          <button onClick={handleDelete} disabled={busy} aria-label="Delete subject" className="p-1.5 rounded text-gray-400 hover:text-red-500">
-            <Trash2 size={12} />
+          <button type="button" onClick={() => setEditing(false)} className={btnGhostSm}>
+            Cancel
+          </button>
+        </form>
+      ) : (
+        <div className="flex items-baseline gap-4">
+          <span className="min-w-0 flex-1 break-words text-[14.5px] text-ink">
+            {subject.name}
+            {subject.code && <span className="ml-2 text-[13px] text-ink-3">{subject.code}</span>}
+          </span>
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            aria-label={`Edit ${subject.name}`}
+            className={`${rowAction} text-ink-2 hover:text-ink`}
+          >
+            Edit
+          </button>
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={busy}
+            aria-label={`Delete ${subject.name}`}
+            className={`${rowAction} text-ink-2 hover:text-urgent`}
+          >
+            Delete
           </button>
         </div>
-      </div>
-      {error && <p className="text-xs text-red-500 pb-1">{error}</p>}
-    </div>
+      )}
+      {error && (
+        <div className="mt-1.5">
+          <Alert>{error}</Alert>
+        </div>
+      )}
+    </li>
   );
 };
 
@@ -110,6 +143,7 @@ const CurriculumCard = ({ curriculum, onChanged }) => {
   };
 
   const handleDeleteCurriculum = async () => {
+    if (!window.confirm(`Delete the ${curriculum.branch} semester ${curriculum.semesterNumber} curriculum and its subjects?`)) return;
     setBusy(true);
     setError("");
     try {
@@ -121,72 +155,82 @@ const CurriculumCard = ({ curriculum, onChanged }) => {
     }
   };
 
+  const title = `${curriculum.branch}, semester ${curriculum.semesterNumber}`;
+
   return (
-    <div className="border border-gray-100 rounded-xl p-4">
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-semibold text-gray-900">
-          {curriculum.branch} — Semester {curriculum.semesterNumber}
-        </p>
-        <button onClick={handleDeleteCurriculum} disabled={busy} aria-label="Delete curriculum" className="p-1.5 -m-1.5 rounded text-gray-400 hover:text-red-500">
-          <Trash2 size={13} />
+    <section aria-label={title} className={`px-5 py-5 ${panel}`}>
+      <div className="flex items-baseline gap-4">
+        <h3 className="min-w-0 flex-1 text-[15.5px] font-[650] tracking-[-0.02em] text-ink">{title}</h3>
+        <span className="text-[13px] text-ink-3">
+          {curriculum.subjects.length} {curriculum.subjects.length === 1 ? "subject" : "subjects"}
+        </span>
+        <button
+          type="button"
+          onClick={handleDeleteCurriculum}
+          disabled={busy}
+          aria-label={`Delete the ${title} curriculum`}
+          className={`${rowAction} text-ink-2 hover:text-urgent`}
+        >
+          Delete
         </button>
       </div>
 
       {error && (
-        <div className="mt-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg">
-          <p className="text-xs text-red-700">{error}</p>
+        <div className="mt-2">
+          <Alert>{error}</Alert>
         </div>
       )}
 
-      <div className="mt-3 divide-y divide-gray-50">
-        {curriculum.subjects.length === 0 ? (
-          <p className="text-xs text-gray-400 py-2">No subjects yet.</p>
-        ) : (
-          curriculum.subjects.map((s) => (
+      {curriculum.subjects.length === 0 ? (
+        <p className={`mt-2 ${note}`}>No subjects yet.</p>
+      ) : (
+        <ul className="mt-2 divide-y divide-line">
+          {curriculum.subjects.map((s) => (
             <SubjectRow key={s._id} curriculumId={curriculum._id} subject={s} onChanged={onChanged} />
-          ))
-        )}
-      </div>
+          ))}
+        </ul>
+      )}
 
-      <form onSubmit={handleAddSubject} className="mt-3 flex items-center gap-2">
+      <form onSubmit={handleAddSubject} className="mt-3 flex items-center gap-2 border-t border-line pt-3.5">
         <input
-          placeholder="New subject name"
+          aria-label={`New subject for ${title}`}
+          placeholder="New subject"
           value={newSubject.name}
           onChange={(e) => setNewSubject((p) => ({ ...p, name: e.target.value }))}
-          className="flex-1 min-w-0 px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
+          className={`${smallInput} flex-1`}
         />
         <input
+          aria-label="Code for the new subject"
           placeholder="Code"
           value={newSubject.code}
           onChange={(e) => setNewSubject((p) => ({ ...p, code: e.target.value }))}
-          className="w-20 px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
+          className={`${smallInput} w-24`}
         />
-        <button
-          type="submit"
-          disabled={busy}
-          className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium border border-gray-200 text-gray-600 rounded-lg hover:border-gray-400 disabled:opacity-50"
-        >
-          <Plus size={11} /> Add
+        <button type="submit" disabled={busy || !newSubject.name.trim()} className={btnGhostSm}>
+          <Plus size={13} aria-hidden="true" /> Add
         </button>
       </form>
-    </div>
+    </section>
   );
 };
 
 const CurriculumManagement = () => {
   const [curricula, setCurricula] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [createForm, setCreateForm] = useState(emptyCreateForm);
   const [createError, setCreateError] = useState("");
   const [creating, setCreating] = useState(false);
 
   const fetchCurricula = async () => {
     setLoading(true);
+    setLoadError(false);
     try {
       const { data } = await getCurricula();
       setCurricula(data.data);
     } catch (err) {
       console.error(err);
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -220,75 +264,88 @@ const CurriculumManagement = () => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-4">
-      <div className="bg-white border border-gray-100 rounded-xl p-5">
-        <h3 className="text-sm font-semibold text-gray-900 mb-1">Create Curriculum</h3>
-        <p className="text-xs text-gray-400 mb-4">
-          Subjects are defined once per branch + semester and shared by every classroom of that branch
-          currently in that semester, regardless of admission batch — a class representative can never
-          add, edit, or delete them.
+    <div className="pb-10 lg:pb-20">
+      <PageTitle
+        crumb="Admin"
+        title="Curricula"
+        sub="The subjects of each branch and semester, shared by every classroom of that branch in that semester."
+      />
+
+      <section className={`mt-8 px-5 py-5 lg:px-[26px] lg:py-6 ${panel}`}>
+        <h2 className="text-[17px] font-[650] tracking-[-0.025em] text-ink">New curriculum</h2>
+        <p className="mt-1 max-w-[70ch] text-[14.5px] leading-[1.6] text-ink-2">
+          Defined once per branch and semester, whatever the admission batch. Class representatives
+          can't add, change or delete subjects.
         </p>
-        {createError && (
-          <div className="mb-3 px-3 py-2 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-xs text-red-700">{createError}</p>
-          </div>
-        )}
-        <form onSubmit={handleCreate} className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+        <form
+          onSubmit={handleCreate}
+          className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end"
+        >
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1.5">Branch</label>
+            <label htmlFor="new-curriculum-branch" className={fieldLabel}>Branch</label>
             <input
+              id="new-curriculum-branch"
               type="text"
               placeholder="e.g. CSE"
               value={createForm.branch}
               onChange={(e) => setCreateForm((p) => ({ ...p, branch: e.target.value }))}
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
+              className={fieldInput}
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1.5">Semester #</label>
+            <label htmlFor="new-curriculum-semester" className={fieldLabel}>Semester</label>
             <input
+              id="new-curriculum-semester"
               type="number"
               min={1}
               max={8}
-              placeholder="1-8"
+              placeholder="1 to 8"
               value={createForm.semesterNumber}
               onChange={(e) => setCreateForm((p) => ({ ...p, semesterNumber: e.target.value }))}
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
+              className={fieldInput}
             />
           </div>
-          <button
-            type="submit"
-            disabled={creating}
-            className="flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-medium bg-gray-900 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50"
-          >
-            <Plus size={14} /> {creating ? "Creating..." : "Create"}
+          <button type="submit" disabled={creating} className={`h-[42px] ${btn}`}>
+            <Plus size={15} aria-hidden="true" /> {creating ? "Creating…" : "Create"}
           </button>
         </form>
-      </div>
+        {createError && (
+          <div className="mt-3">
+            <Alert>{createError}</Alert>
+          </div>
+        )}
+      </section>
 
-      <div className="bg-white border border-gray-100 rounded-xl p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-gray-900">Curricula</h3>
-          <button
-            onClick={fetchCurricula}
-            className="text-xs text-gray-400 hover:text-gray-700 flex items-center gap-1"
-          >
-            <RefreshCw size={11} /> Refresh
+      <section className="mt-12 lg:mt-14" aria-labelledby="curricula-heading">
+        <div className="flex items-baseline gap-4">
+          <h2 id="curricula-heading" className="text-[17px] font-[650] tracking-[-0.025em] text-ink">
+            All curricula
+          </h2>
+          <button type="button" onClick={fetchCurricula} className={`ml-auto ${textLink}`}>
+            Refresh
           </button>
         </div>
 
         {loading ? (
-          <p className="text-xs text-gray-400">Loading...</p>
+          <div className="mt-5 grid animate-pulse grid-cols-1 gap-5 lg:grid-cols-2" aria-busy="true">
+            {[0, 1].map((i) => (
+              <div key={i} className="h-48 rounded-panel bg-soft" />
+            ))}
+          </div>
+        ) : loadError ? (
+          <div className="mt-5">
+            <LoadError onRetry={fetchCurricula}>Couldn't load the curricula.</LoadError>
+          </div>
         ) : curricula.length === 0 ? (
-          <p className="text-xs text-gray-400 text-center py-6">No curricula yet.</p>
+          <p className={`mt-5 ${note}`}>No curricula yet.</p>
         ) : (
-          <div className="space-y-3">
+          <div className="mt-5 grid grid-cols-1 items-start gap-5 lg:grid-cols-2">
             {curricula.map((c) => (
               <CurriculumCard key={c._id} curriculum={c} onChanged={fetchCurricula} />
             ))}
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 };

@@ -1,14 +1,19 @@
-import { useState, useEffect } from "react"
-import { Link } from "react-router-dom"
-// Lucide icons from react-icons
-import { 
-  LuPlus, LuExternalLink, LuSearch, LuX, LuBookOpen, LuFileText, LuMap, LuVideo 
-} from "react-icons/lu"
-// Exact brand icons from react-icons
-import { 
-  SiYoutube, SiGithub, SiLeetcode, SiGeeksforgeeks 
-} from "react-icons/si"
-import useAuth from "../../../hooks/useAuth"
+import { useState, useEffect } from "react";
+import { BookOpen, ExternalLink, FileText, Map as MapIcon, Plus, Video } from "lucide-react";
+import safeHref from "../../../utils/safeHref";
+import {
+  Chips,
+  Modal,
+  PageTitle,
+  SearchField,
+  btnGhost,
+  btnGhostSm,
+  btnSm,
+  fieldInput,
+  fieldLabel,
+  focusRing,
+  note,
+} from "../../../components/common/ui";
 
 // ─── API calls ────────────────────────────────────────────────
 // GET /api/competitive?category= → list resources by category
@@ -16,298 +21,296 @@ import useAuth from "../../../hooks/useAuth"
 
 // ─── Config ───────────────────────────────────────────────────
 const CATEGORIES = [
-  { value: "dsa",          label: "DSA",           description: "Data Structures, Algorithms, Competitive Programming" },
-  { value: "gate",         label: "GATE",          description: "GATE preparation, PYQs, roadmaps" },
-  { value: "aptitude",     label: "Aptitude",      description: "Quant, Logical Reasoning, Verbal" },
-  { value: "placements",   label: "Placements",    description: "Resume, OA prep, interview experiences" },
-  { value: "higherStudies",label: "Higher Studies",description: "MS, GRE, TOEFL, research programs" },
-]
+  { value: "dsa", label: "DSA", description: "Data structures, algorithms and competitive programming" },
+  { value: "gate", label: "GATE", description: "GATE preparation, past papers and roadmaps" },
+  { value: "aptitude", label: "Aptitude", description: "Quant, logical reasoning and verbal" },
+  { value: "placements", label: "Placements", description: "Resumes, online assessments and interview experiences" },
+  { value: "higherStudies", label: "Higher studies", description: "MS, GRE, TOEFL and research programs" },
+];
 
-const resourceTypeIcon = {
-  roadmap:  LuMap,
-  pyq:      LuFileText,
-  playlist: LuVideo,        
-  sheet:    LuFileText,
-  book:     LuBookOpen,
-  course:   LuVideo,        
-  other:    LuExternalLink,
-}
+const RESOURCE_TYPE = {
+  roadmap: { label: "Roadmap", icon: MapIcon },
+  pyq: { label: "Past papers", icon: FileText },
+  playlist: { label: "Playlist", icon: Video },
+  sheet: { label: "Sheet", icon: FileText },
+  book: { label: "Book", icon: BookOpen },
+  course: { label: "Course", icon: Video },
+  other: { label: "Other", icon: ExternalLink },
+};
 
-const resourceTypeColor = {
-  roadmap:  "bg-blue-50 text-blue-700",
-  pyq:      "bg-purple-50 text-purple-700",
-  playlist: "bg-red-50 text-red-700",
-  sheet:    "bg-green-50 text-green-700",
-  book:     "bg-amber-50 text-amber-700",
-  course:   "bg-orange-50 text-orange-700",
-  other:    "bg-gray-100 text-gray-600",
-}
+// ─── Resource row ─────────────────────────────────────────────
+// Opens the resource in a new tab. A stored URL that is not http(s) gives a
+// row with no link at all.
+const ResourceRow = ({ resource }) => {
+  const type = RESOURCE_TYPE[resource.type] || RESOURCE_TYPE.other;
+  const Icon = type.icon;
+  const href = safeHref(resource.url);
+  const layout = "group flex min-h-16 items-center gap-4 py-3";
 
-// Maps platform names to their actual component packages and colors
-const platformConfig = {
-  YouTube: { icon: SiYoutube, color: "text-red-600" },
-  GitHub:  { icon: SiGithub, color: "text-gray-900" },
-  LeetCode: { icon: SiLeetcode, color: "text-orange-500" },
-  GeeksforGeeks: { icon: SiGeeksforgeeks, color: "text-green-600" },
-}
-
-// ─── Resource Card ────────────────────────────────────────────
-const ResourceCard = ({ resource }) => {
-  const Icon = resourceTypeIcon[resource.type] || LuExternalLink
-  const platform = platformConfig[resource.platform]
-  const PlatformIcon = platform ? platform.icon : null
+  const body = (
+    <>
+      <span
+        aria-hidden="true"
+        className="grid size-10 flex-none place-items-center rounded-[11px] bg-soft text-ink-2"
+      >
+        <Icon size={17} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span
+          className={`block truncate text-[15px] font-semibold leading-[1.35] tracking-[-0.018em] text-ink ${
+            href ? "decoration-ink/25 underline-offset-[3px] group-hover:underline" : ""
+          }`}
+        >
+          {resource.title}
+        </span>
+        {resource.description && (
+          <span className="mt-px block text-[13.5px] text-ink-2 max-sm:line-clamp-2 sm:truncate">
+            {resource.description}
+          </span>
+        )}
+      </span>
+      <span className="flex flex-none items-center gap-1.5 whitespace-nowrap text-[13.5px] text-ink-2">
+        {[type.label, resource.platform].filter(Boolean).join(", ")}
+        {href && <ExternalLink size={13} className="text-ink-3" aria-hidden="true" />}
+      </span>
+    </>
+  );
 
   return (
-    <a
-      href={resource.url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="flex items-start gap-3 p-4 bg-white border border-gray-100 rounded-xl hover:border-gray-300 hover:shadow-sm transition-all duration-200 group"
-    >
-      <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${resourceTypeColor[resource.type] || resourceTypeColor.other}`}>
-        <Icon size={14} />
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-start justify-between gap-2">
-          <h4 className="text-sm font-semibold text-gray-900 group-hover:text-gray-700 leading-snug">
-            {resource.title}
-          </h4>
-          <span className={`text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0 ${resourceTypeColor[resource.type] || resourceTypeColor.other}`}>
-            {resource.type}
-          </span>
-        </div>
-        {resource.description && (
-          <p className="text-xs text-gray-500 mt-0.5 leading-relaxed line-clamp-2">
-            {resource.description}
-          </p>
-        )}
-        <div className="flex items-center justify-between mt-2">
-          {resource.platform && (
-            <span className={`text-xs font-medium flex items-center gap-1 ${platform ? platform.color : "text-gray-400"}`}>
-              {PlatformIcon && <PlatformIcon size={12} />} {resource.platform}
-            </span>
-          )}
-          <span className="text-xs text-gray-400 flex items-center gap-1">
-            <LuExternalLink size={10} /> Open
-          </span>
-        </div>
-      </div>
-    </a>
-  )
-}
+    <li>
+      {href ? (
+        <a href={href} target="_blank" rel="noopener noreferrer" className={`rounded-lg ${layout} ${focusRing}`}>
+          {body}
+          <span className="sr-only">(opens in a new tab)</span>
+        </a>
+      ) : (
+        <div className={layout}>{body}</div>
+      )}
+    </li>
+  );
+};
 
 // ─── Submit Resource Modal ────────────────────────────────────
 const SubmitModal = ({ activeCategory, onClose, onSubmit }) => {
   const [form, setForm] = useState({
-    title: "", description: "", url: "",
+    title: "",
+    description: "",
+    url: "",
     category: activeCategory || "dsa",
-    type: "roadmap", platform: ""
-  })
-  const [submitting, setSubmitting] = useState(false)
+    type: "roadmap",
+    platform: "",
+  });
+  const [submitting, setSubmitting] = useState(false);
 
-  const set = (field) => (e) => setForm(prev => ({ ...prev, [field]: e.target.value }))
+  const set = (field) => (e) => setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
   const handleSubmit = async (e) => {
-    e.preventDefault()
-    if (!form.title.trim() || !form.url.trim()) return
-    setSubmitting(true)
+    e.preventDefault();
+    if (!form.title.trim() || !form.url.trim()) return;
+    setSubmitting(true);
     try {
       // TODO: await submitCompetitiveResource(form)
-      onSubmit?.()
-      onClose()
+      onSubmit?.();
+      onClose();
     } catch (err) {
-      console.error(err)
+      console.error(err);
     } finally {
-      setSubmitting(false)
+      setSubmitting(false);
     }
-  }
+  };
 
   return (
-    <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-xl w-full max-w-md">
-        <div className="flex items-center justify-between p-5 border-b border-gray-100">
-          <h3 className="text-sm font-semibold text-gray-900">Submit a Resource</h3>
-          <button onClick={onClose} aria-label="Close" className="p-1.5 -m-1.5 rounded-lg text-gray-400 hover:text-gray-700"><LuX size={16} /></button>
+    <Modal title="Submit a resource" onClose={onClose} wide>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label htmlFor="resource-title" className={fieldLabel}>
+            Title
+          </label>
+          <input
+            id="resource-title"
+            type="text"
+            required
+            placeholder="e.g. Striver's A2Z DSA Sheet"
+            value={form.title}
+            onChange={set("title")}
+            className={fieldInput}
+          />
         </div>
-        <form onSubmit={handleSubmit} className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
+        <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-xs font-medium text-gray-700 block mb-1.5">Title <span className="text-red-400">*</span></label>
-            <input type="text" placeholder="e.g. Striver's A2Z DSA Sheet" value={form.title} onChange={set("title")}
-              className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100 placeholder:text-gray-300" />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-medium text-gray-700 block mb-1.5">Category</label>
-              <select value={form.category} onChange={set("category")}
-                className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100">
-                {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-gray-700 block mb-1.5">Type</label>
-              <select value={form.type} onChange={set("type")}
-                className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100">
-                {Object.keys(resourceTypeIcon).map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
+            <label htmlFor="resource-category" className={fieldLabel}>
+              Category
+            </label>
+            <select id="resource-category" value={form.category} onChange={set("category")} className={fieldInput}>
+              {CATEGORIES.map((c) => (
+                <option key={c.value} value={c.value}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
-            <label className="text-xs font-medium text-gray-700 block mb-1.5">URL <span className="text-red-400">*</span></label>
-            <input type="url" placeholder="https://" value={form.url} onChange={set("url")}
-              className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100 placeholder:text-gray-300" />
+            <label htmlFor="resource-type" className={fieldLabel}>
+              Type
+            </label>
+            <select id="resource-type" value={form.type} onChange={set("type")} className={fieldInput}>
+              {Object.entries(RESOURCE_TYPE).map(([value, { label }]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-medium text-gray-700 block mb-1.5">Platform</label>
-              <input type="text" placeholder="e.g. YouTube, GitHub" value={form.platform} onChange={set("platform")}
-                className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100 placeholder:text-gray-300" />
-            </div>
-          </div>
-          <div>
-            <label className="text-xs font-medium text-gray-700 block mb-1.5">Description</label>
-            <textarea rows={3} placeholder="Brief description of this resource..." value={form.description} onChange={set("description")}
-              className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100 placeholder:text-gray-300 resize-none" />
-          </div>
-          <div className="flex justify-end gap-3 pt-1">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-500 border border-gray-200 rounded-lg hover:border-gray-400 transition-colors">Cancel</button>
-            <button type="submit" disabled={submitting} className="px-4 py-2 text-sm font-medium bg-gray-900 text-white rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50">
-              {submitting ? "Submitting..." : "Submit Resource"}
-            </button>
-          </div>
-        </form>
+        </div>
+        <div>
+          <label htmlFor="resource-url" className={fieldLabel}>
+            URL
+          </label>
+          <input
+            id="resource-url"
+            type="url"
+            required
+            placeholder="https://"
+            value={form.url}
+            onChange={set("url")}
+            className={fieldInput}
+          />
+        </div>
+        <div>
+          <label htmlFor="resource-platform" className={fieldLabel}>
+            Platform <span className="font-normal text-ink-3">(optional)</span>
+          </label>
+          <input
+            id="resource-platform"
+            type="text"
+            placeholder="e.g. YouTube, GitHub"
+            value={form.platform}
+            onChange={set("platform")}
+            className={fieldInput}
+          />
+        </div>
+        <div>
+          <label htmlFor="resource-description" className={fieldLabel}>
+            Description <span className="font-normal text-ink-3">(optional)</span>
+          </label>
+          <textarea
+            id="resource-description"
+            rows={3}
+            placeholder="Brief description of this resource..."
+            value={form.description}
+            onChange={set("description")}
+            className={`${fieldInput} resize-none py-2.5`}
+          />
+        </div>
+        <div className="flex justify-end gap-2 pt-1">
+          <button type="button" onClick={onClose} className={btnGhostSm}>
+            Cancel
+          </button>
+          <button type="submit" disabled={submitting} className={btnSm}>
+            {submitting ? "Submitting..." : "Submit resource"}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+};
+
+const Skeleton = () => (
+  <div className="mt-3 animate-pulse" aria-busy="true">
+    {[0, 1, 2, 3].map((i) => (
+      <div key={i} className="flex h-16 items-center gap-4 border-t border-line first:border-t-0">
+        <div className="size-10 flex-none rounded-[11px] bg-soft" />
+        <div className="flex-1 space-y-2">
+          <div className="h-3.5 w-1/3 rounded bg-soft" />
+          <div className="h-3 w-1/2 rounded bg-soft" />
+        </div>
       </div>
-    </div>
-  )
-}
+    ))}
+  </div>
+);
 
 // ─── Main ─────────────────────────────────────────────────────
 const CompetitivePrep = () => {
-  const [activeCategory, setActiveCategory] = useState("dsa")
-  const [resources, setResources]           = useState([])
-  const [loading, setLoading]               = useState(true)
-  const [search, setSearch]                 = useState("")
-  const [showModal, setShowModal]           = useState(false)
+  const [activeCategory, setActiveCategory] = useState("dsa");
+  const [resources, setResources] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
     const fetchResources = async () => {
-      setLoading(true)
+      setLoading(true);
       try {
         // TODO: const res = await axios.get(`/api/competitive?category=${activeCategory}`)
         // setResources(res.data.data)
       } catch (err) {
-        console.error(err)
+        console.error(err);
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
-    }
-    fetchResources()
-  }, [activeCategory])
+    };
+    fetchResources();
+  }, [activeCategory]);
 
-  const filtered = resources.filter(r =>
-    !search ||
-    r.title.toLowerCase().includes(search.toLowerCase()) ||
-    r.description?.toLowerCase().includes(search.toLowerCase())
-  )
+  const term = search.trim().toLowerCase();
+  const filtered = resources.filter(
+    (r) => !term || r.title.toLowerCase().includes(term) || r.description?.toLowerCase().includes(term),
+  );
 
-  const activeCat = CATEGORIES.find(c => c.value === activeCategory)
+  const activeCat = CATEGORIES.find((c) => c.value === activeCategory);
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="pb-10 lg:pb-20">
       {showModal && (
         <SubmitModal
           activeCategory={activeCategory}
           onClose={() => setShowModal(false)}
-          onSubmit={() => {/* TODO: refetch */}}
+          onSubmit={() => {
+            /* TODO: refetch */
+          }}
         />
       )}
 
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900">Competitive Prep</h2>
-          <p className="text-xs text-gray-400 mt-0.5">Curated resources for placement, GATE, and beyond</p>
-        </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-gray-900 text-white rounded-lg hover:bg-gray-700 transition-colors"
-        >
-          <LuPlus size={13} /> Submit Resource
+      <PageTitle
+        crumb="Academics"
+        title="Competitive prep"
+        sub="Curated resources for placements, GATE and beyond."
+      >
+        <button type="button" onClick={() => setShowModal(true)} className={btnGhost}>
+          <Plus size={15} aria-hidden="true" /> Submit resource
         </button>
-      </div>
+      </PageTitle>
 
-      {/* Category cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-6">
-        {CATEGORIES.map(cat => (
-          <button
-            key={cat.value}
-            onClick={() => setActiveCategory(cat.value)}
-            className={`p-3 rounded-xl border text-left transition-all duration-150
-              ${activeCategory === cat.value
-                ? "bg-gray-900 text-white border-gray-900"
-                : "bg-white text-gray-600 border-gray-100 hover:border-gray-300"
-              }`}
-          >
-            <p className="text-xs font-semibold">{cat.label}</p>
-          </button>
-        ))}
-      </div>
-
-      {/* Active category description */}
-      {activeCat && (
-        <div className="mb-5">
-          <p className="text-xs text-gray-400">{activeCat.description}</p>
-        </div>
-      )}
-
-      {/* Search */}
-      <div className="relative w-full sm:w-72 mb-6">
-        <LuSearch size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-        <input
-          type="text"
-          aria-label="Search competitive prep resources"
-          placeholder="Search resources..."
+      <div className="mt-6 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between lg:gap-5">
+        <Chips label="Category" options={CATEGORIES} value={activeCategory} onChange={setActiveCategory} />
+        <SearchField
           value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="w-full pl-9 pr-8 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100 placeholder:text-gray-300"
+          onChange={setSearch}
+          label="Search competitive prep resources"
+          placeholder="Search resources"
         />
-        {search && (
-          <button onClick={() => setSearch("")} aria-label="Clear resource search" className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-            <LuX size={13} />
-          </button>
-        )}
       </div>
 
-      {/* Resources grid */}
+      {/* What the chosen category covers */}
+      {activeCat && <p className="mt-7 text-[14.5px] text-ink-2">{activeCat.description}.</p>}
+
       {loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {[...Array(6)].map((_, i) => (
-            <div key={i} className="flex gap-3 p-4 bg-white border border-gray-100 rounded-xl animate-pulse">
-              <div className="w-8 h-8 bg-gray-100 rounded-lg flex-shrink-0" />
-              <div className="flex-1 space-y-2">
-                <div className="w-3/4 h-4 bg-gray-100 rounded" />
-                <div className="w-full h-3 bg-gray-100 rounded" />
-                <div className="w-1/2 h-3 bg-gray-100 rounded" />
-              </div>
-            </div>
-          ))}
-        </div>
+        <Skeleton />
       ) : filtered.length > 0 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {filtered.map(r => <ResourceCard key={r._id} resource={r} />)}
-        </div>
+        <ul className="mt-3 divide-y divide-line">
+          {filtered.map((r) => (
+            <ResourceRow key={r._id} resource={r} />
+          ))}
+        </ul>
       ) : (
-        <div className="flex flex-col items-center justify-center py-20 bg-white border border-gray-100 rounded-xl text-center">
-          <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center mb-3">
-            <LuBookOpen size={16} className="text-gray-400" />
-          </div>
-          <p className="text-sm font-medium text-gray-600 mb-1">No resources yet</p>
-          <p className="text-xs text-gray-400">
-            {search ? `No results for "${search}"` : `Be the first to submit a ${activeCat?.label} resource`}
-          </p>
-        </div>
+        <p className={`mt-3 ${note}`}>
+          {term
+            ? `No ${activeCat?.label} resources match "${search.trim()}".`
+            : `No ${activeCat?.label} resources yet.`}
+        </p>
       )}
     </div>
-  )
-}
+  );
+};
 
 export default CompetitivePrep;
