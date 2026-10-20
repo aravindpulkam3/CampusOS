@@ -1,253 +1,83 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
-import {
-  Briefcase,
-  ChevronRight,
-  Clock,
-  Bell,
-  TrendingUp,
-  FileText,
-  Timer,
-} from "lucide-react";
 import useAuth from "../../hooks/useAuth";
 import { getCareerDashboard } from "../../api/career.api";
 import NoticeFeed from "../../components/cards/NoticeFeed";
+import {
+  LoadError,
+  LogoTile,
+  PageTitle,
+  Pill,
+  Row,
+  Rows,
+  SectionHead,
+  note,
+  tone,
+} from "../../components/common/ui";
+import { APPLICATION_STATUS, JOB_TYPE, ROUND_STATE, describeDeadline, drivePay } from "./format";
 
-// ─── Helpers ──────────────────────────────────────────────────
-const timeLeft = (d) => {
-  if (!d) return null;
-  const diff = new Date(d) - new Date();
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-  const hrs = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-  if (diff < 0)
-    return { label: "Closed", color: "text-gray-400", urgent: false };
-  if (days === 0)
-    return { label: `${hrs}h left`, color: "text-red-600", urgent: true };
-  if (days === 1)
-    return { label: "Tomorrow", color: "text-amber-600", urgent: true };
-  return { label: `${days}d left`, color: "text-gray-500", urgent: false };
-};
+const APPLICATIONS_SHOWN = 5;
 
-const jobTypeLabel = { internship: "Internship", fulltime: "Full Time" };
-
-// Intentionally simple: active/rejected/selected only. No fixed OA/
-// interview vocabulary — round names and state come from the drive itself.
-const statusConfig = {
-  active: { label: "Active", color: "bg-blue-50 text-blue-700" },
-  selected: { label: "Selected", color: "bg-green-50 text-green-700" },
-  rejected: { label: "Rejected", color: "bg-red-50 text-red-700" },
-};
-
-const roundStateLabel = {
-  upcoming: "Upcoming",
-  ongoing: "Ongoing",
-  ended_awaiting: "Ended — Results Awaited",
-  processed: "Results Processed",
-};
-
-// ─── Logo Avatar ──────────────────────────────────────────────
-const CompanyAvatar = ({ logo, name, size = "w-9 h-9" }) => (
-  <div
-    className={`${size} rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center flex-shrink-0 overflow-hidden`}
-  >
-    {logo ? (
-      <img src={logo} alt={name} className="w-full h-full object-contain p-1" />
-    ) : (
-      <span className="text-xs font-bold text-gray-500">
-        {name?.slice(0, 2).toUpperCase()}
-      </span>
-    )}
-  </div>
-);
-
-// ─── Skeleton ─────────────────────────────────────────────────
 const Skeleton = () => (
-  <div className="max-w-5xl mx-auto animate-pulse space-y-5">
-    <div className="bg-white border border-gray-100 rounded-xl p-3.5 grid grid-cols-4 gap-px">
-      {[...Array(4)].map((_, i) => (
-        <div key={i} className="px-4 space-y-2">
-          <div className="w-16 h-2.5 bg-gray-100 rounded" />
-          <div className="w-8 h-5 bg-gray-100 rounded" />
+  <div className="animate-pulse pb-10" aria-busy="true">
+    <div className="mt-1 h-9 w-40 rounded-lg bg-soft lg:mt-4" />
+    <div className="mt-3 h-4 w-80 max-w-full rounded bg-soft" />
+    <div className="mt-14">
+      {[0, 1, 2, 3].map((i) => (
+        <div key={i} className="flex h-16 items-center gap-4 border-t border-line first:border-t-0">
+          <div className="size-10 flex-none rounded-[11px] bg-soft" />
+          <div className="flex-1 space-y-2">
+            <div className="h-3.5 w-1/3 rounded bg-soft" />
+            <div className="h-3 w-1/4 rounded bg-soft" />
+          </div>
         </div>
       ))}
     </div>
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-      <div className="lg:col-span-2 space-y-3">
-        {[...Array(3)].map((_, i) => (
-          <div
-            key={i}
-            className="bg-white border border-gray-100 rounded-xl p-4 h-16"
-          />
-        ))}
-      </div>
-      <div className="space-y-3">
-        {[...Array(4)].map((_, i) => (
-          <div
-            key={i}
-            className="bg-white border border-gray-100 rounded-xl p-3 h-14"
-          />
-        ))}
-      </div>
-    </div>
   </div>
 );
 
-// ─── Section wrapper ──────────────────────────────────────────
-const Section = ({ icon: Icon, title, action, children }) => (
-  <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
-    <div className="flex items-center justify-between px-4 py-3 border-b border-gray-50">
-      <div className="flex items-center gap-2">
-        <Icon size={13} className="text-gray-400" />
-        <span className="text-xs font-semibold text-gray-800">{title}</span>
-      </div>
-      {action}
-    </div>
-    <div className="p-3">{children}</div>
-  </div>
-);
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
-const ViewAll = ({ to, label = "View all" }) => (
-  <Link
-    to={to}
-    className="flex items-center gap-0.5 text-xs text-gray-400 hover:text-gray-700 transition-colors"
-  >
-    {label} <ChevronRight size={11} />
-  </Link>
-);
+// The counts as a sentence under the title.
+const summary = ({ eligibleDrives = 0, applied = 0, activeApplications = 0 }, canEvaluate) =>
+  [
+    canEvaluate && `${plural(eligibleDrives, "drive is", "drives are")} open to you.`,
+    applied > 0
+      ? `You have applied to ${applied}${
+          activeApplications > 0
+            ? `, and ${plural(activeApplications, "application is", "applications are")} still active`
+            : ""
+        }.`
+      : "You have not applied to any drives yet.",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
-const Empty = ({ text }) => (
-  <p className="text-xs text-gray-400 text-center py-6 bg-gray-50 rounded-lg border border-dashed border-gray-200">
-    {text}
-  </p>
-);
-
-// ─── Drive row ────────────────────────────────────────────────
+// An eligible drive the student has not applied to: the pay, and under it how
+// long applications stay open.
 const DriveRow = ({ drive }) => {
-  const deadline = timeLeft(drive.registrationDeadline);
-  const pay = drive.jobType === "internship" ? drive.stipend : drive.ctc;
-
+  const deadline = describeDeadline(drive.registrationDeadline);
+  const pay = drivePay(drive);
   return (
-    <Link
+    <Row
       to={`/career/drives/${drive._id}`}
-      className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-gray-50 transition-colors group"
-    >
-      <CompanyAvatar logo={drive.companyLogo} name={drive.companyName} />
-      <div className="flex-1 min-w-0">
-        <p className="text-xs font-semibold text-gray-900 truncate group-hover:text-gray-700">
-          {drive.companyName}
-        </p>
-        <div className="flex items-center gap-1.5 mt-0.5">
-          <p className="text-xs text-gray-400 truncate">{drive.role}</p>
-          <span className="text-gray-200 text-xs">·</span>
-          <span className="text-xs text-gray-400 flex-shrink-0">
-            {jobTypeLabel[drive.jobType]}
-          </span>
-        </div>
-      </div>
-      <div className="text-right flex-shrink-0">
-        {pay && <p className="text-xs font-semibold text-gray-700">{pay}</p>}
-        {deadline && (
-          <p className={`text-[10px] mt-0.5 font-medium ${deadline.color}`}>
-            {deadline.label}
-          </p>
-        )}
-      </div>
-    </Link>
-  );
-};
-
-// ─── Application row ──────────────────────────────────────────
-const AppRow = ({ app }) => {
-  const cfg = statusConfig[app.status] ?? statusConfig.active;
-  const deadline = timeLeft(app.drive.registrationDeadline);
-
-  return (
-    <Link
-      to={`/career/drives/${app.drive._id}`}
-      className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-gray-50 transition-colors group"
-    >
-      <CompanyAvatar
-        logo={app.drive.companyLogo}
-        name={app.drive.companyName}
-      />
-      <div className="flex-1 min-w-0">
-        <p className="text-xs font-semibold text-gray-900 truncate group-hover:text-gray-700">
-          {app.drive.companyName}
-        </p>
-        <p className="text-xs text-gray-400 truncate">{app.drive.role}</p>
-      </div>
-      <span
-        className={`text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${cfg.color}`}
-      >
-        {cfg.label}
-      </span>
-    </Link>
-  );
-};
-
-// ─── Activity row ─────────────────────────────────────────────
-// Shows the round each active application is currently at, with its
-// derived state (Upcoming/Ongoing/Ended — Results Awaited/Results
-// Processed) — never a fixed OA/interview vocabulary.
-const ActivityRow = ({ activity }) => (
-  <div className="flex items-center gap-3 p-2.5 rounded-xl bg-amber-50/60 border border-amber-100">
-    <CompanyAvatar
-      logo={activity.drive.companyLogo}
-      name={activity.drive.companyName}
-      size="w-8 h-8"
+      lead={<LogoTile src={drive.companyLogo} name={drive.companyName} />}
+      title={drive.companyName}
+      meta={[drive.role, JOB_TYPE[drive.jobType], drive.location].filter(Boolean).join(", ")}
+      end={
+        <>
+          {pay && <b className="block text-[15px] font-[650] tracking-[-0.02em] text-ink">{pay}</b>}
+          {deadline && <span className={tone[deadline.tone] || ""}>{deadline.label}</span>}
+        </>
+      }
     />
-    <div className="flex-1 min-w-0">
-      <p className="text-xs font-semibold text-gray-900 truncate">
-        {activity.drive.companyName}
-      </p>
-      {activity.round && (
-        <p className="text-[10px] text-gray-500 truncate">{activity.round.name}</p>
-      )}
-    </div>
-    {activity.round && (
-      <p className="text-[10px] text-amber-700 font-medium flex-shrink-0 text-right">
-        {roundStateLabel[activity.round.derivedState] || "Upcoming"}
-      </p>
-    )}
-  </div>
-);
-
-// ─── Deadline countdown row ───────────────────────────────────
-const DeadlineRow = ({ drive }) => {
-  const tl = timeLeft(drive.registrationDeadline);
-  return (
-    <Link
-      to={`/career/drives/${drive._id}`}
-      className="flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-gray-50 transition-colors"
-    >
-      <CompanyAvatar
-        logo={drive.companyLogo}
-        name={drive.companyName}
-        size="w-7 h-7"
-      />
-      <div className="flex-1 min-w-0">
-        <p className="text-xs font-semibold text-gray-800 truncate">
-          {drive.companyName}
-        </p>
-        <p className="text-[10px] text-gray-400 truncate">{drive.role}</p>
-      </div>
-      {tl && (
-        <span
-          className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0
-          ${tl.urgent ? "bg-red-100 text-red-600" : "bg-gray-100 text-gray-500"}`}
-        >
-          {tl.label}
-        </span>
-      )}
-    </Link>
   );
 };
 
-// ─── Main ─────────────────────────────────────────────────────
 const CareerDashboard = () => {
   const { user } = useAuth();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -256,6 +86,7 @@ const CareerDashboard = () => {
         setData(res.data.data);
       } catch (err) {
         console.error(err);
+        setLoadError(true);
       } finally {
         setLoading(false);
       }
@@ -263,162 +94,97 @@ const CareerDashboard = () => {
   }, []);
 
   if (loading) return <Skeleton />;
+  if (loadError)
+    return (
+      <div className="pb-10">
+        <PageTitle title="Career" />
+        <div className="mt-9">
+          <LoadError>Could not load your career overview. Refresh the page to try again.</LoadError>
+        </div>
+      </div>
+    );
 
   const {
     eligibleDrives = [],
     myApplications = [],
     myActivities = [],
-    recentNotices = [],
+    placementProfile = {},
     stats = {},
   } = data || {};
 
-
-  // Top 3 upcoming deadlines (eligibleDrives already sorted by deadline asc)
-  const upcomingDeadlines = eligibleDrives.slice(0, 3);
+  const canEvaluate = placementProfile.canEvaluateEligibility !== false;
+  const managesNotices = user?.role === "superadmin" || user?.role === "placementCoordinator";
+  // The round each active application is at, by application id.
+  const roundOf = new Map(myActivities.map((a) => [String(a._id), a.round]));
 
   return (
-    <div className="max-w-5xl mx-auto space-y-5">
-      {/* ── Compact Stats Bar ── */}
-      <div className="bg-white border border-gray-100 rounded-xl divide-x divide-gray-100 grid grid-cols-3">
-        {[
-          {
-            label: "Open for you",
-            value: stats.eligibleDrives,
-            icon: Briefcase,
-            color: "text-blue-600",
-          },
-          {
-            label: "Applied",
-            value: stats.applied,
-            icon: FileText,
-            color: "text-green-600",
-          },
-          {
-            label: "Active",
-            value: stats.activeApplications,
-            icon: TrendingUp,
-            color: "text-amber-600",
-          },
-        ].map(({ label, value, icon: Icon, color }) => (
-          <div key={label} className="flex items-center gap-3 px-5 py-3.5">
-            <Icon size={16} className={`${color} flex-shrink-0`} />
-            <div>
-              <p className="text-xl font-bold text-gray-900 leading-none">
-                {value ?? 0}
+    <div className="pb-10 lg:pb-20">
+      <PageTitle title="Career" sub={summary(stats, canEvaluate)} />
+
+      <div className="mt-9 grid grid-cols-1 gap-y-11 lg:mt-14 lg:grid-cols-[minmax(0,1fr)_352px] lg:gap-x-[72px]">
+        <div className="min-w-0 space-y-11 lg:space-y-14">
+          {/* Eligible drives the student has not applied to, soonest deadline first */}
+          <section>
+            <SectionHead title="Open to you" linkTo="/career/drives" linkLabel="All drives" />
+            {!canEvaluate ? (
+              <p className={note}>
+                Your CGPA is not on record yet, so the drives you are eligible for can't be listed.
               </p>
-              <p className="text-[10px] text-gray-400 mt-0.5">{label}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* ── Content Grid ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
-        {/* ── Left column ── */}
-        <div className="lg:col-span-2 space-y-4">
-          {/* Eligible Drives */}
-          <Section
-            icon={Briefcase}
-            title="Open for You"
-            action={<ViewAll to="/career/drives" />}
-          >
-            {eligibleDrives.length > 0 ? (
-              <div className="divide-y divide-gray-50">
-                {eligibleDrives.map((d) => (
-                  <DriveRow key={d._id} drive={d} />
+            ) : eligibleDrives.length > 0 ? (
+              <Rows>
+                {eligibleDrives.map((drive) => (
+                  <DriveRow key={drive._id} drive={drive} />
                 ))}
-              </div>
+              </Rows>
             ) : (
-              <Empty text="No eligible drives open right now." />
+              <p className={note}>No eligible drives are open right now.</p>
             )}
-          </Section>
+          </section>
 
-          {/* My Applications */}
-          {myApplications.length > 0 && (
-            <Section
-              icon={FileText}
-              title="My Applications"
-              action={<ViewAll to="/career/my-applications" />}
-            >
-              <div className="divide-y divide-gray-50">
-                {myApplications.map((a) => (
-                  <AppRow key={a._id} app={a} />
-                ))}
-              </div>
-            </Section>
-          )}
-
-          {/* Active applications and the round each is currently at */}
-          {myActivities.length > 0 && (
-            <Section icon={Clock} title="Active Applications">
-              <div className="space-y-2">
-                {myActivities.map((a) => (
-                  <ActivityRow key={a._id} activity={a} />
-                ))}
-              </div>
-            </Section>
-          )}
+          <section>
+            <SectionHead
+              title="Your applications"
+              linkTo="/career/my-applications"
+              linkLabel="All applications"
+            />
+            {myApplications.length > 0 ? (
+              <Rows>
+                {myApplications.slice(0, APPLICATIONS_SHOWN).map((app) => {
+                  const status = APPLICATION_STATUS[app.status] ?? APPLICATION_STATUS.active;
+                  const round = app.status === "active" ? roundOf.get(String(app._id)) : null;
+                  return (
+                    <Row
+                      key={app._id}
+                      to={`/career/drives/${app.drive._id}`}
+                      lead={<LogoTile src={app.drive.companyLogo} name={app.drive.companyName} />}
+                      title={app.drive.companyName}
+                      meta={[
+                        app.drive.role,
+                        // Where an active application stands right now
+                        round && `${round.name}: ${(ROUND_STATE[round.derivedState] || ROUND_STATE.upcoming).label.toLowerCase()}`,
+                      ]
+                        .filter(Boolean)
+                        .join(", ")}
+                      end={<Pill tone={status.tone}>{status.label}</Pill>}
+                    />
+                  );
+                })}
+              </Rows>
+            ) : (
+              <p className={note}>You haven't applied to any drives yet.</p>
+            )}
+          </section>
         </div>
 
-        {/* ── Right column ── */}
-        <div className="space-y-4">
-          {/* Placement Notices */}
-          <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-50">
-              <div className="flex items-center gap-2">
-                <Bell
-                  size={13}
-                  className={
-                    recentNotices.some((n) => n.priority === "urgent")
-                      ? "text-red-500"
-                      : "text-gray-400"
-                  }
-                />
-                <span className="text-xs font-semibold text-gray-800">
-                  Placement Notices
-                </span>
-                {recentNotices.length > 0 && (
-                  <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-px rounded-full">
-                    {recentNotices.length}
-                  </span>
-                )}
-              </div>
-            </div>
-
-            <div className="p-3">
-              <NoticeFeed
-                targetType="career"
-                compact={true}
-                title="Placement Notices"
-                canPost={
-                  user?.role === "superadmin" ||
-                  user?.role == "placementCoordinator"
-                }
-                showActions={
-                  user?.role === "superadmin" ||
-                  user?.role == "placementCoordinator"
-                }
-              />
-            </div>
-          </div>
-
-          {/* Upcoming Deadlines */}
-          {upcomingDeadlines.length > 0 && (
-            <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
-              <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-50">
-                <Timer size={13} className="text-gray-400" />
-                <span className="text-xs font-semibold text-gray-800">
-                  Closing Soon
-                </span>
-              </div>
-              <div className="p-3 divide-y divide-gray-50">
-                {upcomingDeadlines.map((d) => (
-                  <DeadlineRow key={d._id} drive={d} />
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
+        {/* Notices can be urgent, so they lead on phones */}
+        <aside className="min-w-0 max-lg:order-first">
+          <NoticeFeed
+            targetType="career"
+            title="Placement notices"
+            canPost={managesNotices}
+            showActions={managesNotices}
+          />
+        </aside>
       </div>
     </div>
   );

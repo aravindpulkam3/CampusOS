@@ -13,7 +13,7 @@ import {
   buildEligibilityFilter,
   getPlacementProfile,
 } from "./eligibility.service.js";
-const SEARCH_CACHE_TTL = 60 * 10; // 10m
+const SEARCH_CACHE_TTL = 60; // 1m
 
 // Don't Miss "closing soon" window: today + tomorrow.
 const DONT_MISS_WINDOW_DAYS = 2;
@@ -32,7 +32,7 @@ const WEEKDAYS = [
 
 export const searchAll = async (q) => {
   const normalizedQuery = q.trim().toLowerCase().replace(/\s+/g, " ");
-  const cacheKey = `cache:search:${normalizedQuery}`;
+  const cacheKey = `cache:search:v2:${normalizedQuery}`;
 
   const cached = await getJSON(cacheKey);
   if (cached) return cached;
@@ -51,6 +51,7 @@ export const searchAll = async (q) => {
       .lean(), // lean returns plain js objects instead of mongoose documents, you can just read em , cant to operations like save , validate,populate
 
     Event.find({
+      status: { $ne: "Cancelled" },
       $or: [{ eventName: regex }, { description: regex }],
     })
       .select("_id eventName banner startDateTime")
@@ -559,7 +560,9 @@ export const buildStudentDashboard = async (user) => {
   ];
 
   const noticeRows = await fetchNotices({
-    classroomId: classroom?._id,
+    // Aggregation does not cast IDs. Cached classroom JSON has a string _id,
+    // while Notice.targetId is stored as an ObjectId.
+    classroomId: classroom ? user.classroom : null,
     currentSemesterNumber,
     followedClubIds,
     registeredEventIds,

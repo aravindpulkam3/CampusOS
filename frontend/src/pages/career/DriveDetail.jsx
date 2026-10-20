@@ -1,20 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
-import {
-  ArrowLeft,
-  ExternalLink,
-  FileText,
-  MapPin,
-  CheckCircle2,
-  Plus,
-  Pencil,
-  Clock,
-  Trash2,
-  Upload,
-  Download,
-  X,
-  AlertTriangle,
-} from "lucide-react";
+import { useParams, Link } from "react-router-dom";
+import { Download, ExternalLink, FileText, Pencil, Plus, Trash2, Upload } from "lucide-react";
 import useAuth from "../../hooks/useAuth";
 import {
   getDriveById,
@@ -32,102 +18,47 @@ import {
   updateDrive,
 } from "../../api/career.api";
 import NoticeFeed from "../../components/cards/NoticeFeed";
+import {
+  Alert,
+  Facts,
+  LogoTile,
+  Modal,
+  PageMessage,
+  PageTitle,
+  Pager,
+  Pill,
+  SectionHead,
+  Tabs,
+  btnDangerSm,
+  btnGhost,
+  btnGhostSm,
+  btnLg,
+  btnSm,
+  crumbLink,
+  fieldInput,
+  fieldLabel,
+  focusRing,
+  note,
+  panel,
+  tone,
+  tableCell,
+  tableHead,
+} from "../../components/common/ui";
 import safeHref from "../../utils/safeHref";
 import { toCsv } from "../../utils/csv";
+import { formatDate, toLocalDateTimeInput } from "../../utils/formatDate";
+import {
+  APPLICATION_STATUS,
+  DRIVE_TYPE,
+  JOB_TYPE,
+  ROUND_STATE,
+  describeDeadline,
+  drivePay,
+  formatRoundDate,
+} from "./format";
 
 // ─── Helpers ──────────────────────────────────────────────────
-const formatDate = (d) =>
-  d
-    ? new Date(d).toLocaleDateString("en-IN", {
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-      })
-    : "—";
-
-const formatDateTimeWithFallback = (d) => {
-  if (!d) return "—";
-  const dateObj = new Date(d);
-  const isMidnight = dateObj.getHours() === 0 && dateObj.getMinutes() === 0;
-  const dateStr = dateObj.toLocaleDateString("en-IN", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
-  if (isMidnight) {
-    return `${dateStr}, 11:59 PM`;
-  }
-  const timeStr = dateObj.toLocaleTimeString("en-IN", {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
-  return `${dateStr}, ${timeStr}`;
-};
-
-const formatRoundDate = (d) => {
-  if (!d) return "Date TBA";
-  const dateObj = new Date(d);
-  const isMidnight = dateObj.getHours() === 0 && dateObj.getMinutes() === 0;
-  const dateStr = dateObj.toLocaleDateString("en-IN", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
-  if (isMidnight) {
-    return `${dateStr}, Time TBA`;
-  }
-  const timeStr = dateObj.toLocaleTimeString("en-IN", {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
-  return `${dateStr}, ${timeStr}`;
-};
-
-const formatDeadline = (d) => {
-  if (!d) return null;
-  const diff = new Date(d) - new Date();
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-  if (diff < 0)
-    return { label: "Closed", color: "text-gray-400", urgent: false };
-  if (days === 0)
-    return { label: "Closes today", color: "text-red-600", urgent: true };
-  if (days === 1)
-    return { label: "1 day left", color: "text-amber-600", urgent: true };
-  return { label: `${days} days left`, color: "text-gray-500", urgent: false };
-};
-
-const jobTypeConfig = {
-  internship: { label: "Internship", color: "bg-blue-50 text-blue-700" },
-  fulltime: { label: "Full Time", color: "bg-violet-50 text-violet-700" },
-};
-
-const driveTypeLabel = {
-  oncampus: "On Campus",
-  offcampus: "Off Campus",
-  poolcampus: "Pool Campus",
-};
-
-// Every label a round can show — derived server-side, never a fixed OA/HR/
-// technical vocabulary. A round past the current one always reads
-// "Upcoming" (never "Ongoing") no matter its own date; see backend
-// utils/roundState.js.
-const roundStateConfig = {
-  upcoming: { label: "Upcoming", color: "bg-gray-100 text-gray-500" },
-  ongoing: { label: "Ongoing", color: "bg-blue-50 text-blue-700" },
-  ended_awaiting: {
-    label: "Ended — Results Awaited",
-    color: "bg-amber-50 text-amber-700",
-  },
-  processed: { label: "Results Processed", color: "bg-green-50 text-green-700" },
-};
-
-const applicationStatusConfig = {
-  active: { label: "Active", color: "text-blue-700" },
-  rejected: { label: "Rejected", color: "text-red-600" },
-  selected: { label: "Selected", color: "text-green-700" },
-};
+const sameId = (a, b) => String(a) === String(b);
 
 const downloadCSV = (rows, filename) => {
   const csv = toCsv(rows);
@@ -142,86 +73,28 @@ const downloadCSV = (rows, filename) => {
   URL.revokeObjectURL(url);
 };
 
-// ─── Skeleton ─────────────────────────────────────────────────
 const Skeleton = () => (
-  <div className="max-w-3xl mx-auto animate-pulse space-y-4">
-    <div className="w-16 h-3 bg-gray-100 rounded" />
-    <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden">
-      <div className="p-6 space-y-4">
-        <div className="flex gap-4">
-          <div className="w-14 h-14 bg-gray-100 rounded-xl" />
-          <div className="flex-1 space-y-2">
-            <div className="w-40 h-5 bg-gray-100 rounded" />
-            <div className="w-24 h-3 bg-gray-100 rounded" />
-          </div>
-        </div>
+  <div className="animate-pulse pb-10" aria-busy="true" aria-label="Loading drive">
+    <div className="flex items-center gap-4 pt-1 lg:pt-4">
+      <div className="size-[60px] flex-none rounded-2xl bg-soft" />
+      <div className="flex-1">
+        <div className="h-4 w-32 rounded bg-soft" />
+        <div className="mt-3 h-9 w-1/2 rounded-lg bg-soft" />
       </div>
     </div>
-  </div>
-);
-
-// ─── Sub-components ───────────────────────────────────────────
-const InfoRow = ({ label, value }) =>
-  value ? (
-    <div className="flex items-start gap-4 py-2.5 border-b border-gray-50 last:border-0">
-      <span className="text-xs text-gray-400 w-36 flex-shrink-0 pt-px">
-        {label}
-      </span>
-      <span className="text-xs font-medium text-gray-800">{value}</span>
-    </div>
-  ) : null;
-
-const Section = ({ title, children, action }) => (
-  <div className="bg-white border border-gray-100 rounded-xl p-5">
-    <div className="flex items-center justify-between mb-3 pb-2.5 border-b border-gray-50">
-      <h2 className="text-sm font-semibold text-gray-900">{title}</h2>
-      {action && <div className="flex-shrink-0">{action}</div>}
-    </div>
-    {children}
-  </div>
-);
-
-const Modal = ({ title, onClose, children, wide }) => (
-  <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-    <div
-      className={`bg-white rounded-2xl border border-gray-100 shadow-xl w-full ${wide ? "max-w-xl" : "max-w-sm"} my-8`}
-    >
-      <div className="flex items-center justify-between p-5 border-b border-gray-100">
-        <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
-        <button onClick={onClose} className="text-gray-400 hover:text-gray-700">
-          <X size={16} />
-        </button>
-      </div>
-      <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">{children}</div>
+    <div className="mt-9 h-24 rounded-panel bg-soft" />
+    <div className="mt-14 space-y-3">
+      <div className="h-4 w-full max-w-xl rounded bg-soft" />
+      <div className="h-4 w-full max-w-lg rounded bg-soft" />
     </div>
   </div>
 );
-
-const Btn = ({ children, onClick, variant = "default", disabled, type = "button" }) => {
-  const variants = {
-    default:
-      "border border-gray-200 text-gray-600 hover:border-gray-400 hover:text-gray-900 bg-white",
-    primary: "bg-gray-900 text-white hover:bg-gray-700",
-    danger:
-      "border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 bg-white",
-  };
-  return (
-    <button
-      type={type}
-      onClick={onClick}
-      disabled={disabled}
-      className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${variants[variant]}`}
-    >
-      {children}
-    </button>
-  );
-};
 
 // ─── Add / Edit round modal ────────────────────────────────────
 const RoundFormModal = ({ initial, onClose, onSubmit, title }) => {
   const [name, setName] = useState(initial?.name || "");
   const [startDate, setStartDate] = useState(
-    initial?.startDate ? initial.startDate.slice(0, 16) : "",
+    initial?.startDate ? toLocalDateTimeInput(initial.startDate) : "",
   );
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -246,41 +119,41 @@ const RoundFormModal = ({ initial, onClose, onSubmit, title }) => {
 
   return (
     <Modal title={title} onClose={onClose}>
-      <form onSubmit={handleSubmit} className="space-y-3">
-        {error && (
-          <div className="flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg">
-            <AlertTriangle size={13} className="text-red-500 flex-shrink-0" />
-            <p className="text-xs text-red-700">{error}</p>
-          </div>
-        )}
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {error && <Alert>{error}</Alert>}
         <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1.5">
+          <label htmlFor="round-name" className={fieldLabel}>
             Round name
           </label>
           <input
+            id="round-name"
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="e.g. Online Assessment, Technical Interview"
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400"
+            className={fieldInput}
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1.5">
-            Start date <span className="text-gray-400 font-normal">(optional — leave blank if TBA)</span>
+          <label htmlFor="round-start" className={fieldLabel}>
+            Start date{" "}
+            <span className="font-normal text-ink-3">(optional, leave blank if not announced)</span>
           </label>
           <input
+            id="round-start"
             type="datetime-local"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400"
+            className={fieldInput}
           />
         </div>
-        <div className="flex justify-end gap-2 pt-2">
-          <Btn onClick={onClose}>Cancel</Btn>
-          <Btn type="submit" variant="primary" disabled={saving}>
+        <div className="flex justify-end gap-2 pt-1">
+          <button type="button" onClick={onClose} className={btnGhostSm}>
+            Cancel
+          </button>
+          <button type="submit" disabled={saving} className={btnSm}>
             {saving ? "Saving..." : "Save"}
-          </Btn>
+          </button>
         </div>
       </form>
     </Modal>
@@ -288,6 +161,23 @@ const RoundFormModal = ({ initial, onClose, onSubmit, title }) => {
 };
 
 // ─── Shortlist upload/preview/confirm modal ────────────────────
+const bucketTone = {
+  warn: "border-[#f2dcae] bg-[#fff3dc] text-[#8a5300]",
+  bad: "border-[#f6caca] bg-[#fdecec] text-[#b4282d]",
+  quiet: "border-line-2 bg-soft text-ink-2",
+  good: "border-[#bfe5cf] bg-[#e8f6ee] text-[#0b7a3e]",
+};
+
+const Bucket = ({ label, list, kind }) =>
+  list?.length > 0 && (
+    <div className={`rounded-xl border p-3 ${bucketTone[kind]}`}>
+      <p className="mb-1 text-[13px] font-semibold">
+        {label} ({list.length})
+      </p>
+      <p className="break-words text-[13px] opacity-90">{list.join(", ")}</p>
+    </div>
+  );
+
 const ShortlistModal = ({ driveId, round, onClose, onDone }) => {
   const fileInputRef = useRef(null);
   const [file, setFile] = useState(null);
@@ -324,106 +214,97 @@ const ShortlistModal = ({ driveId, round, onClose, onDone }) => {
     }
   };
 
-  const Bucket = ({ label, list, tone }) =>
-    list?.length > 0 && (
-      <div className={`rounded-lg border p-2.5 ${tone}`}>
-        <p className="text-xs font-semibold mb-1">{label} ({list.length})</p>
-        <p className="text-xs opacity-80 break-words">{list.join(", ")}</p>
-      </div>
-    );
-
   return (
-    <Modal title={`Shortlist — ${round.name}`} onClose={onClose} wide>
-      {error && (
-        <div className="flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg">
-          <AlertTriangle size={13} className="text-red-500 flex-shrink-0" />
-          <p className="text-xs text-red-700">{error}</p>
-        </div>
-      )}
-
+    <Modal title={`Shortlist: ${round.name}`} onClose={onClose} wide>
+      {/* Errors sit beside the buttons: a long preview scrolls the dialog. */}
       {!preview ? (
-        <div className="space-y-3">
-          <p className="text-xs text-gray-500">
-            Upload a CSV with a required <code className="bg-gray-100 px-1 rounded">rollNumber</code> column.
-            Other columns (name, email) are fine but ignored.
+        <div className="space-y-4">
+          <p className="text-[14.5px] text-ink-2">
+            Upload a CSV with a required{" "}
+            <code className="rounded bg-soft px-1 text-[13px] text-ink">rollNumber</code> column. Other
+            columns (name, email) are fine but ignored.
           </p>
           <input
             ref={fileInputRef}
             type="file"
             accept=".csv,text/csv"
+            aria-label="Shortlist CSV file"
             onChange={(e) => setFile(e.target.files?.[0] || null)}
-            className="w-full text-xs"
+            className="w-full text-[13.5px] text-ink-2"
           />
-          <div className="flex justify-end gap-2 pt-2">
-            <Btn onClick={onClose}>Cancel</Btn>
-            <Btn variant="primary" onClick={handlePreview} disabled={loading || !file}>
+          {error && <Alert>{error}</Alert>}
+          <div className="flex justify-end gap-2 pt-1">
+            <button type="button" onClick={onClose} className={btnGhostSm}>
+              Cancel
+            </button>
+            <button type="button" onClick={handlePreview} disabled={loading || !file} className={btnSm}>
               {loading ? "Parsing..." : "Preview"}
-            </Btn>
+            </button>
           </div>
         </div>
       ) : (
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-2">
-            <div className="rounded-lg border border-green-200 bg-green-50 p-2.5">
-              <p className="text-xs font-semibold text-green-800">
-                Valid — advancing ({preview.validCount})
-              </p>
-            </div>
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-2.5">
-              <p className="text-xs font-semibold text-gray-700">
-                Total rows in file ({preview.totalRows})
-              </p>
-            </div>
+            <p className={`rounded-xl border p-3 text-[13px] font-semibold ${bucketTone.good}`}>
+              Valid, advancing ({preview.validCount})
+            </p>
+            <p className={`rounded-xl border p-3 text-[13px] font-semibold ${bucketTone.quiet}`}>
+              Total rows in file ({preview.totalRows})
+            </p>
           </div>
-          <Bucket
-            label="Duplicate roll numbers"
-            list={preview.duplicateRollNumbers}
-            tone="border-amber-200 bg-amber-50 text-amber-800"
-          />
-          <Bucket
-            label="Unknown roll numbers"
-            list={preview.unknownRollNumbers}
-            tone="border-red-200 bg-red-50 text-red-800"
-          />
-          <Bucket
-            label="Never applied to this drive"
-            list={preview.neverAppliedRollNumbers}
-            tone="border-red-200 bg-red-50 text-red-800"
-          />
+          <Bucket label="Duplicate roll numbers" list={preview.duplicateRollNumbers} kind="warn" />
+          <Bucket label="Unknown roll numbers" list={preview.unknownRollNumbers} kind="bad" />
+          <Bucket label="Never applied to this drive" list={preview.neverAppliedRollNumbers} kind="bad" />
           <Bucket
             label="Already rejected/selected (no-op)"
             list={preview.alreadyTerminalRollNumbers}
-            tone="border-gray-200 bg-gray-50 text-gray-600"
+            kind="quiet"
           />
 
           {preview.validCount === 0 && (
-            <label className="flex items-start gap-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-2.5">
+            <label className={`flex items-start gap-2.5 rounded-xl border p-3 text-[13px] ${bucketTone.bad}`}>
               <input
                 type="checkbox"
                 checked={confirmRejectAll}
                 onChange={(e) => setConfirmRejectAll(e.target.checked)}
                 className="mt-0.5"
               />
-              No valid students recognized — confirming now will reject every
-              currently active applicant in this round. I understand.
+              No valid students recognized. Confirming now will reject every currently active
+              applicant in this round. I understand.
             </label>
           )}
 
-          <div className="flex justify-end gap-2 pt-2">
-            <Btn onClick={() => setPreview(null)}>Back</Btn>
-            <Btn
-              variant="primary"
+          {error && <Alert>{error}</Alert>}
+          <div className="flex justify-end gap-2 pt-1">
+            <button type="button" onClick={() => setPreview(null)} className={btnGhostSm}>
+              Back
+            </button>
+            <button
+              type="button"
               onClick={handleConfirm}
               disabled={loading || (preview.validCount === 0 && !confirmRejectAll)}
+              className={btnSm}
             >
-              {loading ? "Confirming..." : "Confirm Shortlist"}
-            </Btn>
+              {loading ? "Confirming..." : "Confirm shortlist"}
+            </button>
           </div>
         </div>
       )}
     </Modal>
   );
 };
+
+// A round's number in the sequence.
+const RoundNumber = ({ n, current }) => (
+  <span
+    aria-hidden="true"
+    className={`grid size-7 flex-none place-items-center rounded-full text-[13px] font-semibold ${
+      current ? "bg-ink text-white" : "text-ink-2 ring-1 ring-inset ring-line-2"
+    }`}
+  >
+    {n}
+  </span>
+);
 
 // ─── Rounds tab ─────────────────────────────────────────────────
 const RoundsTab = ({ drive, application, isCoordinator, onRefresh }) => {
@@ -434,9 +315,7 @@ const RoundsTab = ({ drive, application, isCoordinator, onRefresh }) => {
   const [actionError, setActionError] = useState("");
 
   const rounds = drive.rounds || [];
-  const currentIndex = rounds.findIndex(
-    (r) => String(r._id) === String(drive.currentRoundId),
-  );
+  const currentIndex = rounds.findIndex((r) => sameId(r._id, drive.currentRoundId));
 
   const rejectionRoundId =
     application?.status === "rejected"
@@ -489,19 +368,20 @@ const RoundsTab = ({ drive, application, isCoordinator, onRefresh }) => {
 
   const registrationClosed = new Date() >= new Date(drive.registrationDeadline);
   const isDriveActive = drive.status === "active";
+  const myStatus = application && (APPLICATION_STATUS[application.status] || APPLICATION_STATUS.active);
 
   return (
-    <div className="space-y-4">
+    <div className="max-w-3xl space-y-6">
       {addOpen && (
         <RoundFormModal
-          title="Add Round"
+          title="Add round"
           onClose={() => setAddOpen(false)}
           onSubmit={(data) => addRound(drive._id, data).then(onRefresh)}
         />
       )}
       {editingRound && (
         <RoundFormModal
-          title="Edit Round"
+          title="Edit round"
           initial={editingRound}
           onClose={() => setEditingRound(null)}
           onSubmit={(data) => updateRound(drive._id, editingRound._id, data).then(onRefresh)}
@@ -519,276 +399,276 @@ const RoundsTab = ({ drive, application, isCoordinator, onRefresh }) => {
         />
       )}
 
-      {actionError && (
-        <div className="flex items-center gap-2 px-4 py-2.5 bg-red-50 border border-red-200 rounded-xl">
-          <AlertTriangle size={13} className="text-red-500 flex-shrink-0" />
-          <p className="text-xs text-red-700">{actionError}</p>
-        </div>
-      )}
+      {actionError && <Alert>{actionError}</Alert>}
 
       {!isCoordinator && (
-        <div className="bg-white border border-gray-100 rounded-xl p-4 flex items-center justify-between">
-          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-            Your Application
-          </span>
-          <span
-            className={`text-sm font-semibold ${application ? applicationStatusConfig[application.status]?.color : "text-gray-400"}`}
-          >
-            {application ? applicationStatusConfig[application.status]?.label : "Not applied"}
-          </span>
-        </div>
+        <p className="flex items-center justify-between gap-4 border-b border-line pb-4 text-[14.5px]">
+          <span className="text-ink-2">Your application</span>
+          {myStatus ? <Pill tone={myStatus.tone}>{myStatus.label}</Pill> : <span className="text-ink-3">Not applied</span>}
+        </p>
       )}
 
       {drive.status === "cancelled" && (
-        <div className="px-4 py-3 bg-gray-100 border border-gray-200 rounded-xl text-xs text-gray-600">
-          This drive has been cancelled. No further round actions are available.
-        </div>
+        <p className={note}>This drive has been cancelled. No further round actions are available.</p>
       )}
       {drive.status === "completed" && (
-        <div className="px-4 py-3 bg-green-50 border border-green-200 rounded-xl text-xs text-green-700">
-          This drive has been finished — final outcomes are recorded on the Applicants tab.
-        </div>
+        <p className={`${note} ${tone.live}`}>
+          This drive has been finished. Final outcomes are recorded on the Applicants tab.
+        </p>
       )}
 
       {isCoordinator && isDriveActive && (
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <Btn onClick={() => setAddOpen(true)}>
-            <Plus size={12} /> Add Round
-          </Btn>
-          <div className="flex gap-2">
+          <button type="button" onClick={() => setAddOpen(true)} className={btnGhostSm}>
+            <Plus size={14} aria-hidden="true" /> Add round
+          </button>
+          <div className="flex flex-wrap gap-2">
             {currentIndex !== -1 &&
               rounds[currentIndex].endedAt &&
               rounds[currentIndex].processedAt &&
               currentIndex === rounds.length - 1 && (
-                <Btn
-                  variant="primary"
+                <button
+                  type="button"
                   disabled={busyId === "finish"}
-                  onClick={() =>
-                    withBusy("finish", () => finishDrive(drive._id))
-                  }
+                  onClick={() => withBusy("finish", () => finishDrive(drive._id))}
+                  className={btnSm}
                 >
-                  {busyId === "finish" ? "Finishing..." : "Finish Drive"}
-                </Btn>
+                  {busyId === "finish" ? "Finishing..." : "Finish drive"}
+                </button>
               )}
-            <Btn
-              variant="danger"
+            <button
+              type="button"
               disabled={busyId === "cancel"}
               onClick={() => {
                 if (window.confirm("Cancel this drive? This cannot be undone.")) {
                   withBusy("cancel", () => cancelDrive(drive._id));
                 }
               }}
+              className={btnDangerSm}
             >
-              Cancel Drive
-            </Btn>
+              Cancel drive
+            </button>
           </div>
         </div>
       )}
 
       {currentIndex === -1 && rounds.length > 0 && isCoordinator && isDriveActive && (
-        <div className="flex items-center justify-between px-4 py-3 bg-blue-50 border border-blue-100 rounded-xl">
-          <p className="text-xs text-blue-700">
+        <div className={`flex flex-wrap items-center justify-between gap-3 px-5 py-4 ${panel}`}>
+          <p className="text-[14.5px] text-ink-2">
             {registrationClosed
               ? "Ready to begin recruitment."
               : "Recruitment can begin once registration closes."}
           </p>
-          <Btn
-            variant="primary"
+          <button
+            type="button"
             disabled={!registrationClosed || busyId === rounds[0]._id}
             onClick={() => withBusy(rounds[0]._id, () => advanceRound(drive._id, rounds[0]._id))}
+            className={`${btnSm} disabled:cursor-not-allowed`}
           >
-            {busyId === rounds[0]._id ? "Starting..." : "Begin Recruitment (Round 1)"}
-          </Btn>
+            {busyId === rounds[0]._id ? "Starting..." : "Begin recruitment (round 1)"}
+          </button>
         </div>
       )}
 
-      {rounds.length === 0 && (
-        <p className="text-xs text-gray-400 text-center py-8">
-          No rounds have been added yet.
-        </p>
+      {rounds.length === 0 ? (
+        <p className={note}>No rounds have been added yet.</p>
+      ) : (
+        <ol className="divide-y divide-line">
+          {rounds.map((round, index) => {
+            // Lifecycle-derived flags — never "last array element" or "most
+            // recently added". Array position is the recruitment sequence;
+            // whether a round is past/current/pending is only ever relative
+            // to currentIndex.
+            const isCurrent = currentIndex !== -1 && index === currentIndex;
+            const isPast = currentIndex !== -1 && index < currentIndex;
+            const isPending = currentIndex === -1 || index > currentIndex;
+            const state = ROUND_STATE[round.derivedState] || ROUND_STATE.upcoming;
+            const personalizedRejection = !isCoordinator && sameId(round._id, rejectionRoundId);
+            // Only meaningful on the current round's own card — the single
+            // legal "next" target (currentIndex + 1), never any other pending
+            // round further down the list.
+            const nextRound = isCurrent ? rounds[currentIndex + 1] : null;
+
+            return (
+              <li key={round._id} className="py-4">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <RoundNumber n={index + 1} current={isCurrent} />
+                  <div className="min-w-0 flex-1 basis-40">
+                    <h3 className="break-words text-[15px] font-semibold tracking-[-0.018em] text-ink">
+                      {round.name}
+                    </h3>
+                    <p className="text-[13.5px] text-ink-2">{formatRoundDate(round.startDate)}</p>
+                  </div>
+                  <Pill tone={personalizedRejection ? "bad" : state.tone}>
+                    {personalizedRejection ? "Not shortlisted" : state.label}
+                  </Pill>
+                </div>
+
+                {isCoordinator && isDriveActive && (
+                  <div className="mt-3 flex flex-wrap items-center gap-2 pl-11">
+                    {/* Rename/reschedule is allowed on ANY round regardless of lifecycle
+                        stage (backend updateRound has no stage restriction — timeline
+                        entries reference a round only by id, never a name/date snapshot,
+                        so this is purely cosmetic and safe even on past/current rounds).
+                        This is what lets a coordinator add a start date to the CURRENT
+                        round after the fact so it can become "ongoing" and be ended. */}
+                    <button type="button" onClick={() => setEditingRound(round)} className={btnGhostSm}>
+                      <Pencil size={13} aria-hidden="true" /> Edit
+                    </button>
+
+                    {/* Delete stays pending-only — deleting a current/past round would
+                        corrupt index-based derivation and orphan timeline.roundId refs. */}
+                    {isPending && (
+                      <button
+                        type="button"
+                        disabled={busyId === round._id}
+                        onClick={() => withBusy(round._id, () => deleteRound(drive._id, round._id))}
+                        className={btnDangerSm}
+                      >
+                        <Trash2 size={13} aria-hidden="true" /> Delete
+                      </button>
+                    )}
+
+                    {isPast && <p className="text-[13.5px] text-ink-3">Completed.</p>}
+
+                    {/* Current round: exactly one further action based on its own timestamps.
+                        End Round only once it's actually ongoing (real startDate reached) —
+                        not merely because it's current; a TBA/future-dated current round has
+                        nothing else to do yet but get a start date set (Edit, above). */}
+                    {isCurrent && round.derivedState === "ongoing" && (
+                      <button
+                        type="button"
+                        disabled={busyId === round._id}
+                        onClick={() => withBusy(round._id, () => endRound(drive._id, round._id))}
+                        className={btnGhostSm}
+                      >
+                        {busyId === round._id ? "Ending..." : "End round"}
+                      </button>
+                    )}
+                    {isCurrent && round.derivedState === "upcoming" && (
+                      <p className="text-[13.5px] text-ink-3">
+                        {round.startDate
+                          ? "Waiting for this round's start date."
+                          : "Use Edit to set a start date, then it can be ended."}
+                      </p>
+                    )}
+                    {isCurrent && round.endedAt && !round.processedAt && (
+                      <>
+                        <button type="button" onClick={handleDownloadActive} className={btnGhostSm}>
+                          <Download size={13} aria-hidden="true" /> Download active applicants CSV
+                        </button>
+                        <button type="button" onClick={() => setShortlistRound(round)} className={btnSm}>
+                          <Upload size={13} aria-hidden="true" /> Upload shortlist
+                        </button>
+                      </>
+                    )}
+                    {isCurrent && round.processedAt && nextRound && (
+                      <button
+                        type="button"
+                        disabled={busyId === nextRound._id}
+                        onClick={() =>
+                          withBusy(nextRound._id, () => advanceRound(drive._id, nextRound._id))
+                        }
+                        className={btnSm}
+                      >
+                        {busyId === nextRound._id ? "Advancing..." : `Move to next round (${nextRound.name})`}
+                      </button>
+                    )}
+                    {isCurrent && round.processedAt && !nextRound && (
+                      <p className="text-[13.5px] text-ink-3">
+                        Add a round to continue, or finish the drive above.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ol>
       )}
-
-      <div className="space-y-3">
-        {rounds.map((round, index) => {
-          // Lifecycle-derived flags — never "last array element" or "most
-          // recently added". Array position is the recruitment sequence;
-          // whether a round is past/current/pending is only ever relative
-          // to currentIndex.
-          const isCurrent = currentIndex !== -1 && index === currentIndex;
-          const isPast = currentIndex !== -1 && index < currentIndex;
-          const isPending = currentIndex === -1 || index > currentIndex;
-          const cfg = roundStateConfig[round.derivedState] || roundStateConfig.upcoming;
-          const personalizedRejection =
-            !isCoordinator && String(round._id) === String(rejectionRoundId);
-          // Only meaningful on the current round's own card — the single
-          // legal "next" target (currentIndex + 1), never any other pending
-          // round further down the list.
-          const nextRound = isCurrent ? rounds[currentIndex + 1] : null;
-
-          return (
-            <div
-              key={round._id}
-              className={`bg-white border rounded-xl p-4 ${isCurrent ? "border-gray-300" : "border-gray-100"}`}
-            >
-              <div className="flex items-center justify-between gap-3 flex-wrap">
-                <div className="flex items-center gap-3">
-                  <div className="w-6 h-6 rounded-full bg-gray-900 flex items-center justify-center flex-shrink-0">
-                    <span className="text-[10px] text-white font-bold">{index + 1}</span>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-800">{round.name}</p>
-                    <p className="text-xs text-gray-400">
-                      {round.startDate ? formatRoundDate(round.startDate) : "Date TBA"}
-                    </p>
-                  </div>
-                </div>
-                <span
-                  className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${personalizedRejection ? "bg-red-50 text-red-700" : cfg.color}`}
-                >
-                  {personalizedRejection ? "Not Shortlisted" : cfg.label}
-                </span>
-              </div>
-
-              {isCoordinator && isDriveActive && (
-                <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-gray-50">
-                  {/* Rename/reschedule is allowed on ANY round regardless of lifecycle
-                      stage (backend updateRound has no stage restriction — timeline
-                      entries reference a round only by id, never a name/date snapshot,
-                      so this is purely cosmetic and safe even on past/current rounds).
-                      This is what lets a coordinator add a start date to the CURRENT
-                      round after the fact so it can become "ongoing" and be ended. */}
-                  <Btn onClick={() => setEditingRound(round)}>
-                    <Pencil size={11} /> Edit
-                  </Btn>
-
-                  {/* Delete stays pending-only — deleting a current/past round would
-                      corrupt index-based derivation and orphan timeline.roundId refs. */}
-                  {isPending && (
-                    <Btn
-                      variant="danger"
-                      disabled={busyId === round._id}
-                      onClick={() =>
-                        withBusy(round._id, () => deleteRound(drive._id, round._id))
-                      }
-                    >
-                      <Trash2 size={11} /> Delete
-                    </Btn>
-                  )}
-
-                  {isPast && (
-                    <p className="text-xs text-gray-400 self-center">Completed.</p>
-                  )}
-
-                  {/* Current round: exactly one further action based on its own timestamps.
-                      End Round only once it's actually ongoing (real startDate reached) —
-                      not merely because it's current; a TBA/future-dated current round has
-                      nothing else to do yet but get a start date set (Edit, above). */}
-                  {isCurrent && round.derivedState === "ongoing" && (
-                    <Btn
-                      disabled={busyId === round._id}
-                      onClick={() => withBusy(round._id, () => endRound(drive._id, round._id))}
-                    >
-                      {busyId === round._id ? "Ending..." : "End Round"}
-                    </Btn>
-                  )}
-                  {isCurrent && round.derivedState === "upcoming" && (
-                    <p className="text-xs text-gray-400 self-center">
-                      {round.startDate
-                        ? "Waiting for this round's start date."
-                        : "Use Edit to set a start date, then it can be ended."}
-                    </p>
-                  )}
-                  {isCurrent && round.endedAt && !round.processedAt && (
-                    <>
-                      <Btn onClick={handleDownloadActive}>
-                        <Download size={11} /> Download Active Applicants CSV
-                      </Btn>
-                      <Btn variant="primary" onClick={() => setShortlistRound(round)}>
-                        <Upload size={11} /> Upload Shortlist
-                      </Btn>
-                    </>
-                  )}
-                  {isCurrent && round.processedAt && nextRound && (
-                    <Btn
-                      variant="primary"
-                      disabled={busyId === nextRound._id}
-                      onClick={() =>
-                        withBusy(nextRound._id, () => advanceRound(drive._id, nextRound._id))
-                      }
-                    >
-                      {busyId === nextRound._id ? "Advancing..." : `Move to Next Round (${nextRound.name})`}
-                    </Btn>
-                  )}
-                  {isCurrent && round.processedAt && !nextRound && (
-                    <p className="text-xs text-gray-400 self-center">
-                      Add a round to continue, or finish the drive above.
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
     </div>
   );
 };
 
 // ─── Applicants tab ─────────────────────────────────────────────
+const th = tableHead;
+const td = tableCell;
+
 const ApplicantsTab = ({ driveId }) => {
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({ total: 0, page: 1, pages: 0 });
 
   useEffect(() => {
-    getDriveApplications(driveId, { limit: 200 })
-      .then((res) => setApplications(res.data.data.applications || []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [driveId]);
+    let cancelled = false;
+    setLoading(true);
+    getDriveApplications(driveId, { page, limit: 50 })
+      .then((res) => {
+        if (cancelled) return;
+        setApplications(res.data.data.applications || []);
+        setPagination(res.data.data.pagination);
+      })
+      .catch(() => { if (!cancelled) setApplications([]); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [driveId, page]);
 
-  if (loading) return <p className="text-xs text-gray-400 py-8 text-center">Loading applicants...</p>;
-  if (!applications.length)
-    return <p className="text-xs text-gray-400 py-8 text-center">No applicants yet.</p>;
+  if (loading) return <p className={note}>Loading applicants...</p>;
+  if (!applications.length) return <p className={note}>No applicants yet.</p>;
 
   return (
-    <div className="bg-white border border-gray-100 rounded-xl overflow-x-auto">
-      <table className="w-full text-xs">
-        <thead>
-          <tr className="border-b border-gray-100 text-gray-400">
-            <th className="text-left font-medium px-4 py-2.5">Name</th>
-            <th className="text-left font-medium px-4 py-2.5">Roll No.</th>
-            <th className="text-left font-medium px-4 py-2.5">Branch</th>
-            <th className="text-left font-medium px-4 py-2.5">Year</th>
-            <th className="text-left font-medium px-4 py-2.5">CGPA</th>
-            <th className="text-left font-medium px-4 py-2.5">Status</th>
-            <th className="text-left font-medium px-4 py-2.5">Applied</th>
-          </tr>
-        </thead>
-        <tbody>
-          {applications.map((a) => (
-            <tr key={a._id} className="border-b border-gray-50 last:border-0">
-              <td className="px-4 py-2.5 font-medium text-gray-800">
-                {a.student?.firstName} {a.student?.lastName}
-              </td>
-              <td className="px-4 py-2.5 text-gray-500">{a.student?.rollNumber}</td>
-              <td className="px-4 py-2.5 text-gray-500">{a.student?.branch}</td>
-              <td className="px-4 py-2.5 text-gray-500">{a.student?.year}</td>
-              <td className="px-4 py-2.5 text-gray-500">{a.student?.cgpa}</td>
-              <td className="px-4 py-2.5">
-                <span className={applicationStatusConfig[a.status]?.color}>
-                  {applicationStatusConfig[a.status]?.label}
-                </span>
-              </td>
-              <td className="px-4 py-2.5 text-gray-400">{formatDate(a.appliedAt)}</td>
+    <div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[720px] border-collapse text-[14px]">
+          <thead>
+            <tr>
+              <th scope="col" className={th}>Name</th>
+              <th scope="col" className={th}>Roll no.</th>
+              <th scope="col" className={th}>Branch</th>
+              <th scope="col" className={th}>Year</th>
+              <th scope="col" className={th}>CGPA</th>
+              <th scope="col" className={th}>Status</th>
+              <th scope="col" className={`${th} pr-0 text-right`}>Applied</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {applications.map((a) => {
+              const status = APPLICATION_STATUS[a.status];
+              return (
+                <tr key={a._id}>
+                  <td className={`${td} font-semibold text-ink`}>
+                    {a.student?.firstName} {a.student?.lastName}
+                  </td>
+                  <td className={`${td} tabular-nums text-ink-2`}>{a.student?.rollNumber}</td>
+                  <td className={`${td} text-ink-2`}>{a.student?.branch}</td>
+                  <td className={`${td} text-ink-2`}>{a.student?.year}</td>
+                  <td className={`${td} tabular-nums text-ink-2`}>{a.student?.cgpa}</td>
+                  <td className={td}>{status && <Pill tone={status.tone}>{status.label}</Pill>}</td>
+                  <td className={`${td} pr-0 text-right text-ink-2`}>{formatDate(a.appliedAt)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <Pager page={pagination.page} pages={pagination.pages} onPage={setPage}>
+        {pagination.total} {pagination.total === 1 ? "applicant" : "applicants"}
+      </Pager>
     </div>
   );
 };
 
 // ─── Settings tab ───────────────────────────────────────────────
+const Field = ({ id, label, wide = false, children }) => (
+  <div className={wide ? "sm:col-span-2" : ""}>
+    <label htmlFor={id} className={fieldLabel}>
+      {label}
+    </label>
+    {children}
+  </div>
+);
+
 const SettingsTab = ({ drive, onSaved }) => {
   const [form, setForm] = useState({
     companyName: drive.companyName || "",
@@ -798,7 +678,7 @@ const SettingsTab = ({ drive, onSaved }) => {
     ctc: drive.ctc || "",
     stipend: drive.stipend || "",
     registrationDeadline: drive.registrationDeadline
-      ? drive.registrationDeadline.slice(0, 16)
+      ? toLocalDateTimeInput(drive.registrationDeadline)
       : "",
     applicationLink: drive.applicationLink || "",
   });
@@ -828,105 +708,125 @@ const SettingsTab = ({ drive, onSaved }) => {
     }
   };
 
+  const payField = drive.jobType === "internship" ? "stipend" : "ctc";
+
   return (
-    <form onSubmit={handleSubmit} className="bg-white border border-gray-100 rounded-xl p-5 space-y-4">
-      {error && (
-        <div className="flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg">
-          <AlertTriangle size={13} className="text-red-500 flex-shrink-0" />
-          <p className="text-xs text-red-700">{error}</p>
+    <form onSubmit={handleSubmit} className="grid max-w-3xl grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-x-6">
+      {(error || saved) && (
+        <div className="sm:col-span-2">
+          {error ? <Alert>{error}</Alert> : <Alert kind="ok">Saved.</Alert>}
         </div>
       )}
-      {saved && (
-        <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-200 rounded-lg">
-          <CheckCircle2 size={13} className="text-green-600 flex-shrink-0" />
-          <p className="text-xs text-green-700">Saved.</p>
-        </div>
-      )}
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1.5">Company Name</label>
-          <input
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400"
-            value={form.companyName}
-            onChange={set("companyName")}
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1.5">Role</label>
-          <input
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400"
-            value={form.role}
-            onChange={set("role")}
-          />
-        </div>
-      </div>
-      <div>
-        <label className="block text-xs font-medium text-gray-700 mb-1.5">Description</label>
+      <Field id="drive-company" label="Company name">
+        <input id="drive-company" className={fieldInput} value={form.companyName} onChange={set("companyName")} />
+      </Field>
+      <Field id="drive-role" label="Role">
+        <input id="drive-role" className={fieldInput} value={form.role} onChange={set("role")} />
+      </Field>
+      <Field id="drive-description" label="Description" wide>
         <textarea
-          rows={3}
-          className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 resize-none"
+          id="drive-description"
+          rows={4}
+          className={`${fieldInput} resize-none py-2.5 leading-normal`}
           value={form.description}
           onChange={set("description")}
         />
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1.5">Location</label>
-          <input
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400"
-            value={form.location}
-            onChange={set("location")}
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1.5">
-            {drive.jobType === "internship" ? "Stipend" : "CTC"}
-          </label>
-          <input
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400"
-            value={drive.jobType === "internship" ? form.stipend : form.ctc}
-            onChange={set(drive.jobType === "internship" ? "stipend" : "ctc")}
-          />
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1.5">Registration Deadline</label>
-          <input
-            type="datetime-local"
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400"
-            value={form.registrationDeadline}
-            onChange={set("registrationDeadline")}
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1.5">Application Link</label>
-          <input
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400"
-            value={form.applicationLink}
-            onChange={set("applicationLink")}
-          />
-        </div>
-      </div>
-      <div className="flex justify-end pt-2">
-        <Btn type="submit" variant="primary" disabled={saving}>
-          {saving ? "Saving..." : "Save Changes"}
-        </Btn>
+      </Field>
+      <Field id="drive-location" label="Location">
+        <input id="drive-location" className={fieldInput} value={form.location} onChange={set("location")} />
+      </Field>
+      <Field id="drive-pay" label={drive.jobType === "internship" ? "Stipend" : "CTC"}>
+        <input id="drive-pay" className={fieldInput} value={form[payField]} onChange={set(payField)} />
+      </Field>
+      <Field id="drive-deadline" label="Registration deadline">
+        <input
+          id="drive-deadline"
+          type="datetime-local"
+          className={fieldInput}
+          value={form.registrationDeadline}
+          onChange={set("registrationDeadline")}
+        />
+      </Field>
+      <Field id="drive-link" label="Application link">
+        <input id="drive-link" className={fieldInput} value={form.applicationLink} onChange={set("applicationLink")} />
+      </Field>
+      <div className="flex justify-end sm:col-span-2">
+        <button type="submit" disabled={saving} className={btnSm}>
+          {saving ? "Saving..." : "Save changes"}
+        </button>
       </div>
     </form>
+  );
+};
+
+// ─── Overview pieces ────────────────────────────────────────────
+
+// What the drive asks for, beside what the student has on record. The verdict
+// comes from the server (the same check that guards applying); the reasons for
+// a "no" are shown with the student's status in the apply card.
+const Eligibility = ({ drive, user, eligibility, forStudent }) => {
+  const branches = drive.eligibleBranches || [];
+  const onRecord = (value) => (value === null || value === undefined ? "Not on record" : String(value));
+  const rows = [
+    { label: "Branches", need: branches.length ? branches.join(", ") : "All branches", you: user?.branch },
+    {
+      label: "Minimum CGPA",
+      need: drive.minCGPA > 0 ? String(drive.minCGPA) : "No requirement",
+      you: onRecord(user?.cgpa),
+    },
+    {
+      label: "Backlogs",
+      need:
+        drive.maxBacklogs > 0
+          ? `Up to ${drive.maxBacklogs}`
+          : drive.maxBacklogs === 0
+            ? "None allowed"
+            : "No limit",
+      you: onRecord(user?.backlogs),
+    },
+    drive.minYear &&
+      drive.maxYear && {
+        label: "Year",
+        need:
+          drive.minYear === drive.maxYear
+            ? `Year ${drive.minYear}`
+            : `Years ${drive.minYear} to ${drive.maxYear}`,
+        you: user?.year ? `Year ${user.year}` : "",
+      },
+  ].filter(Boolean);
+
+  return (
+    <section aria-labelledby="drive-eligibility">
+      <SectionHead id="drive-eligibility" title="Eligibility" aside={forStudent ? "Yours" : undefined} />
+      <ul className="divide-y divide-line">
+        {rows.map((row) => (
+          <li
+            key={row.label}
+            className="grid min-h-14 grid-cols-[104px_minmax(0,1fr)_auto] items-center gap-x-4 py-3 lg:grid-cols-[150px_minmax(0,1fr)_auto]"
+          >
+            <span className="text-[15px] font-semibold tracking-[-0.018em] text-ink">{row.label}</span>
+            <span className="min-w-0 break-words text-[14.5px] text-ink-2">{row.need}</span>
+            {forStudent && <span className="text-right text-[14.5px] font-semibold text-ink">{row.you}</span>}
+          </li>
+        ))}
+      </ul>
+      {forStudent && eligibility?.eligible && (
+        <p className={`mt-4 text-[14.5px] ${tone.live}`}>You meet every requirement.</p>
+      )}
+    </section>
   );
 };
 
 // ─── Main ─────────────────────────────────────────────────────
 const DriveDetail = () => {
   const { id } = useParams();
-  const navigate = useNavigate();
   const { user } = useAuth();
 
   const [drive, setDrive] = useState(null);
   const [eligibility, setEligibility] = useState(null);
   const [application, setApplication] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [applying, setApplying] = useState(false);
   const [applyError, setApplyError] = useState("");
   const [tab, setTab] = useState("overview");
@@ -944,6 +844,8 @@ const DriveDetail = () => {
       setApplication(myApplication);
     } catch (err) {
       console.error(err);
+      // Anything but a 404 is a failed request, not a missing drive.
+      setLoadFailed(err.response?.status !== 404);
     } finally {
       setLoading(false);
     }
@@ -971,319 +873,281 @@ const DriveDetail = () => {
   if (loading) return <Skeleton />;
   if (!drive)
     return (
-      <div className="max-w-3xl mx-auto text-center py-20">
-        <p className="text-sm text-gray-400 mb-3">Drive not found.</p>
-        <button
-          onClick={() => navigate(-1)}
-          className="text-xs text-gray-500 underline"
-        >
-          Go back
-        </button>
-      </div>
+      <PageMessage
+        title={loadFailed ? "Couldn't load this drive" : "Drive not found"}
+        action={
+          <Link to="/career/drives" className={btnGhost}>
+            Back to drives
+          </Link>
+        }
+      >
+        {loadFailed
+          ? "Check your connection and try again."
+          : "It may have been removed, or the link is incorrect."}
+      </PageMessage>
     );
 
-  const isClosed = drive.registrationDeadline
-    ? new Date(drive.registrationDeadline) < new Date()
-    : true;
-  const deadline = formatDeadline(drive.registrationDeadline);
-  const jobCfg = jobTypeConfig[drive.jobType] || jobTypeConfig.fulltime;
+  const deadline = describeDeadline(drive.registrationDeadline);
+  const isClosed = !deadline || deadline.closed;
   const isCoordinator = ["superadmin", "placementCoordinator"].includes(user?.role);
   const hasApplied = !!application;
   const isEligible = eligibility ? eligibility.eligible : true;
   const ineligibilityReasons = eligibility ? eligibility.reasons : [];
-  const canApply = isEligible && !hasApplied && !isClosed;
+  // The server refuses applications to a finished or cancelled drive, and once
+  // the first round has begun, whatever the deadline says.
+  const isActive = drive.status === "active";
+  const hasStarted = !!drive.currentRoundId;
+  const canApply = isEligible && !hasApplied && !isClosed && isActive && !hasStarted;
   const applicationHref = safeHref(drive.applicationLink);
   const brochureHref = safeHref(drive.brochureUrl);
-  const compensation =
-    drive.jobType === "internship" ? drive.stipend : drive.ctc;
+  const pay = drivePay(drive);
+  const rounds = drive.rounds || [];
+  const applied = drive.applicationCount ?? 0;
+
+  const state =
+    drive.status === "cancelled"
+      ? { label: "Cancelled", className: tone.urgent }
+      : drive.status === "completed"
+        ? { label: "Completed", className: "font-[550] text-ink-2" }
+        : isClosed
+          ? { label: "Applications closed", className: "font-[550] text-ink-2" }
+          : hasStarted
+            ? { label: "Recruitment under way", className: "font-[550] text-ink-2" }
+            : { label: "Open for applications", className: tone.live };
+
+  const myStatus = hasApplied
+    ? application.status === "active"
+      ? { label: "Applied", className: "text-live" }
+      : application.status === "selected"
+        ? { label: "Selected", className: "text-live" }
+        : { label: "Rejected", className: "text-ink" }
+    : !isActive
+      ? { label: "Not open" }
+      : isClosed
+        ? { label: "Applications closed" }
+        : hasStarted
+          ? { label: "Recruitment has started" }
+          : !isEligible
+            ? { label: "Not eligible", className: "text-warn" }
+            : { label: "Not yet applied" };
+
+  const facts = [
+    pay && { label: drive.jobType === "internship" ? "Stipend" : "CTC", value: pay, lead: true },
+    drive.location && { label: "Location", value: drive.location },
+    { label: "Job type", value: JOB_TYPE[drive.jobType] || "Not stated" },
+    drive.batch && { label: "Batch", value: `${drive.batch} graduates` },
+    drive.slots && { label: "Positions", value: drive.slots },
+  ];
 
   const tabs = [
     { key: "overview", label: "Overview" },
-    { key: "rounds", label: "Rounds" },
-    ...(isCoordinator ? [{ key: "applicants", label: "Applicants" }] : []),
+    { key: "rounds", label: "Rounds", count: rounds.length },
+    ...(isCoordinator ? [{ key: "applicants", label: "Applicants", count: applied }] : []),
     ...(isCoordinator ? [{ key: "settings", label: "Settings" }] : []),
   ];
 
   return (
-    <div className="max-w-3xl mx-auto space-y-4">
-      <button
-        onClick={() => navigate(-1)}
-        className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-700 transition-colors"
+    <div className="pb-10 lg:pb-20">
+      <PageTitle
+        lead={<LogoTile src={drive.companyLogo} name={drive.companyName} size="lg" />}
+        crumb={
+          <>
+            <Link to="/career" className={crumbLink}>
+              Career
+            </Link>{" "}
+            /{" "}
+            <Link to="/career/drives" className={crumbLink}>
+              Drives
+            </Link>
+          </>
+        }
+        title={drive.companyName}
+        sub={<span className="text-[17px] tracking-[-0.02em]">{drive.role}</span>}
       >
-        <ArrowLeft size={13} /> Back
-      </button>
+        <p className="text-[14.5px] lg:pb-1.5 lg:text-right">
+          <span className={`block ${state.className}`}>
+            <span aria-hidden="true" className="mr-2 inline-block size-[7px] rounded-full bg-current align-[1px]" />
+            {state.label}
+          </span>
+          <span className="mt-0.5 block text-[13.5px] text-ink-3">
+            {applied} applied{isClosed || !isActive ? "" : " so far"}
+          </span>
+        </p>
+      </PageTitle>
 
-      {/* ── Company header card ── */}
-      <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden">
-        <div className="p-5">
-          <div className="flex items-start gap-4">
-            <div className="w-14 h-14 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center flex-shrink-0 overflow-hidden">
-              {drive.companyLogo ? (
-                <img
-                  src={drive.companyLogo}
-                  alt={drive.companyName}
-                  className="w-full h-full object-contain p-1.5"
-                />
-              ) : (
-                <span className="text-lg font-bold text-gray-500">
-                  {drive.companyName?.slice(0, 2).toUpperCase()}
-                </span>
-              )}
-            </div>
+      {/* On phones the pay leads across the full width, the rest two to a row */}
+      <Facts className="mt-9" facts={facts} />
 
-            <div className="flex-1 min-w-0">
-              <div className="min-w-0">
-                <h1 className="text-lg font-bold text-gray-900 leading-tight">
-                  {drive.companyName}
-                </h1>
-                <p className="text-sm text-gray-500 mt-0.5">{drive.role}</p>
-              </div>
-
-              <div className="flex items-center gap-2 mt-3 flex-wrap">
-                <span
-                  className={`text-[10px] font-bold px-2.5 py-1 rounded-full
-                  ${isClosed ? "bg-gray-100 text-gray-400" : "bg-green-50 text-green-700"}`}
-                >
-                  {isClosed ? "Closed" : "Open"}
-                </span>
-                {drive.status !== "active" && (
-                  <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-gray-900 text-white capitalize">
-                    {drive.status}
-                  </span>
-                )}
-                <span
-                  className={`text-[10px] font-semibold px-2.5 py-1 rounded-full ${jobCfg.color}`}
-                >
-                  {jobCfg.label}
-                </span>
-                {drive.driveType && (
-                  <span className="text-[10px] text-gray-500 bg-gray-50 border border-gray-100 px-2.5 py-1 rounded-full">
-                    {driveTypeLabel[drive.driveType]}
-                  </span>
-                )}
-                {drive.location && (
-                  <span className="flex items-center gap-1 text-[10px] text-gray-400">
-                    <MapPin size={9} /> {drive.location}
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="border-t border-gray-50 px-5 py-4 flex items-center gap-6 bg-gray-50/50">
-          {compensation && (
-            <div>
-              <p className="text-[10px] text-gray-400 uppercase tracking-wide">
-                {drive.jobType === "internship" ? "Stipend" : "CTC"}
-              </p>
-              <p className="text-base font-bold text-gray-900 mt-0.5">{compensation}</p>
-            </div>
-          )}
-          {compensation && drive.registrationDeadline && (
-            <div className="w-px h-8 bg-gray-200" />
-          )}
-          {drive.registrationDeadline && (
-            <div>
-              <p className="text-[10px] text-gray-400 uppercase tracking-wide">
-                Registration Deadline
-              </p>
-              <div className="flex items-center gap-2 mt-0.5">
-                <p className="text-sm font-semibold text-gray-800">
-                  {formatDateTimeWithFallback(drive.registrationDeadline)}
-                </p>
-                {deadline && (
-                  <span className={`flex items-center gap-1 text-xs font-medium ${deadline.color}`}>
-                    <Clock size={10} /> {deadline.label}
-                  </span>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ── Tabs ── */}
-      <div className="flex gap-1 border-b border-gray-100">
-        {tabs.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${
-              tab === t.key
-                ? "border-gray-900 text-gray-900"
-                : "border-transparent text-gray-400 hover:text-gray-700"
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
+      <div className="mt-11">
+        <Tabs label="Drive" tabs={tabs} value={tab} onChange={setTab} />
       </div>
 
       {tab === "overview" && (
-        <>
-          {/* ── Registration / Apply card ── */}
-          {!isCoordinator && (
-            <div className="bg-white border border-gray-100 rounded-xl p-5">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
-                    Your Status
+        <div className="mt-9 grid grid-cols-1 gap-y-11 lg:mt-11 lg:grid-cols-[minmax(0,1fr)_352px] lg:gap-x-[72px]">
+          <div className="min-w-0 space-y-11 lg:space-y-14">
+            <section aria-labelledby="drive-about">
+              <SectionHead id="drive-about" title="About this role" />
+              {drive.description ? (
+                <p className="max-w-[62ch] whitespace-pre-line break-words text-[15.5px] leading-[1.65] text-ink/90">
+                  {drive.description}
+                </p>
+              ) : (
+                <p className={note}>No description yet.</p>
+              )}
+              <p className="mt-3.5 text-[14.5px] text-ink-3">
+                {[
+                  DRIVE_TYPE[drive.driveType] && `${DRIVE_TYPE[drive.driveType]} drive.`,
+                  drive.bond && `Bond: ${drive.bond}.`,
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+              </p>
+            </section>
+
+            <Eligibility drive={drive} user={user} eligibility={eligibility} forStudent={!isCoordinator} />
+
+            <NoticeFeed
+              targetType="drive"
+              targetId={id}
+              title="Notices for this drive"
+              canPost={isCoordinator}
+              showActions={isCoordinator}
+              postTo={`/drive/${id}/create-notice`}
+            />
+          </div>
+
+          {/* Applying leads on phones; on desktop it stays in view beside the page. */}
+          <aside className="min-w-0 max-lg:order-first lg:sticky lg:top-6 lg:self-start">
+            <section aria-labelledby="drive-apply" className={`p-6 ${panel}`}>
+              <h2 id="drive-apply" className="text-[13px] font-normal text-ink-3">
+                {isClosed ? "Applications closed" : "Applications close"}
+              </h2>
+              {deadline ? (
+                <>
+                  <p className="mt-1.5 text-2xl font-bold leading-[1.15] tracking-[-0.04em] text-ink">
+                    {deadline.when}
                   </p>
-                  {hasApplied ? (
-                    <div className="flex items-center gap-2">
-                      <CheckCircle2 size={14} className="text-green-600" />
-                      <p className="text-sm font-semibold text-green-700">Registered</p>
-                    </div>
-                  ) : isClosed ? (
-                    <p className="text-sm font-medium text-gray-400">Registration closed</p>
-                  ) : !isEligible ? (
-                    <p className="text-sm font-medium text-amber-600">Not eligible</p>
-                  ) : (
-                    <p className="text-sm font-medium text-gray-600">Not yet registered</p>
+                  {!deadline.closed && (
+                    <p className={`mt-1 text-[14.5px] ${tone[deadline.tone] || "text-ink-2"}`}>{deadline.label}</p>
                   )}
-                </div>
+                </>
+              ) : (
+                <p className="mt-1.5 text-[14.5px] text-ink-2">No deadline has been set.</p>
+              )}
 
-                <div className="flex flex-col items-end gap-2">
+              {!isCoordinator && (
+                <>
+                  <p className="my-5 flex justify-between gap-4 border-y border-line py-3.5 text-[14.5px]">
+                    <span className="text-ink-2">Your status</span>
+                    <b className={`text-right font-semibold ${myStatus.className || "text-ink"}`}>
+                      {myStatus.label}
+                    </b>
+                  </p>
+
                   {!hasApplied && !isClosed && !isEligible && (
-                    <div className="text-right">
-                      <div className="px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl">
-                        <p className="text-xs font-medium text-gray-400">Not Eligible</p>
-                      </div>
-                      <div className="mt-1.5 space-y-0.5">
-                        {ineligibilityReasons.map((r, i) => (
-                          <p key={i} className="text-xs text-amber-600">{r}</p>
-                        ))}
-                      </div>
-                    </div>
+                    <ul className={`space-y-0.5 text-[13.5px] ${tone.warn}`}>
+                      {ineligibilityReasons.map((reason) => (
+                        <li key={reason}>{reason}</li>
+                      ))}
+                    </ul>
                   )}
 
-                  {canApply && (
-                    <div className="flex flex-col items-end gap-1.5">
-                      {/* External navigation only for a valid http(s) link;
-                          otherwise a plain button that just registers. */}
-                      {applicationHref ? (
+                  {canApply &&
+                    /* External navigation only for a valid http(s) link;
+                       otherwise a plain button that just registers. */
+                    (applicationHref ? (
+                      <>
                         <a
                           href={applicationHref}
                           target="_blank"
                           rel="noopener noreferrer"
                           onClick={handleApply}
-                          className="flex items-center gap-2 px-5 py-2.5 bg-gray-900 text-white text-xs font-semibold rounded-xl hover:bg-gray-700 transition-colors"
+                          className={`w-full ${btnLg}`}
                         >
-                          <ExternalLink size={12} />
-                          {applying ? "Processing..." : "Apply Now"}
+                          {applying ? "Processing..." : "Apply now"}
+                          <ExternalLink size={15} aria-hidden="true" />
                         </a>
-                      ) : (
-                        <>
-                          <button
-                            type="button"
-                            onClick={handleApply}
-                            disabled={applying}
-                            className="flex items-center gap-2 px-5 py-2.5 bg-gray-900 text-white text-xs font-semibold rounded-xl hover:bg-gray-700 transition-colors disabled:opacity-60"
-                          >
-                            {applying ? "Processing..." : "Apply Now"}
-                          </button>
-                          <p className="text-xs text-gray-400">
-                            External application link unavailable — contact the placement office.
-                          </p>
-                        </>
-                      )}
-                      {applyError && <p className="text-xs text-red-500">{applyError}</p>}
+                        <p className="mt-3 text-[13px] leading-[1.45] text-ink-3">
+                          Opens the company's application form and records your application here.
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <button type="button" onClick={handleApply} disabled={applying} className={`w-full ${btnLg}`}>
+                          {applying ? "Processing..." : "Apply now"}
+                        </button>
+                        <p className="mt-3 text-[13px] leading-[1.45] text-ink-3">
+                          External application link unavailable. Contact the placement office.
+                        </p>
+                      </>
+                    ))}
+
+                  {applyError && (
+                    <div className="mt-3">
+                      <Alert>{applyError}</Alert>
                     </div>
                   )}
+                </>
+              )}
 
-                  {brochureHref && (
-                    <a
-                      href={brochureHref}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-700 transition-colors"
-                    >
-                      <FileText size={11} /> View Brochure
-                    </a>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {drive.description && (
-            <Section title="About This Role">
-              <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line">
-                {drive.description}
-              </p>
-            </Section>
-          )}
-
-          <Section title="Job Details">
-            <InfoRow label="Role" value={drive.role} />
-            <InfoRow label="Job Type" value={jobTypeConfig[drive.jobType]?.label} />
-            <InfoRow label="Drive Type" value={driveTypeLabel[drive.driveType]} />
-            {drive.jobType === "fulltime" && <InfoRow label="CTC" value={drive.ctc} />}
-            {drive.jobType === "internship" && <InfoRow label="Stipend" value={drive.stipend} />}
-            {drive.bond && <InfoRow label="Bond" value={drive.bond} />}
-            {drive.location && <InfoRow label="Location" value={drive.location} />}
-            {drive.batch && <InfoRow label="Batch" value={`${drive.batch} graduates`} />}
-            {drive.slots && <InfoRow label="Slots" value={`${drive.slots} positions`} />}
-          </Section>
-
-          <Section title="Eligibility">
-            <InfoRow
-              label="Eligible Branches"
-              value={drive.eligibleBranches?.length ? drive.eligibleBranches.join(", ") : "All branches"}
-            />
-            <InfoRow label="Min CGPA" value={drive.minCGPA > 0 ? `${drive.minCGPA}` : "No requirement"} />
-            <InfoRow
-              label="Max Backlogs"
-              value={drive.maxBacklogs > 0 ? `${drive.maxBacklogs}` : "No backlogs allowed"}
-            />
-            {drive.minYear && drive.maxYear && (
-              <InfoRow
-                label="Year"
-                value={drive.minYear === drive.maxYear ? `Year ${drive.minYear}` : `Years ${drive.minYear} – ${drive.maxYear}`}
-              />
-            )}
-          </Section>
-
-          <Section
-            title="Drive Notices"
-            action={
-              isCoordinator && (
-                <Link
-                  to={`/drive/${id}/create-notice`}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-gray-200 text-gray-600 rounded-lg hover:border-gray-400 hover:text-gray-900 transition-all"
+              {brochureHref && (
+                <a
+                  href={brochureHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`mt-4 inline-flex items-center gap-2 rounded text-[14.5px] font-medium text-ink underline decoration-line-2 underline-offset-4 hover:decoration-ink-3 ${focusRing}`}
                 >
-                  <Plus size={12} /> Post Notice
-                </Link>
-              )
-            }
-          >
-            <NoticeFeed
-              targetType="drive"
-              targetId={id}
-              canPost={isCoordinator}
-              showActions={isCoordinator}
-            />
-          </Section>
-        </>
+                  <FileText size={15} aria-hidden="true" /> View the brochure
+                </a>
+              )}
+            </section>
+
+            <section aria-labelledby="drive-rounds" className="mt-11">
+              <SectionHead id="drive-rounds" title="Selection rounds" />
+              {rounds.length > 0 ? (
+                <ol className="divide-y divide-line">
+                  {rounds.map((round, i) => (
+                    <li key={round._id} className="flex min-h-[58px] items-center gap-4 py-2.5">
+                      <RoundNumber n={i + 1} current={sameId(round._id, drive.currentRoundId)} />
+                      <div className="min-w-0">
+                        <h3 className="break-words text-[15px] font-semibold tracking-[-0.018em] text-ink">
+                          {round.name}
+                        </h3>
+                        <p className="text-[13.5px] text-ink-2">{formatRoundDate(round.startDate)}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p className={note}>No rounds have been added yet.</p>
+              )}
+            </section>
+          </aside>
+        </div>
       )}
 
       {tab === "rounds" && (
-        <RoundsTab
-          drive={drive}
-          application={application}
-          isCoordinator={isCoordinator}
-          onRefresh={fetchData}
-        />
+        <div className="mt-9">
+          <RoundsTab
+            drive={drive}
+            application={application}
+            isCoordinator={isCoordinator}
+            onRefresh={fetchData}
+          />
+        </div>
       )}
 
-      {tab === "applicants" && isCoordinator && <ApplicantsTab driveId={drive._id} />}
+      {tab === "applicants" && isCoordinator && (
+        <div className="mt-9">
+          <ApplicantsTab key={drive._id} driveId={drive._id} />
+        </div>
+      )}
 
       {tab === "settings" && isCoordinator && (
-        <SettingsTab drive={drive} onSaved={fetchData} />
+        <div className="mt-9">
+          <SettingsTab drive={drive} onSaved={fetchData} />
+        </div>
       )}
-
-      <div className="pb-8" />
     </div>
   );
 };

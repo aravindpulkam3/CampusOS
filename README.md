@@ -1,562 +1,273 @@
 <div align="center">
 
-# 🎓 CampusOS
+# CampusOS
 
-**One platform for academics, clubs, events, discussions, and placements.**
+### A connected workspace for campus life
 
-A full-stack MERN application that centralizes everything a college student
-needs — classroom logistics, campus community, and the entire placement
-pipeline — behind a single login, with a dashboard that answers one
-question: _what needs my attention today?_
+Bring classes, clubs, events, discussions, notices, and placements into one student portal.
 
-[![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white&labelColor=20232a)](https://react.dev/)
-[![Node.js](https://img.shields.io/badge/Node.js-Express-339933?logo=node.js&logoColor=white&labelColor=20232a)](https://expressjs.com/)
-[![MongoDB](https://img.shields.io/badge/MongoDB-Mongoose-47A248?logo=mongodb&logoColor=white&labelColor=20232a)](https://mongoosejs.com/)
-[![Redis](https://img.shields.io/badge/Redis-cache-DC382D?logo=redis&logoColor=white&labelColor=20232a)](https://redis.io/)
-[![Socket.IO](https://img.shields.io/badge/Socket.IO-realtime-black?logo=socket.io&logoColor=white&labelColor=20232a)](https://socket.io/)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind-CSS_4-06B6D4?logo=tailwindcss&logoColor=white&labelColor=20232a)](https://tailwindcss.com/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](#license)
+[![React](https://img.shields.io/badge/React-18-149ECA?logo=react&logoColor=white)](https://react.dev/) [![Express](https://img.shields.io/badge/Express-4-000000?logo=express&logoColor=white)](https://expressjs.com/) [![MongoDB](https://img.shields.io/badge/MongoDB-Mongoose-47A248?logo=mongodb&logoColor=white)](https://mongoosejs.com/) [![Socket.IO](https://img.shields.io/badge/Socket.IO-live_updates-010101?logo=socketdotio&logoColor=white)](https://socket.io/) [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+
+**[Explore features](#what-campusos-does) · [Run locally](#run-locally) · [Architecture](#architecture) · [Project status](#project-status)**
 
 </div>
 
 ---
 
-## Table of Contents
+CampusOS (also named EventSphere in package names) is a full-stack college portal. Students can see what needs attention today, join campus communities, follow their academic schedule, discuss questions, and track placement applications. Staff and resource administrators manage those workflows in the same system.
 
-- [Overview](#overview)
-- [Feature Highlights](#feature-highlights)
-- [Engineering Highlights](#engineering-highlights)
-- [Tech Stack](#tech-stack)
-- [Architecture](#architecture)
-- [Project Structure](#project-structure)
-- [Getting Started](#getting-started)
-- [Environment Variables](#environment-variables)
-- [Roles & Permissions](#roles--permissions)
-- [API Surface](#api-surface)
-- [Roadmap](#roadmap)
-- [Contributing](#contributing)
-- [License](#license)
-- [Author](#author)
+The repository contains two independent applications: a React client in [`frontend/`](frontend/) and an Express API in [`backend/`](backend/). Each has its own dependencies and commands.
 
----
+## What CampusOS does
 
-## Overview
+| Workspace | Available capabilities |
+| --- | --- |
+| **Home** | A personalized dashboard combines today's classes, registered events, placement rounds, upcoming deadlines, eligible drives, and relevant notices. Global search spans clubs, events, drives, and discussions. |
+| **Academics** | Classrooms have curricula, a weekly period timetable, semester-specific deadlines, and classroom notices. Class representatives maintain their own classroom; administrators manage classrooms and curricula. |
+| **Community** | Students discover and follow clubs, mute club notifications, register for events, read announcements, and participate in discussions with votes, bookmarks, comments, replies, and accepted answers. |
+| **Career** | Students browse drives with eligibility checks, apply once per drive, and follow application and round progress. Placement coordinators manage rounds, preview and confirm CSV shortlists, and finish or cancel drives. |
+| **Administration** | Administrators manage clubs, classrooms, curricula, notices, and the student roster. The roster supplies authoritative academic data for account activation and placement eligibility. |
 
-CampusOS replaces the usual scatter of WhatsApp groups, notice boards, and
-spreadsheets with one coherent system:
+### Recent improvements
 
-- **Students** get a personalized dashboard that merges today's classes,
-  registered events, and placement rounds into one timeline, and surfaces
-  anything due today or tomorrow.
-- **Class representatives** run their section's timetable, deadlines, and
-  semester progression.
-- **Club admins and event organizers** manage their clubs, events,
-  announcements, and notices.
-- **Placement coordinators** run drives end-to-end — from eligibility-gated
-  applications through multi-round CSV shortlisting to final selection.
-
-Everything is tied together by a unified notice system and real-time,
-persisted notifications.
-
-The repository is a monorepo of two independent apps:
-
-| App        | Path                    | Stack                                       |
-| ---------- | ----------------------- | ------------------------------------------- |
-| **API**    | [`backend/`](backend)   | Express, Mongoose/MongoDB, Redis, Socket.IO |
-| **Client** | [`frontend/`](frontend) | React 18, Vite, Tailwind CSS 4              |
-
----
-
-## Feature Highlights
-
-### 🏠 Personalized Student Dashboard
-
-Every section answers _"why should **this** student see this?"_. The server
-returns render-ready data, so the frontend never works out business rules
-from raw domain objects.
-
-- **Action Required** — registration deadlines for eligible drives you haven't applied to, assignment deadlines, placement rounds, registered events, and urgent notices, all within a today/tomorrow window and ranked `critical` (today) or `warning` (tomorrow)
-- **Today's Schedule** — classroom periods, registered events (including multi-day events already in progress), and your placement rounds, merged into one sorted timeline
-- **Upcoming Deadlines** — scoped to your classroom's _current_ semester
-- **Eligible Drives** — open drives you qualify for and haven't applied to yet
-- **Relevant Notices** — from your classroom, followed clubs, registered events, and relevant drives; a notice already shown under Action Required isn't repeated here
-- Built from parallel `.lean()` queries (dependent queries run in a few rounds, independent ones in parallel), with a loading skeleton on the frontend
-
-### 📚 Classroom & Curriculum
-
-- Section-based classrooms (`branch + batch + section`, unique) linked to a per-branch, per-semester **curriculum** of subjects
-- Weekly **period timetable** (day, subject, faculty, room, time slot), managed by the class representative
-- **Deadlines** tied to the semester they were created in; once the classroom moves on to the next semester, they can no longer be edited
-- **Semester lifecycle** — the class rep advances to the next semester in one step. The server always works out the next number itself and refuses if no curriculum exists for it; only a superadmin can override the number
-- Admin tools to create classrooms, assign class reps, and manage curricula
-
-### 🧑‍🤝‍🧑 Community
-
-- **Clubs** — discovery, popular clubs, follow/unfollow, **mute** (stops a club's notifications without unfollowing), per-club admins, logo/banner branding
-- **Events** — creation and editing, registration, organizer management, event-scoped announcements and notices
-- **Discussions** — upvotes, bookmarks, threaded comments and replies, **accepted answers**, locking, and soft deletion
-- A community announcement feed with "load more" pagination
-
-### 💼 Placement Portal
-
-- Drive listings with company, role, job/drive type, CTC/stipend, bond, and eligibility criteria (branches, batch, CGPA, year range, backlog limit)
-- **One eligibility engine** shared by the drive listings, career dashboard, student dashboard, and apply endpoint — a drive shown as eligible is never rejected on apply
-- One application per student per drive (enforced by a unique index), with resume attachment
-- **Multi-round recruitment pipeline** — coordinators define an ordered list of rounds, then schedule, end, and advance them round by round
-- **CSV shortlisting** — upload a `rollNumber` list and get a preview that sorts rows into _valid_, _duplicate_, _unknown roll number_, _never applied_, and _already decided_. Confirming re-checks everything against the live database; students who aren't shortlisted are rejected
-- Drive lifecycle: `active → completed | cancelled`, with the final survivors marked `selected` when a drive is finished
-- A full per-candidate **timeline** (status changes, notes, which round, who changed it, when)
-- Students are notified when they're shortlisted, rejected, or selected, and only see round schedules for rounds they've actually reached
-
-```mermaid
-stateDiagram-v2
-    direction LR
-    [*] --> upcoming: addRound
-    upcoming --> ongoing: startDate reached
-    ongoing --> ended_awaiting: endRound
-    ended_awaiting --> processed: confirm CSV shortlist
-    processed --> upcoming: advanceRound (next round)
-    processed --> [*]: finishDrive (last round)
-```
-
-### 🔔 Notices & Real-Time Notifications
-
-- A single polymorphic **Notice** model (`targetType` + `targetId`) serves platform, classroom, club, event, and drive notices — one feed component works everywhere
-- Priority levels (`low → urgent`), pinning, archiving, and optional expiry; classroom notices can be limited to the current semester
-- Pin, archive, and delete use one shared permission check, so they can't get out of sync
-- **Real-time notifications** over Socket.IO — the socket handshake checks the same JWT cookie as HTTP requests, each user gets a private `user:<id>` room, and a `notification:new` event is pushed on every new notification
-- Notifications are saved in MongoDB (unread count, mark read / mark all read), so nothing is lost while a user is offline
-- Automatic notifications go to club followers (skipping users who muted the club), event registrants, eligible students (new drives), drive applicants, classroom students, and everyone (platform notices)
-
-### 🔎 Global Search
-
-- One search bar across clubs, events, drives, and discussions (debounced on the client, cached on the server)
-
-### 🖼️ File Uploads
-
-- Images are saved to a local temp folder (Multer), uploaded to Cloudinary, and the temp file is always deleted, whether the upload succeeds or fails
-- Used for profile pictures, club logos/banners, and event posters
-- Shortlist CSVs take a separate path: held in memory only, 2 MB limit, CSV files only, and never uploaded to Cloudinary
-
-### 👤 Profiles
-
-- Academic profile (branch, year, batch, section, roll number, CGPA, backlogs), used for eligibility and classroom membership
-- Skills, bio, resume, and GitHub/LinkedIn/portfolio links
-
----
-
-## Engineering Highlights
-
-Design decisions worth calling out:
-
-| Concern                           | Approach                                                                                                                                                                                                                                                                                                                                      |
-| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Consistency of rules**          | Drive eligibility lives in one service (`services/eligibility.service.js`). It has a Mongo filter and an in-memory check that apply the same criteria in the same order. It replaced five separate copies that disagreed with each other.                                                                                                     |
-| **Derived, not stored, state**    | Round states (`upcoming / ongoing / ended_awaiting / processed`) are calculated from timestamps and the drive's current round (`utils/roundState.js`), never saved as a label, so they can't go stale.                                                                                                                                        |
-| **Safe concurrent writes**        | Shortlisting marks the round as processed with a check-and-set update, so a double-submit fails with `409` instead of running twice. Writes run inside a MongoDB transaction when the database supports it (replica set / Atlas), and fall back cleanly on a standalone `mongod`.                                                             |
-| **Graceful degradation**          | Every Redis call is wrapped: if Redis is down or unset, the app skips the cache and reads from MongoDB.                                                                                                                                                                                                                                       |
-| **Deliberate caching**            | Redis caches data that is the same for everyone (all clubs 24h, popular clubs 1h, upcoming events 15m, search results 10m), and clears it when clubs or events are written. The personalized dashboard is **intentionally not cached**: it depends on the current time, so an item cached at 23:50 as "closes today" would be wrong at 00:01. |
-| **Resource-scoped authorization** | Class reps, club admins, and event organizers get their powers from their link to a specific classroom, club, or event, not from an app-wide role.                                                                                                                                                                                            |
-| **Consistent API contract**       | `asyncHandler` passes errors to one global error handler, which turns Mongoose/JWT errors into proper HTTP responses. Every success response has the same `{ success, message, data }` shape.                                                                                                                                                 |
-| **Session UX**                    | Access and refresh tokens are `httpOnly` cookies. When a request gets a `401`, the Axios interceptor refreshes the session once and retries the request, excluding the auth routes to avoid a refresh loop.                                                                                                                                   |
-| **Migrations**                    | `scripts/migrateDriveRounds.js` is a one-off migration from the old `selectionProcess` / 9-status model to rounds and `active / rejected / selected`. It uses the native driver so it can read fields the current schemas no longer define.                                                                                                   |
-
----
-
-## Tech Stack
-
-<table>
-<tr>
-<td valign="top" width="50%">
-
-**Frontend**
-
-- React 18 + Vite 5
-- React Router 6
-- Tailwind CSS 4
-- Axios (with auto refresh-token retry interceptor)
-- Context API for auth & notification state
-- Socket.IO client
-- lucide-react / react-icons
-
-</td>
-<td valign="top" width="50%">
-
-**Backend**
-
-- Node.js + Express (ES modules)
-- MongoDB + Mongoose
-- Redis (`node-redis` v5) — read-through caching
-- Socket.IO (real-time notifications)
-- JSON Web Tokens (access + refresh, cookie-based)
-- Multer + Cloudinary (media pipeline)
-- csv-parse (shortlist ingestion)
-- bcryptjs (password hashing)
-
-</td>
-</tr>
-</table>
-
----
+- **Safer accounts:** roster-based student activation, email verification, password reset, per-device sessions, rotating refresh tokens, and auth rate limits.
+- **Stronger write paths:** transaction-backed roster and club-follow updates, idempotent follow and registration actions, and checks against duplicate drive applications and shortlist processing.
+- **Faster shared reads:** optional Redis caching for club lists, upcoming events, search, shared classroom data, the default drive catalogue, and classroom notices. Writes invalidate the affected entries; time-sensitive and user-specific dashboard data is calculated per request.
+- **Better discussion browsing:** paginated discussion lists and cursor-paginated comments and replies, with retry states in the client.
+- **Live updates:** MongoDB-backed notifications are delivered to authenticated Socket.IO user rooms; unread state remains available after reconnecting.
 
 ## Architecture
 
-The backend runs each request through the same layers. Cross-cutting concerns
-(auth, role checks, resource-scoped checks, error handling, async error
-propagation) live in reusable middleware instead of being repeated in every
-route.
-
 ```mermaid
 flowchart LR
-    A[React Client] -- REST / Axios --> B[Express Routes]
-    A -- WebSocket --> S[Socket.IO]
-    B --> C[Middleware<br/><i>auth · roles · club-admin · classroom-rep</i>]
-    C --> D[Controllers]
-    D -.->|domains with a service layer| E[Services]
-    D --> F[(MongoDB via Mongoose)]
-    E --> F
-    D <-->|read-through cache| R[(Redis)]
-    E <--> R
-    E -- notification:new --> S
-    S -- user:&lt;id&gt; room --> A
-    D --> G[Cloudinary]
+    UI[React + Vite client] -->|Axios /api| API[Express routes]
+    UI <-->|Socket.IO| SOCKET[Authenticated user rooms]
+    API --> GUARDS[Auth and resource permissions]
+    GUARDS --> LOGIC[Controllers and domain services]
+    LOGIC --> DB[(MongoDB + Mongoose)]
+    LOGIC -.->|optional shared-read cache| CACHE[(Redis)]
+    LOGIC --> MEDIA[Cloudinary uploads]
+    LOGIC --> MAIL[SMTP email]
+    LOGIC --> SOCKET
 ```
 
-> Not every domain has a service layer. Auth, dashboard/search, eligibility,
-> shortlisting, classroom, and notifications go through `services/`; simpler
-> CRUD controllers (events, clubs, notices, announcements, discussions) query
-> models directly.
+The API uses cookie-based JWT authentication. Access and refresh tokens are held in `httpOnly` cookies; refresh sessions are stored per device with hashed refresh tokens. Backend routes enforce both global roles and resource-specific permissions. The frontend uses shared Axios wrappers, React Context for auth and notifications, and page-local state for most domain data.
 
----
+| Layer | Main tools |
+| --- | --- |
+| Client | React 18, React Router 6, Vite 5, Tailwind CSS 4, Axios, Socket.IO client |
+| API | Node.js, Express 4, Mongoose 7, Socket.IO, JWT, Multer, Cloudinary, Nodemailer |
+| Data | MongoDB; Redis is optional and used only as a cache |
+| Verification | Vitest and Supertest API tests with an in-memory MongoDB replica set |
 
-## Project Structure
+### Redis cache TTLs and operational notes
+
+TTL constants remain next to their read paths. All values below are seconds from the cache write; MongoDB remains authoritative.
+
+| Cache | Key | TTL | Reason |
+| --- | --- | ---: | --- |
+| Active clubs | `cache:clubs:active` | 24 h | Club details change rarely; create, update, and follow writes invalidate it. |
+| Popular clubs | `cache:clubs:popular:active` | 1 h | Follower ranking changes more often; club/follow writes invalidate it. |
+| Upcoming events | `cache:events:upcoming` | 15 min | The set changes as events end; create/update writes invalidate it. Cancelled events are excluded when the DB query refills the key. |
+| Global search | `cache:search:v2:<normalizedQuery>` | 60 s | Many query variants; source writes do not invalidate individual search keys. |
+| Academic classroom | `cache:classroom:<id>:academic` | 1 h | Shared academic data changes infrequently; period, semester, classroom, and curriculum edits invalidate it. |
+| Classroom notices | `cache:notices:classroom:<id>` | Up to 5 min | Writes invalidate it; TTL is shortened to the earliest visible notice expiry. |
+| Default drive catalogue | `cache:drives:catalog:default` | 60 s | Candidate set is shared; application state, eligibility, and final page documents are read per request. |
+
+The cache helper counts hits, misses, Redis-not-ready bypasses, and GET/SET/DEL/JSON errors by key family. It reports cumulative per-process counters only after activity, every minute in development and every five minutes in production; it logs no keys, search text, payloads, or Redis URL. A malformed JSON value is deleted by its exact key and treated as a miss. Maintenance scripts bound their optional Redis connection wait to eight seconds and continue when cleanup cannot run.
+
+Cache-aside has bounded stale windows: a Redis outage can skip invalidation, and a read racing a DB write can repopulate an older value after deletion. TTL is the eventual freshness bound; there is no stampede lock or cross-database atomicity. An out-of-band cancellation may remain in a previously cached upcoming-events value until its 15-minute TTL ends. A missed drive invalidation can briefly leave catalogue membership or pagination totals stale, while personal application/eligibility values and displayed drive documents are still read live.
+
+### Repository map
 
 ```text
-CampusOS
-├── backend
-│   ├── config           # MongoDB connection, Redis client
-│   ├── constants        # Event & resource categories
-│   ├── controllers      # Request handling (+ domain logic for simpler CRUD)
-│   ├── middleware       # auth, roles, club-admin, classroom-rep, multer, CSV upload, errors
-│   ├── models           # User, Classroom, Curriculum, Deadline, Club, Event, Drive,
-│   │                    # Application, Notice, Notification, Discussion, Comment, Reply, …
-│   ├── routes           # One router per resource
-│   ├── scripts          # One-off migrations (migrateDriveRounds.js)
-│   ├── services         # auth, dashboard/search, eligibility, shortlist, notifications, …
-│   ├── sockets          # Socket.IO cookie-JWT auth + per-user rooms
-│   ├── utils            # ApiError, asyncHandler, sendResponse, cache, cloudinary, roundState
-│   └── server.js
-│
-├── frontend
-│   ├── src
-│   │   ├── api          # One thin wrapper per backend resource, built on axios.js
-│   │   ├── components   # cards, common, dashboard, forms, layout
-│   │   ├── constants    # Branches, categories, years
-│   │   ├── context      # AuthContext, NotificationContext
-│   │   ├── hooks        # useAuth, useSocket, useNotifications, useIsClassRep, useDebounce, …
-│   │   ├── pages        # dashboard, academics, community (clubs/events), discussions,
-│   │   │                # career, admin, profile, auth
-│   │   └── utils        # Client-side eligibility, formatting, validators
-│   └── vite.config.js
-│
-└── README.md
+backend/
+  app.js             Express middleware and mounted API routes
+  server.js          MongoDB, optional Redis, HTTP, and Socket.IO startup
+  config/            Environment validation and service connections
+  routes/            Route definitions and middleware chains
+  controllers/       Request handling and domain logic
+  services/          Auth, eligibility, dashboard, shortlist, notification logic
+  models/            Mongoose schemas and indexes
+  middleware/        Auth, permissions, rate limits, uploads, and errors
+  scripts/           One-off data migrations and reconciliation
+  tests/             API integration tests
+frontend/
+  src/App.jsx        Client routes and access guards
+  src/api/           Resource wrappers around the shared Axios client
+  src/context/       Authentication and notification providers
+  src/pages/         Dashboard and domain workspaces
+  src/components/    Layouts, forms, and reusable UI
 ```
 
----
-
-## Getting Started
+## Run locally
 
 ### Prerequisites
 
-- Node.js 18+
-- MongoDB — local or Atlas (Atlas or any replica set enables transactional shortlisting; a standalone server also works)
-- A Cloudinary account (for image uploads)
-- _(Optional)_ Redis — the app runs without it, just without caching
-
-### Clone
+- **Node.js 20.19+ with npm 10+**, or Node.js 22.13+. The current backend test and development dependencies require these versions.
+- **MongoDB replica set** (local or Atlas). Several account and relationship writes use MongoDB transactions, so a standalone MongoDB server is insufficient for the full app.
+- **Cloudinary** credentials to use media uploads. **SMTP** is optional in development; without it, activation and reset links are printed to the backend console.
+- **Redis** is optional. The app continues to read from MongoDB when Redis is unset or unavailable.
 
 ```bash
 git clone https://github.com/aravindpulkam3/CampusOS.git
 cd CampusOS
 ```
 
-### Backend
+### 1. Start the API
+
+From the repository root:
 
 ```bash
 cd backend
 npm install
 ```
 
-Create `backend/.env` (see [Environment Variables](#environment-variables)), then:
+Create `backend/.env` with your own values:
 
-```bash
-npm run dev     # nodemon server.js
-# or
-npm start       # node server.js
+```dotenv
+NODE_ENV=development
+MONGO_URI=<your-mongodb-replica-set-uri>
+CLIENT_URL=http://localhost:5173
+JWT_ACCESS_SECRET=<random-secret-at-least-32-characters>
+JWT_REFRESH_SECRET=<different-random-secret-at-least-32-characters>
+PORT=5000
+TZ=Asia/Kolkata
+
+# Optional in development
+# REDIS_URL=redis://localhost:6379
+# CLOUDINARY_CLOUD_NAME=
+# CLOUDINARY_API_KEY=
+# CLOUDINARY_API_SECRET=
+# SMTP_HOST=
+# SMTP_PORT=
+# SMTP_USER=
+# SMTP_PASS=
+# MAIL_FROM=
 ```
 
-### Frontend
+Generate **two different** secrets, for example with `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"` run twice. The server validates configuration at startup and reports missing or invalid settings.
+
+```bash
+npm run dev
+```
+
+The API listens on port `5000` by default. `npm start` runs it without nodemon.
+
+### 2. Start the client
+
+In a second terminal, from the repository root:
 
 ```bash
 cd frontend
 npm install
-npm run dev     # Vite dev server, proxies /api/* to localhost:5000
 ```
 
-Both servers need to run at the same time; there is no root-level script
-that starts both.
+For local development, create `frontend/.env` with:
 
-### Tests
-
-```bash
-cd backend
-npm test        # Vitest + Supertest against an in-memory MongoDB replica set
+```dotenv
+VITE_API_URL=/api
 ```
 
-The first run downloads a MongoDB 7.0 binary for the in-memory server. The
-frontend has no tests.
-
-### Optional: local Redis
-
 ```bash
-docker run -d --name campusos-redis -p 6379:6379 redis:7
-# then set REDIS_URL=redis://localhost:6379 in backend/.env
+npm run dev
 ```
 
-### Migrating older data
+Open the URL printed by Vite, normally `http://localhost:5173`. Vite proxies `/api` and `/socket.io` to port `5000`. If `VITE_API_URL` is omitted, the Axios client defaults to `http://localhost:5000/api` and makes cross-origin requests using the configured `CLIENT_URL`.
 
-If your database has drives from before the rounds pipeline was introduced,
-run this once:
+**Account setup:** students can activate accounts only after a superadmin imports their roster entries through **Admin → Roster**. Staff accounts are administrator-provisioned; this repository does not include a general-purpose superadmin bootstrap command. The old `backend/seed.js` targets announcements for a specific event and is not an account or database bootstrap.
+
+## Configuration
+
+The backend's source of truth is [`backend/config/env.js`](backend/config/env.js). Its core settings are:
+
+| Variable | Purpose |
+| --- | --- |
+| `NODE_ENV` | Required: `development`, `production`, or `test`. Production enables secure cookies. |
+| `MONGO_URI` | Required MongoDB connection string. Use a replica set for transactional operations. |
+| `CLIENT_URL` | Required frontend origin for HTTP and Socket.IO CORS and email links. HTTPS is required in production. |
+| `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET` | Required, distinct secrets of at least 32 characters each. |
+| `JWT_ACCESS_EXPIRY`, `JWT_REFRESH_EXPIRY` | Optional JWT lifetimes; defaults are `15m` and `7d`. |
+| `PORT`, `HOST` | API port defaults to `5000`; production requires a loopback `HOST`. |
+| `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | Set all three for uploads; required in production. |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` | Set all five for outbound mail; required in production. Development can log links instead. |
+| `REDIS_URL` | Optional cache connection. |
+| `TRUST_PROXY` | Proxy trust for correct client IPs and rate limits; required in production. Use `loopback` with local Nginx. |
+| `RATE_LIMIT_*` | Optional auth rate-limit tuning; see [`rateLimitMiddleware.js`](backend/middleware/rateLimitMiddleware.js). |
+| `TZ` | Set to `Asia/Kolkata` if campus day boundaries should use IST. Dashboard date logic uses server-local time. |
+
+`VITE_API_URL` is the only frontend environment variable used here. For a production build served from the same origin as the API, set it to `/api` **before** running `npm run build`. The reverse proxy must forward both `/api` and `/socket.io` to the backend.
+
+## Access model
+
+| Permission | Scope |
+| --- | --- |
+| `student` | Dashboard, classroom, community, and placement participation. |
+| `placementCoordinator` | Drive and recruitment management, plus authorized academic corrections in the roster. |
+| `superadmin` | Platform administration, including clubs, classrooms, curricula, roster, and notices. |
+| Classroom `classRepresentative` | Timetable, deadlines, classroom notices, and semester progression for that classroom. |
+| Club `clubAdmins` | Club profile, events, announcements, and notices for that club. |
+| Event `eventOrganizers` | Event management, announcements, and notices for that event. |
+
+The first three are global user roles. The remaining permissions come from relationships to a specific resource; the API checks them on mutations.
+
+## API overview
+
+All routes are under `/api`. Standard successful responses use `{ success, message, data }`; the upload endpoint also returns its uploaded `url` and `publicId` directly.
+
+| Base path | Responsibility |
+| --- | --- |
+| `/api/auth` | Activation, sign-in, refresh, sign-out, password reset, profile |
+| `/api/dashboard` | Personalized dashboard and global search |
+| `/api/classroom`, `/api/admin/classroom`, `/api/curriculum` | Classrooms, timetable, deadlines, semester progression, curricula |
+| `/api/admin/roster` | Roster import and academic updates |
+| `/api/clubs`, `/api/events`, `/api/announcements` | Community and event workflows |
+| `/api/discussions` | Paged discussions, comments, replies, votes, bookmarks |
+| `/api/notices`, `/api/notifications` | Scoped notices and persisted notifications |
+| `/api/drives`, `/api/applications` | Placement drives, rounds, shortlisting, applications |
+| `/api/v1/upload` | Authenticated Cloudinary upload (`file` field) |
+
+## Verification
 
 ```bash
-cd backend
+# From backend/: integration tests use an in-memory MongoDB replica set
+npm test
+
+# From frontend/: production client build
+npm run build
+```
+
+The test runner may download a MongoDB binary on its first run. There is currently no frontend test or lint script.
+
+## Deployment and existing data
+
+For a single-VM production deployment, serve the built client over HTTPS and reverse-proxy `/api` and `/socket.io` to Node. Set `HOST=127.0.0.1`, `TRUST_PROXY=loopback`, `CLIENT_URL` to the public HTTPS frontend origin, and `VITE_API_URL=/api` at build time. The backend validates these production settings. Auth cookies use `SameSite=Strict`, so the client and API should share a site. Keep Node behind the proxy; rate-limit counters are process-local, so run one API process unless you add a shared rate-limit store.
+
+The API sets security headers for API responses. The server hosting the SPA must also set headers for `index.html` and static assets. Roll out a Content Security Policy in report-only mode first and account for Socket.IO and hosted media.
+
+If upgrading an older database, review the scripts before running them against a backup:
+
+```bash
+# Run from backend/; import the student roster before the auth migration
+node scripts/migratePhase1Auth.js --dry-run
+node scripts/migratePhase1Auth.js
+
+# Reconcile counts created by the older club-follow implementation
+node scripts/reconcileFollowerCounts.js --dry-run
+node scripts/reconcileFollowerCounts.js
+
+# Only for databases using the old drive selectionProcess format
 node scripts/migrateDriveRounds.js
 ```
 
-Databases from before roster-based accounts and per-device sessions need a
-one-off migration. **Import the student roster first** (Admin → Roster), then:
+`migratePhase1Auth.js` removes legacy refresh tokens, links matching students to roster entries, and requires those students to activate through email. It signs users out once. `reconcileFollowerCounts.js` corrects stored counts from the actual follower relationships. `migrateDriveRounds.js` converts legacy drive and application states.
 
-```bash
-cd backend
-node scripts/migratePhase1Auth.js --dry-run   # report only
-node scripts/migratePhase1Auth.js
-```
+## Project status
 
-It drops legacy refresh tokens (everyone signs in again once) and stored event
-registration counts, marks placement-coordinator/superadmin accounts as
-verified, and links existing students to their roster entry when roll number,
-email and cohort all match. Linked students activate through **Sign up** (the
-claim link); the script lists every student it could not link.
+The dashboard, academics, community, placement, roster, auth, notifications, and their mounted API routes are implemented. The **competitive preparation** screen is currently a frontend-only prototype, and the **moderation queue** is a placeholder; their backend workflows are not mounted. There is no root npm workspace or one-command setup script.
 
-Before deploying the transactional club-follow counter, reconcile existing
-follower counts once (the old follow toggle could inflate them):
-
-```bash
-cd backend
-node scripts/reconcileFollowerCounts.js --dry-run   # report mismatches
-node scripts/reconcileFollowerCounts.js             # reset them to the real count
-node scripts/reconcileFollowerCounts.js --dry-run   # must report 0 mismatches
-```
-
-### Accounts and sessions
-
-- **Student accounts come from the roster.** A superadmin imports a CSV
-  (`rollNumber,email,firstName,lastName,branch,batch,section,year`, optional
-  `cgpa,backlogs`). Signing up only asks for the college email; an activation
-  link (valid 24 h, single use) lets the student set a password. Roll number,
-  cohort and academic data are taken from the roster, never typed in.
-- **CGPA and backlogs are authoritative.** Students cannot edit them; placement
-  coordinators and superadmins can (Admin → Roster), and only superadmins can
-  change `year`.
-- **Sessions are per device.** Refresh tokens rotate on every use and are
-  stored hashed. Presenting an already-used refresh token revokes that
-  session — including the rare case where a refresh response is lost on the
-  network, which then requires signing in again. This is deliberate: strict
-  rotation with no grace window. Sessions end after 30 days regardless of
-  activity.
-- **Password change and reset.** Changing the password (Profile) requires the
-  current one. *Forgot password?* on the login page emails a reset link (valid
-  30 minutes, single use); the response is the same whether or not the account
-  exists. Both write the new password and delete every refresh session in one
-  transaction. The current device signs in again right away; other devices keep
-  their current access token until it expires (`JWT_ACCESS_EXPIRY`, 15 minutes
-  by default), then their refresh fails and they must sign in again.
-- **Login rate limits.** Failed logins are limited per IP (one password tried
-  against many accounts) and per email address (one account guessed from many
-  IPs). A limit is a temporary `429`, never an account lockout.
-- **Deploy frontend and API on the same site** (same origin, or subdomains of
-  one domain you control). Auth cookies are `SameSite=Strict`, which is the
-  CSRF defence — never relax it to `None`. State-changing API requests from a
-  foreign `Origin` are refused as defence in depth.
-
-### Deploying on one VM with Nginx
-
-Node listens on loopback only and trusts only the local Nginx, so the client
-IPs used by the login rate limits can't be forged:
-
-- Set `HOST=127.0.0.1` and `TRUST_PROXY=loopback`. In production the server
-  refuses to start without them. (A hop count such as `TRUST_PROXY=1` trusts
-  whatever connects to the port; `loopback` trusts only this machine.)
-- Open only ports 80 and 443 in the firewall.
-- Nginx forwards the client address and upgrades WebSockets:
-
-```nginx
-location /api/ {
-    proxy_pass http://127.0.0.1:5000;
-    proxy_set_header Host $host;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-}
-location /socket.io/ {
-    proxy_pass http://127.0.0.1:5000;
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection "upgrade";
-    proxy_set_header Host $host;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-}
-```
-
-- Run **one** Node process. Rate-limit counters live in memory (and reset on
-  restart); with PM2 cluster mode or several instances each process would count
-  separately, and a shared store such as Redis would be needed.
-
-### Frontend response headers
-
-The API sets its own security headers (`backend/middleware/securityHeaders.js`),
-but those only cover **API responses**. The SPA document (`index.html`) is
-served by Nginx/CloudFront, so **that layer must send these headers itself** —
-an API-side CSP does not protect the frontend.
-
-Nginx example (use `always` so error pages get them too; CloudFront: a response
-headers policy with the same values):
-
-```nginx
-# Roll out CSP in report-only mode first; click through the dashboard,
-# discussions, drives, uploads, notifications (socket) and the activation page,
-# fix any violations, then switch the header name to Content-Security-Policy.
-add_header Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' wss://YOUR_HOST; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" always;
-add_header X-Content-Type-Options "nosniff" always;
-add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-add_header Strict-Transport-Security "max-age=31536000" always;   # at the TLS terminator
-add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
-```
-
-`img-src` allows any `https:` source because image fields (logos, banners,
-profile pictures) can hold external URLs. `script-src 'self'` also blocks
-`javascript:` URLs from executing.
+Contributions and issues are welcome. Open a focused issue or pull request against the current code and include the relevant manual or automated verification.
 
 ---
 
-## Environment Variables
-
-### `backend/.env`
-
-Configuration is validated at startup (`backend/config/env.js`); the server
-lists every problem and refuses to start if anything required is missing or
-invalid.
-
-| Variable                                                                 | Description                                                                                                                                                                                               |
-| ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NODE_ENV`                                                               | **Required.** `development`, `production` or `test`. `production` makes auth cookies `Secure`; internal error messages are shown only in `development`                                                    |
-| `MONGO_URI`                                                              | **Required.** MongoDB connection string (a replica set — e.g. Atlas — is required for transactions)                                                                                                       |
-| `CLIENT_URL`                                                             | **Required.** Frontend origin, used for CORS (HTTP + Socket.IO) and activation links. Must be `https://` in production                                                                                    |
-| `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET`                               | **Required.** Independent random secrets, at least 32 characters each, and different from each other. Generate each with `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"` |
-| `JWT_ACCESS_EXPIRY` / `JWT_REFRESH_EXPIRY`                               | Optional token lifetimes like `15m`, `12h`, `7d` (defaults `15m` / `7d`). Sessions also end 30 days after sign-in regardless                                                                              |
-| `PORT`                                                                   | Port the Express + Socket.IO server listens on (default `5000`)                                                                                                                                           |
-| `HOST`                                                                   | Interface to listen on. Unset in development (all interfaces). **Required in production and must be `127.0.0.1`** (Node sits behind Nginx on the same machine)                                            |
-| `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` | Cloudinary credentials — all three together; required in production                                                                                                                                       |
-| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `MAIL_FROM`      | Outgoing mail for account activation and password reset links — all five together; required in production. In development without them, links are printed to the server console                           |
-| `REDIS_URL`                                                              | Redis connection string (optional; Redis errors are logged, not fatal)                                                                                                                                    |
-| `TRUST_PROXY`                                                            | Express `trust proxy` for real client IPs behind a proxy. Use `loopback` behind Nginx on the same machine (**required in production**); a hop count or subnet list is also accepted. `true` is refused     |
-| `RATE_LIMIT_*`                                                           | Optional auth rate-limit tuning (see `middleware/rateLimitMiddleware.js`): `RATE_LIMIT_LOGIN_MAX` / `_WINDOW_MINUTES` (failed logins per email, default 10 / 15 min), `RATE_LIMIT_LOGIN_IP_MAX` / `_WINDOW_MINUTES` (failed logins per IP, default 100 / 15 min), plus signup and refresh limits |
-| `TZ`                                                                     | Recommended: `Asia/Kolkata`. "Today" calculations use server-local time, so a UTC host would roll the dashboard over at 05:30 IST                                                                         |
-
-### `frontend/.env`
-
-| Variable       | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `VITE_API_URL` | Backend API base URL, baked in at build time (optional, defaults to `http://localhost:5000/api` for local dev). **Production: `/api`** — frontend and API on the same origin behind the reverse proxy; Socket.IO then connects to the page's own origin, so the layer serving `index.html` must also proxy `/socket.io` to the backend with WebSocket upgrade headers (`Upgrade`/`Connection`). `vite` and `vite preview` already proxy both `/api` and `/socket.io` |
-
----
-
-## Roles & Permissions
-
-| Global role            | Scope                                                                                            |
-| ---------------------- | ------------------------------------------------------------------------------------------------ |
-| `student`              | Default role — dashboard, classroom, community, and placement access                             |
-| `placementCoordinator` | Creates and runs placement drives: rounds, shortlisting, finish/cancel, drive notices            |
-| `superadmin`           | Full platform administration: clubs, classrooms, curricula, platform notices, semester overrides |
-
-On top of these, three **contextual** permissions attach to a specific
-resource rather than to a user role:
-
-| Relationship                    | Grants                                                                                            |
-| ------------------------------- | ------------------------------------------------------------------------------------------------- |
-| Club `clubAdmins`               | Manage that club's profile, events, announcements, and notices                                    |
-| Event `eventOrganizers`         | Manage that event and post its announcements and notices                                          |
-| Classroom `classRepresentative` | Manage that classroom's timetable and deadlines, post classroom notices, and advance its semester |
-
----
-
-## API Surface
-
-All routes are mounted under `/api`. Success responses have the shape
-`{ success, message, data }`.
-
-| Base path              | Responsibility                                                                                                              |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `/api/auth`            | Signup, login, logout, token refresh, current user, profile                                                                 |
-| `/api/dashboard`       | Personalized student dashboard · `GET /search` global search                                                                |
-| `/api/clubs`           | Club CRUD, popular clubs, follow, mute                                                                                      |
-| `/api/events`          | Event CRUD, upcoming events, registration                                                                                   |
-| `/api/classroom`       | My classroom, deadlines, timetable periods, `POST /:classroomId/semester/next`                                              |
-| `/api/admin/classroom` | _(superadmin)_ Create/list/update classrooms, semester override                                                             |
-| `/api/curriculum`      | _(superadmin)_ Curricula and their subjects                                                                                 |
-| `/api/discussions`     | Discussions, comments, replies, upvotes, bookmarks, accepted answers                                                        |
-| `/api/notices`         | Polymorphic notices — create, list, pin, archive, delete                                                                    |
-| `/api/announcements`   | Club/event announcements, community feed                                                                                    |
-| `/api/drives`          | Drives, career dashboard, applicants, rounds (`/end`, `/advance`), shortlist (`/preview`, `/confirm`), `/finish`, `/cancel` |
-| `/api/applications`    | Apply to a drive, my applications, application detail & notes                                                               |
-| `/api/notifications`   | List, unread count, mark read, mark all read                                                                                |
-| `/api/v1/upload`       | Generic Cloudinary image upload (`?folder=<name>`, field `file`)                                                            |
-
----
-
-## Roadmap
-
-- [x] Real-time notifications over Socket.IO
-- [x] Cross-domain global search
-- [x] Redis caching for shared data like clubs, events, and search
-- [x] Personalized, time-aware student dashboard
-- [x] Multi-round placement pipeline with CSV shortlisting
-- [x] Semester-aware classrooms and curricula
-- [ ] Backend API for the competitive-prep hub and study resources (the `Resource` model and frontend page exist; routes are not wired yet)
-- [ ] Backend endpoints for the discussion moderation queue
-- [ ] Socket.IO Redis adapter for horizontal scaling
-- [ ] Request validation middleware (schema-based)
-- [ ] Background job queue (BullMQ) for notification fan-out
-- [ ] AI-assisted resume analysis
-- [ ] Drive/event recommendation engine
-- [ ] Browser push notifications
-- [ ] Docker Compose setup for one-command local dev
-
----
-
-## Contributing
-
-Contributions, issues, and feature suggestions are welcome. Fork the repo,
-create a feature branch, and open a pull request.
-
----
-
-## License
-
-Licensed under the [MIT License](LICENSE).
-
----
-
-## Author
-
-**Aravind Pulkam**
-GitHub: [@aravindpulkam3](https://github.com/aravindpulkam3)
+Built by [Aravind Pulkam](https://github.com/aravindpulkam3). No license file is currently included in this repository.

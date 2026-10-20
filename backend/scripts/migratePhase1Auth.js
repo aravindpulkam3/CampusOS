@@ -53,11 +53,15 @@ const run = async () => {
   }
   log(`events with stored registrationCount removed: ${withCount}`);
 
-  if (redisClient) {
-    await connectRedis();
+  if (!DRY_RUN && redisClient) {
+    await connectRedis({ timeoutMs: 8_000 });
     if (redisClient.isReady) {
-      if (!DRY_RUN) await redisClient.del(UPCOMING_EVENTS_CACHE_KEY);
-      log(`cache key ${UPCOMING_EVENTS_CACHE_KEY} deleted`);
+      try {
+        await redisClient.del(UPCOMING_EVENTS_CACHE_KEY);
+        log(`cache key ${UPCOMING_EVENTS_CACHE_KEY} deleted`);
+      } catch {
+        console.warn(`[migrate] cache cleanup failed; ${UPCOMING_EVENTS_CACHE_KEY} will expire on its own`);
+      }
     } else {
       log(`Redis unavailable — ${UPCOMING_EVENTS_CACHE_KEY} will expire on its own within 15 minutes`);
     }

@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 
 import Layout from "./components/layout/Layout";
@@ -23,8 +23,6 @@ import CreateClub from "./pages/clubs/CreateClub";
 import Events from "./pages/events/Events.jsx";
 import EventDetail from "./pages/events/EventDetail.jsx";
 import EventForm from "./pages/events/EventForm.jsx";
-import MyEvents from "./pages/events/MyEvents.jsx";
-import Announcements from "./pages/announcements/AnnouncementCard.jsx";
 import AnnouncementForm from "./pages/announcements/AnnouncementForm.jsx";
 
 // Academics workspace
@@ -41,10 +39,8 @@ import DriveDetail from "./pages/career/DriveDetail.jsx";
 import CreateDrive from "./pages/career/CreateDrive.jsx";
 
 // Admin workspace
-import AdminPanel from "./pages/admin/AdminPanel";
 import ManageNotices from "./pages/admin/ManageNotices";
 import ManageDrives from "./pages/admin/ManageDrives";
-import ModerationQueue from "./pages/admin/ModerationQueue";
 import ClassroomManagement from "./pages/admin/ClassroomManagement.jsx";
 import CurriculumManagement from "./pages/admin/CurriculumManagement.jsx";
 import RosterManagement from "./pages/admin/RosterManagement.jsx";
@@ -59,7 +55,6 @@ import EditClub from "./pages/clubs/EditClub.jsx";
 
 const adminTabs = [
   { label: "Drives", path: "/admin/drives", end: false },
-  { label: "Moderation", path: "/admin/moderation", end: false },
   { label: "Notices", path: "/admin/notices", end: false },
   { label: "Classrooms", path: "/admin/classrooms", end: false },
   { label: "Curricula", path: "/admin/curricula", end: false },
@@ -67,12 +62,14 @@ const adminTabs = [
 ];
 
 function App() {
-  const { loading } = useAuth(); // 2. FIXED: Added parenthesis to invoke hook properly
+  const { loading } = useAuth();
 
+  // Until the session check answers, nothing can decide which page to show.
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen w-screen bg-gray-50">
-        <div className="w-6 h-6 border-2 border-gray-900 border-t-transparent rounded-full animate-spin" />
+      <div role="status" className="grid h-dvh w-screen place-items-center bg-white">
+        <div className="size-6 animate-spin rounded-full border-2 border-ink border-t-transparent" />
+        <span className="sr-only">Loading</span>
       </div>
     );
   }
@@ -125,7 +122,8 @@ function App() {
             path="/community/:targetType/:targetId/announcements/create"
             element={<AnnouncementForm />}
           />
-          <Route path="/community/announcements" element={<Announcements />} />
+          {/* Announcements have no page of their own; they show in the community feed. */}
+          <Route path="/community/announcements" element={<Navigate to="/community" replace />} />
 
           {/* Academics workspace */}
           <Route
@@ -145,7 +143,14 @@ function App() {
           {/* Career workspace */}
           <Route path="/career" element={<CareerDashboard />} />
           <Route path="/career/drives" element={<DrivesList />} />
-          <Route path="/career/drives/create" element={<CreateDrive />} />
+          <Route
+            path="/career/drives/create"
+            element={
+              <ProtectedRoute allowedRoles={["superadmin", "placementCoordinator"]}>
+                <CreateDrive />
+              </ProtectedRoute>
+            }
+          />
           <Route path="/career/drives/:id" element={<DriveDetail />} />
           <Route path="/career/my-applications" element={<MyApplications />} />
 
@@ -162,9 +167,8 @@ function App() {
               </ProtectedRoute>
             }
           >
-            <Route index element={<AdminPanel />} />
+            <Route index element={<Navigate to="/admin/notices" replace />} />
             <Route path="drives" element={<ManageDrives />} />
-            <Route path="moderation" element={<ModerationQueue />} />
             <Route path="notices" element={<ManageNotices />} />
             <Route path="classrooms" element={<ClassroomManagement />} />
             <Route path="curricula" element={<CurriculumManagement />} />

@@ -121,6 +121,7 @@ export const NotificationProvider = ({ children }) => {
         markRead,
         markAllRead,
         dismissToast,
+        refetch: fetchNotifications,
       }}
     >
       {children}

@@ -8,6 +8,7 @@ import mongoose from "mongoose";
 import Drive from "../models/Drive.js";
 import Application from "../models/Application.js";
 import ApiError from "../utils/apiError.js";
+import { parseQueryInt } from "../utils/queryParams.js";
 import { getJSON, setJSON, del } from "../utils/cache.js";
 import { canManageEvent } from "../middleware/eventManagerMiddleware.js";
 import {
@@ -170,6 +171,26 @@ export const createNotice = asyncHandler(async (req, res) => {
 
   await notice.populate("createdBy", "firstName lastName role");
   sendResponse(res, 201, "Notice posted.", notice);
+});
+
+// Management is separate from the compact, audience-scoped notice feeds.
+export const listPlatformNotices = asyncHandler(async (req, res) => {
+  const page = parseQueryInt(req.query.page, 1);
+  const limit = 20;
+  const query = { targetType: "platform" };
+  const [notices, total] = await Promise.all([
+    Notice.find(query)
+      .populate("createdBy", "firstName lastName role")
+      .sort({ isPinned: -1, createdAt: -1, _id: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean(),
+    Notice.countDocuments(query),
+  ]);
+  sendResponse(res, 200, "Platform notices fetched.", {
+    notices,
+    pagination: { total, page, pages: Math.ceil(total / limit) },
+  });
 });
 
 export const getNotices = asyncHandler(async (req, res) => {

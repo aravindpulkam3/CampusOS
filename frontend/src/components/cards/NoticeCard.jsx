@@ -1,325 +1,222 @@
-import { useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import {
-  Pin,
-  ChevronDown,
-  ChevronUp,
   Archive,
+  CircleAlert,
+  MoreHorizontal,
+  Pin,
   Trash2,
-  Megaphone,
 } from "lucide-react";
+import { formatDate, formatDateTime, formatShortDate, formatTimeAgo } from "../../utils/formatDate";
+import useIsClamped from "../../hooks/useIsClamped";
+import { Kicker, feedTitle, focusRing } from "../common/ui";
 
-const relativeTime = (d) => {
-  if (!d) return "";
-  const mins = Math.floor((Date.now() - new Date(d)) / 60000);
-  if (mins < 1) return "now";
-  if (mins < 60) return `${mins}m`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h`;
-  return `${Math.floor(hrs / 24)}d`;
+// Only urgent and high are called out in words; normal and low carry no label.
+export const PRIORITY_LABEL = { urgent: "Urgent", high: "Important" };
+
+// Club / event / company a notice belongs to, when the server populated it.
+const sourceName = ({ targetType, targetId }) => {
+  if (!targetId || typeof targetId !== "object") return "";
+  if (targetType === "clubs") return targetId.clubName || "";
+  if (targetType === "events") return targetId.eventName || "";
+  if (targetType === "drive" || targetType === "drives") return targetId.companyName || "";
+  return "";
 };
 
-const formatDate = (d) =>
-  new Date(d).toLocaleDateString("en-IN", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
+// "16 Oct" this year, "16 Oct 2027" otherwise.
+const expiryDate = (d) =>
+  new Date(d).getFullYear() === new Date().getFullYear() ? formatShortDate(d) : formatDate(d);
 
-// "By X · Expires <date>" — expiry stays secondary, in the muted footer line.
-const footerText = (notice, byLabel) =>
-  [
-    notice.createdBy &&
-      `${byLabel} ${notice.createdBy.firstName} ${notice.createdBy.lastName}`,
-    notice.expiresAt && `Expires ${formatDate(notice.expiresAt)}`,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+const menuItem = `flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13.5px] hover:bg-soft focus-visible:bg-soft focus-visible:outline-none`;
 
-const priorityConf = {
-  urgent: {
-    dot: "bg-rose-500",
-    bar: "bg-rose-500",
-    row: "bg-rose-50/60 border-rose-200/80 shadow-xs",
-    badge: "bg-rose-600 text-white animate-pulse",
-    label: "Urgent Alert",
-  },
-  high: {
-    dot: "bg-amber-500",
-    bar: "bg-amber-500",
-    row: "bg-amber-50/60 border-amber-200/80 shadow-2xs",
-    badge: "bg-amber-600 text-white",
-    label: "High Priority",
-  },
-  normal: {
-    dot: "bg-slate-400",
-    bar: "bg-slate-300",
-    row: "bg-white border-slate-200/80 shadow-2xs",
-    badge: null,
-    label: "",
-  },
-  low: {
-    dot: "bg-slate-300",
-    bar: "bg-slate-200",
-    row: "bg-slate-50/40 border-slate-200/60 opacity-90",
-    badge: null,
-    label: "",
-  },
+// Pin / Archive / Delete. A sibling of the notice's text, never inside a
+// control, so using the menu can't also open the notice.
+const NoticeMenu = ({ isPinned, busy, onPin, onArchive, onDelete }) => {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef(null);
+  const triggerRef = useRef(null);
+  const menuRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    menuRef.current?.querySelector("button")?.focus();
+    const onDown = (e) => {
+      if (!wrapRef.current?.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [open]);
+
+  const close = () => {
+    setOpen(false);
+    triggerRef.current?.focus();
+  };
+
+  const onKeyDown = (e) => {
+    if (!open) return;
+    if (e.key === "Escape") {
+      e.preventDefault();
+      close();
+    } else if (e.key === "Tab") {
+      setOpen(false);
+    } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      const items = [...menuRef.current.querySelectorAll("button")];
+      const next = items.indexOf(document.activeElement) + (e.key === "ArrowDown" ? 1 : -1);
+      items[(next + items.length) % items.length]?.focus();
+    }
+  };
+
+  const pick = (fn) => () => {
+    close();
+    fn();
+  };
+
+  return (
+    <div ref={wrapRef} className="relative -mr-1.5 -mt-1.5 shrink-0" onKeyDown={onKeyDown}>
+      <button
+        ref={triggerRef}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label="Notice actions"
+        disabled={busy}
+        onClick={() => setOpen((o) => !o)}
+        className={`grid size-8 place-items-center rounded-lg transition-colors disabled:opacity-40 ${focusRing} ${
+          open ? "bg-soft text-ink" : "text-ink-3 hover:bg-soft hover:text-ink"
+        }`}
+      >
+        <MoreHorizontal size={16} aria-hidden="true" />
+      </button>
+
+      {open && (
+        <div
+          ref={menuRef}
+          role="menu"
+          className="absolute right-0 top-full z-20 mt-1 w-40 rounded-xl border border-line-2 bg-white p-1 shadow-panel"
+        >
+          <button type="button" role="menuitem" onClick={pick(onPin)} className={`${menuItem} text-ink`}>
+            <Pin size={14} className="text-ink-3" aria-hidden="true" />
+            {isPinned ? "Unpin" : "Pin"}
+          </button>
+          <button type="button" role="menuitem" onClick={pick(onArchive)} className={`${menuItem} text-ink`}>
+            <Archive size={14} className="text-ink-3" aria-hidden="true" />
+            Archive
+          </button>
+          <div className="my-1 border-t border-line" />
+          <button type="button" role="menuitem" onClick={pick(onDelete)} className={`${menuItem} text-urgent`}>
+            <Trash2 size={14} aria-hidden="true" />
+            Delete
+          </button>
+        </div>
+      )}
+    </div>
+  );
 };
 
-const NoticeCard = ({
-  notice,
-  canManage,
-  onPin,
-  onArchive,
-  onDelete,
-  compact = false,
-}) => {
+// One notice: what kind it is and when, the title, then the text. The text
+// opens in place, and only offers to when two lines cut it short.
+// `showSource` names the club, event or company it belongs to, for feeds that
+// mix several.
+const NoticeCard = ({ notice, canManage, showSource = false, onPin, onArchive, onDelete }) => {
   const [open, setOpen] = useState(false);
   const [isPinned, setIsPinned] = useState(notice.isPinned);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const bodyId = useId();
+  const bodyRef = useRef(null);
+  const clamped = useIsClamped(bodyRef, !open, notice.content);
 
-  const pc = priorityConf[notice.priority] ?? priorityConf.normal;
-  const isAlert = notice.priority === "urgent" || notice.priority === "high";
+  const author = notice.createdBy?.firstName
+    ? `${notice.createdBy.firstName} ${notice.createdBy.lastName ?? ""}`.trim()
+    : "";
+  const lead =
+    [PRIORITY_LABEL[notice.priority], showSource && sourceName(notice), author]
+      .filter(Boolean)
+      .join(", ") ||
+    "Notice";
+  const kind = notice.priority === "urgent" ? "urgent" : notice.priority === "high" ? "warn" : "quiet";
 
-  const act = async (fn) => {
+  // State only changes once the request has succeeded; a failure leaves the
+  // notice as it was and says so.
+  const act = async (fn, failed) => {
     setBusy(true);
+    setError("");
     try {
       await fn();
     } catch {
+      setError(failed);
     } finally {
       setBusy(false);
     }
   };
 
-  if (compact) {
-    return (
-      <div
-        className={`border-b border-slate-100/80 last:border-0 transition-all ${busy ? "opacity-40" : ""}`}
-      >
-        <button
-          onClick={() => setOpen((o) => !o)}
-          className="w-full flex items-start gap-3 py-3 text-left group"
-        >
-          {/* Priority Dot Indicator aligned nicely to the top row */}
-          <div
-            className={`w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1.5 ${pc.dot} ${isAlert ? "scale-110 shadow-xs" : ""}`}
-          />
-
-          <div className="flex-1 min-w-0">
-            {/* Row 1: Badges and Title */}
-            <div className="flex items-start gap-1.5 min-w-0">
-              {isAlert && pc.badge && (
-                <span
-                  className={`text-[9px] font-bold px-1.5 py-0.5 rounded tracking-wider uppercase flex-shrink-0 mt-0.5 ${pc.badge}`}
-                >
-                  {pc.label.split(" ")[0]}
-                </span>
-              )}
-
-              <p
-                className={`text-xs text-slate-800 break-words transition-colors group-hover:text-slate-900 ${isPinned || isAlert ? "font-semibold" : "font-medium"}`}
-              >
-                {notice.title}
-              </p>
-            </div>
-
-            {/* Row 2: Populated Source Name */}
-            {notice.targetId && typeof notice.targetId === "object" && (
-              <div className="flex items-center gap-2 mt-1 flex-wrap text-[10px] text-slate-400 font-medium">
-                <span className="font-semibold text-blue-600 bg-blue-50/60 border border-blue-100/40 px-1.5 py-0.5 rounded">
-                  {notice.targetType === "clubs" && notice.targetId.clubName}
-                  {notice.targetType === "events" &&
-                    notice.targetId.eventName}
-                  {(notice.targetType === "drive" ||
-                    notice.targetType === "drives") &&
-                    notice.targetId.companyName}
-                </span>
-              </div>
-            )}
-          </div>
-
-          {/* Right Edge Action Alignments */}
-          <div className="flex items-center gap-2 flex-shrink-0 pt-0.5">
-            <span className="text-[10px] text-slate-400 font-mono font-medium bg-slate-50 border border-slate-100 px-1.5 py-0.5 rounded">
-              {relativeTime(notice.createdAt)}
-            </span>
-            <ChevronDown
-              size={12}
-              className={`text-slate-300 group-hover:text-slate-500 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
-            />
-          </div>
-        </button>
-
-        {open && (
-          <div className="ml-4 pb-3.5 space-y-2.5 overflow-hidden animate-in fade-in duration-150">
-            {notice.content && (
-              <p className="text-xs text-slate-600 leading-relaxed break-words whitespace-pre-line bg-slate-50/50 p-2.5 rounded-lg border border-slate-100/50">
-                {notice.content}
-              </p>
-            )}
-
-            <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-              <span className="text-[10px] text-slate-400 font-medium">
-                {footerText(notice, "By")}
-              </span>
-              {canManage && (
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      act(async () => {
-                        await onPin?.(notice._id);
-                        setIsPinned((p) => !p);
-                      });
-                    }}
-                    className={`flex items-center gap-1 text-[10px] font-medium transition-colors ${isPinned ? "text-slate-900 font-semibold" : "text-slate-400 hover:text-slate-700"}`}
-                  >
-                    <Pin size={10} className={isPinned ? "fill-current" : ""} />{" "}
-                    {isPinned ? "Pinned" : "Pin"}
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      act(() => onArchive?.(notice._id));
-                    }}
-                    className="flex items-center gap-1 text-[10px] font-medium text-slate-400 hover:text-slate-600 transition-colors"
-                  >
-                    <Archive size={10} /> Archive
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      act(() => onDelete?.(notice._id));
-                    }}
-                    className="flex items-center gap-1 text-[10px] font-medium text-slate-400 hover:text-red-500 transition-colors"
-                  >
-                    <Trash2 size={10} /> Delete
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // ── 2. FULL PAGE VIEW (Classrooms / Dynamic Dashboards) ───────────────────
   return (
-    <div
-      className={`relative border rounded-xl overflow-hidden transition-all duration-200 max-w-4xl w-full ${pc.row} ${busy ? "opacity-40 pointer-events-none" : ""}`}
-    >
-      {/* Solid Left Priority Accent Bar */}
-      <div className={`absolute left-0 top-0 bottom-0 w-1 ${pc.bar}`} />
-
-      <div className="pl-5 pr-5 py-4">
-        {/* Top Header Row: Icon, Badges, and Time cleanly separated */}
-        <div className="flex items-center justify-between gap-4 mb-3">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 shadow-3xs bg-slate-100">
-              <Megaphone size={13} className="text-slate-600" />
-            </div>
-            {isPinned && (
-              <Pin
-                size={10}
-                className="text-slate-400 fill-slate-400/20 flex-shrink-0"
-              />
-            )}
-            {isAlert && pc.badge && (
-              <span
-                className={`text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-wider shadow-3xs flex-shrink-0 ${pc.badge}`}
-              >
-                {pc.label}
-              </span>
-            )}
-          </div>
-
-          {/* Timestamp cleanly aligned on the right edge */}
-          <span className="text-[10px] text-slate-400 font-mono font-medium bg-white/80 border border-slate-200/60 px-2 py-0.5 rounded shadow-3xs flex-shrink-0">
-            {relativeTime(notice.createdAt)}
-          </span>
-        </div>
-
-        {/* Content Body Layout */}
-        <div className="max-w-3xl">
-          <h4 className="text-sm font-bold text-slate-900 leading-snug tracking-tight mb-1.5">
-            {notice.title}
-          </h4>
-
+    <li className={`py-[18px] first:pt-1.5 ${busy ? "opacity-60" : ""}`}>
+      <div className="flex items-start gap-2">
+        <div className="min-w-0 flex-1">
+          <Kicker
+            tone={kind}
+            pinned={isPinned}
+            after={
+              <>
+                {", "}
+                <time dateTime={notice.createdAt} title={formatDateTime(notice.createdAt)}>
+                  {formatTimeAgo(notice.createdAt)}
+                </time>
+                {notice.expiresAt && `, until ${expiryDate(notice.expiresAt)}`}
+              </>
+            }
+          >
+            {lead}
+          </Kicker>
+          <h3 className={feedTitle}>{notice.title}</h3>
           {notice.content && (
             <p
-              className={`text-xs text-slate-600 leading-relaxed break-words ${open ? "whitespace-pre-line" : "line-clamp-2"}`}
+              id={bodyId}
+              ref={bodyRef}
+              className={`mt-1 break-words text-[13.5px] leading-normal text-ink-2 ${
+                open ? "whitespace-pre-line" : "line-clamp-2"
+              }`}
             >
               {notice.content}
             </p>
           )}
+          {(clamped || open) && (
+            <button
+              type="button"
+              onClick={() => setOpen((o) => !o)}
+              aria-expanded={open}
+              aria-controls={bodyId}
+              className={`mt-1.5 rounded text-[13px] font-[550] text-ink-2 transition-colors hover:text-ink ${focusRing}`}
+            >
+              {open ? "Show less" : "Show more"}
+            </button>
+          )}
         </div>
 
-        {/* Action Toggle Button */}
-        {(notice.content?.length > 120 || canManage) && (
-          <button
-            onClick={() => setOpen((o) => !o)}
-            className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 hover:text-slate-700 mt-3 px-2.5 py-1 bg-white border border-slate-200 shadow-3xs rounded-md transition-all"
-          >
-            {open ? (
-              <>
-                <ChevronUp size={10} /> Hide Details
-              </>
-            ) : (
-              <>
-                <ChevronDown size={10} /> View Full Details
-              </>
-            )}
-          </button>
+        {canManage && (
+          <NoticeMenu
+            isPinned={isPinned}
+            busy={busy}
+            onPin={() =>
+              act(async () => {
+                await onPin?.(notice._id);
+                setIsPinned((p) => !p);
+              }, "Couldn't update the pin. Try again.")
+            }
+            onArchive={() => act(() => onArchive?.(notice._id), "Couldn't archive this notice. Try again.")}
+            onDelete={() => act(() => onDelete?.(notice._id), "Couldn't delete this notice. Try again.")}
+          />
         )}
       </div>
 
-      {/* Accordion Expansion Drawer Section */}
-      {open && (
-        <div className="mx-5 mb-4 space-y-3 pt-3.5 border-t border-slate-200/60 animate-in fade-in duration-200">
-          <div className="flex items-center justify-between pt-2 border-t border-slate-200/60">
-            <span className="text-[10px] font-medium text-slate-400">
-              {footerText(notice, "Posted by")}
-            </span>
-            {canManage && (
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    act(async () => {
-                      await onPin?.(notice._id);
-                      setIsPinned((p) => !p);
-                    });
-                  }}
-                  className={`flex items-center gap-1 text-[10px] font-semibold transition-colors ${isPinned ? "text-slate-900" : "text-slate-400 hover:text-slate-700"}`}
-                >
-                  <Pin size={10} className={isPinned ? "fill-current" : ""} />{" "}
-                  {isPinned ? "Pinned" : "Pin Notice"}
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    act(() => onArchive?.(notice._id));
-                  }}
-                  className="flex items-center gap-1 text-[10px] font-semibold text-slate-400 hover:text-slate-600 transition-colors"
-                >
-                  <Archive size={10} /> Archive
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    act(() => onDelete?.(notice._id));
-                  }}
-                  className="flex items-center gap-1 text-[10px] font-semibold text-slate-400 hover:text-red-500 transition-colors"
-                >
-                  <Trash2 size={10} /> Delete Notice
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
+      {error && (
+        <p role="alert" className="mt-2 flex items-center gap-1.5 text-[13px] text-urgent">
+          <CircleAlert size={13} className="shrink-0" aria-hidden="true" />
+          {error}
+        </p>
       )}
-    </div>
+    </li>
   );
 };
 

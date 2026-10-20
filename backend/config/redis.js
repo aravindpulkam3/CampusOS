@@ -5,6 +5,8 @@ import { env } from "./env.js";
 // (URL unset, URL malformed, server down at boot, outage mid-run) leaves the
 // app running with caching disabled — utils/cache.js checks isReady.
 const RECONNECT_MAX_DELAY_MS = 5000;
+const errorType = (err) =>
+  String(err?.code || err?.name || "Error").replace(/[^A-Za-z0-9_]/g, "").slice(0, 40) || "Error";
 
 const createRedisClient = () => {
   if (!env.redisUrl) {
@@ -45,7 +47,7 @@ if (redisClient) {
     if (outageLogged) return;
     outageLogged = true;
     console.error(
-      `[REDIS] unavailable, serving without cache: ${err.message || err.code || err.name}`
+      `[REDIS] unavailable, serving without cache: ${errorType(err)}`
     );
   });
 
@@ -55,26 +57,46 @@ if (redisClient) {
   });
 }
 
-// Never rejects: Redis being down must not fail startup. With the reconnect
-// strategy above, connect() keeps retrying instead of rejecting; the catch
-// covers anything else (e.g. the client being closed mid-connect).
+// The HTTP server calls this without a timeout: Redis reconnects in the
+// background and never gates startup. One-off scripts may opt into a bounded
+// wait; on timeout their process-local client is destroyed to stop retries.
 let connectPromise = null;
-export const connectRedis = () => {
-  if (!redisClient || redisClient.isOpen) {
-    return Promise.resolve();
-  }
+export const connectRedis = ({ timeoutMs } = {}) => {
+  if (!redisClient) return Promise.resolve(false);
+  if (redisClient.isReady) return Promise.resolve(true);
 
-  if (!connectPromise) {
+  if (!connectPromise && !redisClient.isOpen) {
     connectPromise = redisClient
       .connect()
+      .then(() => true)
       .catch((err) => {
-        console.error(`[REDIS] Initial connection failed: ${err.message || err.code || err.name}`);
+        console.error(`[REDIS] Initial connection failed: ${errorType(err)}`);
+        return false;
       })
       .finally(() => {
         connectPromise = null;
       });
   }
-  return connectPromise;
+  if (!connectPromise) return Promise.resolve(redisClient.isReady);
+  if (timeoutMs === undefined) return connectPromise;
+
+  const pending = connectPromise;
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      if (redisClient.isReady) return resolve(true);
+      console.warn(`[REDIS] connection not ready after ${timeoutMs}ms; stopping script attempt`);
+      try {
+        if (redisClient.isOpen) redisClient.destroy();
+      } catch (err) {
+        console.warn(`[REDIS] failed to stop connection attempt: ${errorType(err)}`);
+      }
+      resolve(false);
+    }, timeoutMs);
+    pending.then((connected) => {
+      clearTimeout(timer);
+      resolve(connected);
+    });
+  });
 };
 
 // May be null when caching is disabled.

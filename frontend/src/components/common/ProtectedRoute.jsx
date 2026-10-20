@@ -7,8 +7,9 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <div className="w-6 h-6 border-2 border-gray-900 border-t-transparent rounded-full animate-spin" />
+      <div role="status" className="grid min-h-screen place-items-center bg-white">
+        <div className="size-6 animate-spin rounded-full border-2 border-ink border-t-transparent" />
+        <span className="sr-only">Loading</span>
       </div>
     );
   }

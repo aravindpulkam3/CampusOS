@@ -1,17 +1,31 @@
 import { useState, useEffect } from "react";
-import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { ArrowLeft, AlertTriangle } from "lucide-react";
+import { Link, useParams, useNavigate, useLocation } from "react-router-dom";
 import { getClassroom, getDeadlines, createDeadline, updateDeadline } from "../../../api/classroom.api";
+import { toLocalDateTimeInput } from "../../../utils/formatDate";
+import { PageMessage, btn, btnGhost, crumbLink, tone } from "../../../components/common/ui";
+import {
+  Busy,
+  ChoiceChips,
+  Counter,
+  Field,
+  FormBar,
+  FormSection,
+  FormSheet,
+  describedBy,
+  fixMessage,
+  focusFirstError,
+  inputClass,
+} from "../../../components/forms/formBits";
 
 // ─── Config ───────────────────────────────────────────────────
 const TYPES = [
-  { value: "assignment", label: "Assignment", color: "bg-blue-50 text-blue-700 border-blue-200", activeRing: "ring-blue-200", icon: "📄" },
-  { value: "quiz", label: "Quiz", color: "bg-purple-50 text-purple-700 border-purple-200", activeRing: "ring-purple-200", icon: "✏️" },
-  { value: "minor_exam", label: "Minor Exam", color: "bg-amber-50 text-amber-700 border-amber-200", activeRing: "ring-amber-200", icon: "📋" },
-  { value: "lab_exam", label: "Lab Exam", color: "bg-green-50 text-green-700 border-green-200", activeRing: "ring-green-200", icon: "🔬" },
-  { value: "semester_exam", label: "Semester Exam", color: "bg-red-50 text-red-700 border-red-200", activeRing: "ring-red-200", icon: "📕" },
-  { value: "project", label: "Project", color: "bg-teal-50 text-teal-700 border-teal-200", activeRing: "ring-teal-200", icon: "🗂️" },
-  { value: "general", label: "General", color: "bg-gray-50 text-gray-700 border-gray-200", activeRing: "ring-gray-200", icon: "📌" },
+  { value: "assignment", label: "Assignment" },
+  { value: "quiz", label: "Quiz" },
+  { value: "minor_exam", label: "Minor exam" },
+  { value: "lab_exam", label: "Lab exam" },
+  { value: "semester_exam", label: "Semester exam" },
+  { value: "project", label: "Project" },
+  { value: "general", label: "General" },
 ];
 
 const MAX_TITLE = 120;
@@ -23,21 +37,14 @@ const isUrgent = (dateStr) => {
   return diff > 0 && diff < 48 * 60 * 60 * 1000;
 };
 
-const toDatetimeLocal = (isoString) => {
-  if (!isoString) return "";
-  return new Date(isoString).toISOString().slice(0, 16);
-};
-
-const FieldError = ({ message }) =>
-  message ? <p className="mt-1.5 text-xs text-red-500">{message}</p> : null;
+const ORDER = ["type", "title", "dueDate", "description"];
+const idFor = (key) => `deadline-${key}`;
 
 const FormSkeleton = () => (
-  <div className="max-w-2xl mx-auto animate-pulse space-y-4">
-    <div className="w-16 h-3 bg-gray-100 rounded" />
-    <div className="w-48 h-5 bg-gray-100 rounded" />
-    {[...Array(4)].map((_, i) => (
-      <div key={i} className="h-20 bg-white border border-gray-100 rounded-xl" />
-    ))}
+  <div className="max-w-[760px] animate-pulse pb-10" aria-busy="true">
+    <div className="mt-1 h-4 w-32 rounded bg-soft lg:mt-4" />
+    <div className="mt-2 h-9 w-48 rounded-lg bg-soft" />
+    <div className="mt-12 h-48 rounded-[11px] bg-soft" />
   </div>
 );
 
@@ -98,22 +105,17 @@ export default function CreateDeadline() {
         title: existingDeadline.title || "",
         description: existingDeadline.description || "",
         type: existingDeadline.type || "",
-        dueDate: existingDeadline.dueDate ? toDatetimeLocal(existingDeadline.dueDate) : "",
+        dueDate: existingDeadline.dueDate ? toLocalDateTimeInput(existingDeadline.dueDate) : "",
       });
     }
   }, [existingDeadline]);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
+  const setValue = (name, value) => {
     setForm((p) => ({ ...p, [name]: value }));
     setErrors((p) => ({ ...p, [name]: "" }));
     setSubmitError("");
   };
-
-  const selectType = (value) => {
-    setForm((p) => ({ ...p, type: value }));
-    setErrors((p) => ({ ...p, type: "" }));
-  };
+  const handleChange = (e) => setValue(e.target.name, e.target.value);
 
   const validate = () => {
     const e = {};
@@ -131,6 +133,7 @@ export default function CreateDeadline() {
     const errs = validate();
     if (Object.keys(errs).length) {
       setErrors(errs);
+      focusFirstError(errs, ORDER, idFor);
       return;
     }
 
@@ -164,208 +167,125 @@ export default function CreateDeadline() {
 
   if (!allowed) {
     return (
-      <div className="max-w-md mx-auto my-20 bg-white border border-gray-100 rounded-2xl p-8 text-center">
-        <h3 className="text-base font-semibold text-gray-900 mb-1.5">Access Denied</h3>
-        <p className="text-xs text-gray-400 leading-relaxed mb-6">
-          Only this classroom's representative can manage deadlines.
-        </p>
-        <button
-          onClick={() => navigate(-1)}
-          className="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
-        >
-          Go Back
-        </button>
-      </div>
+      <PageMessage
+        title="You can't manage deadlines here"
+        action={
+          <button type="button" onClick={() => navigate(-1)} className={btnGhost}>
+            Go back
+          </button>
+        }
+      >
+        Only this classroom's representative can add or change deadlines.
+      </PageMessage>
     );
   }
 
   if (loadError) {
     return (
-      <div className="max-w-md mx-auto my-20 bg-white border border-gray-100 rounded-2xl p-8 text-center">
-        <h3 className="text-base font-semibold text-gray-900 mb-1.5">Something went wrong</h3>
-        <p className="text-xs text-gray-400 leading-relaxed mb-6">{loadError}</p>
-        <button
-          onClick={() => navigate(-1)}
-          className="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
-        >
-          Go Back
-        </button>
-      </div>
+      <PageMessage
+        title="Something went wrong"
+        action={
+          <button type="button" onClick={() => navigate(-1)} className={btnGhost}>
+            Go back
+          </button>
+        }
+      >
+        {loadError}
+      </PageMessage>
     );
   }
 
-  const titleLeft = MAX_TITLE - form.title.length;
-  const descLeft = MAX_DESC - form.description.length;
-  const minDate = new Date(Date.now() + 60000).toISOString().slice(0, 16);
-  const selectedType = TYPES.find((t) => t.value === form.type);
+  const minDate = toLocalDateTimeInput(new Date(Date.now() + 60000));
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <button
-        onClick={() => navigate(-1)}
-        className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-700 transition-colors mb-6"
-      >
-        <ArrowLeft size={14} /> Back
-      </button>
-
-      <div className="mb-6">
-        <h2 className="text-lg font-semibold text-gray-900">{isEdit ? "Edit Deadline" : "Add Deadline"}</h2>
-        <p className="text-xs text-gray-400 mt-0.5">
-          {isEdit ? "Update the deadline details below." : "Students in this classroom will see this in their schedule."}
-        </p>
-      </div>
-
-      {submitError && (
-        <div className="flex items-start gap-2.5 px-4 py-3 bg-red-50 border border-red-200 rounded-xl mb-4">
-          <AlertTriangle size={14} className="text-red-500 mt-0.5 flex-shrink-0" />
-          <p className="text-xs text-red-700">{submitError}</p>
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <div className="bg-white border border-gray-100 rounded-xl p-5">
-          <label className="block text-xs font-medium text-gray-700 mb-3">
-            Type <span className="text-red-400">*</span>
-          </label>
-          <div className="grid grid-cols-4 gap-2">
-            {TYPES.map((t) => (
-              <button
-                key={t.value}
-                type="button"
-                onClick={() => selectType(t.value)}
-                className={`flex flex-col items-center justify-center gap-1.5 py-3 px-2 rounded-xl border text-xs font-medium transition-all duration-150
-                  ${form.type === t.value ? `${t.color} ring-2 ${t.activeRing}` : "border-gray-200 text-gray-500 bg-white hover:border-gray-300 hover:bg-gray-50"}`}
-              >
-                <span className="text-sm">{t.icon}</span>
-                {t.label}
-              </button>
-            ))}
-          </div>
-          <FieldError message={errors.type} />
-        </div>
-
-        <div className="bg-white border border-gray-100 rounded-xl p-5">
-          <div className="flex items-center justify-between mb-1.5">
-            <label className="text-xs font-medium text-gray-700">
-              Title <span className="text-red-400">*</span>
-            </label>
-            <span className={`text-xs tabular-nums ${titleLeft < 20 ? "text-amber-500" : "text-gray-300"}`}>
-              {titleLeft} left
-            </span>
-          </div>
-          <input
-            type="text"
-            name="title"
-            value={form.title}
-            onChange={handleChange}
-            maxLength={MAX_TITLE}
-            placeholder="Enter a clear, descriptive title"
-            className={`w-full px-3 py-2 text-sm border rounded-lg outline-none focus:ring-2 transition-all placeholder:text-gray-300
-              ${errors.title ? "border-red-300 focus:border-red-400 focus:ring-red-100" : "border-gray-200 focus:border-gray-400 focus:ring-gray-100"}`}
-          />
-          <FieldError message={errors.title} />
-        </div>
-
-        <div className="bg-white border border-gray-100 rounded-xl p-5">
-          <label className="block text-xs font-medium text-gray-700 mb-1.5">
-            Due date &amp; time <span className="text-red-400">*</span>
-          </label>
-          <input
-            type="datetime-local"
-            name="dueDate"
-            value={form.dueDate}
-            onChange={handleChange}
-            min={isEdit ? undefined : minDate}
-            className={`w-full px-3 py-2 text-sm border rounded-lg outline-none focus:ring-2 transition-all
-              ${errors.dueDate ? "border-red-300 focus:border-red-400 focus:ring-red-100" : "border-gray-200 focus:border-gray-400 focus:ring-gray-100"}`}
-          />
-          <FieldError message={errors.dueDate} />
-          {isUrgent(form.dueDate) && (
-            <div className="flex items-center gap-1.5 mt-2">
-              <AlertTriangle size={12} className="text-amber-500 flex-shrink-0" />
-              <p className="text-xs text-amber-600">Within 48 hours — students will see an urgent flag.</p>
-            </div>
-          )}
-        </div>
-
-        <div className="bg-white border border-gray-100 rounded-xl p-5">
-          <div className="flex items-center justify-between mb-1.5">
-            <label className="text-xs font-medium text-gray-700">
-              Description <span className="text-gray-400 font-normal">(optional)</span>
-            </label>
-            <span className={`text-xs tabular-nums ${descLeft < 100 ? "text-amber-500" : "text-gray-300"}`}>
-              {descLeft} left
-            </span>
-          </div>
-          <textarea
-            name="description"
-            value={form.description}
-            onChange={handleChange}
-            maxLength={MAX_DESC}
-            rows={4}
-            placeholder="Add instructions, weightage, or submission details students should know..."
-            className={`w-full px-3 py-2 text-sm border rounded-lg outline-none focus:ring-2 transition-all placeholder:text-gray-300 resize-none leading-relaxed
-              ${errors.description ? "border-red-300 focus:border-red-400 focus:ring-red-100" : "border-gray-200 focus:border-gray-400 focus:ring-gray-100"}`}
-          />
-          <FieldError message={errors.description} />
-        </div>
-
-        {(form.title || form.type) && (
-          <div className="bg-gray-50 border border-gray-100 rounded-xl p-4">
-            <p className="text-xs font-medium text-gray-400 mb-3">Preview</p>
-            <div className="flex items-start gap-3">
-              {selectedType && (
-                <span className={`mt-0.5 text-xs font-medium px-2.5 py-1 rounded-full border flex-shrink-0 ${selectedType.color}`}>
-                  {selectedType.label}
-                </span>
-              )}
-              <div className="min-w-0 flex-1">
-                {form.title && <p className="text-sm font-semibold text-gray-900 truncate">{form.title}</p>}
-                {form.dueDate && (
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    Due{" "}
-                    {new Date(form.dueDate).toLocaleString("en-IN", {
-                      day: "2-digit",
-                      month: "short",
-                      year: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                    {isUrgent(form.dueDate) && <span className="ml-2 text-amber-600 font-medium">⚡ Urgent</span>}
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div className="flex items-center justify-end gap-3 pt-2 pb-6">
-          <button
-            type="button"
-            onClick={() => navigate(-1)}
-            disabled={loading}
-            className="px-4 py-2 text-sm font-medium text-gray-500 border border-gray-200 rounded-lg hover:border-gray-400 hover:text-gray-700 transition-colors disabled:opacity-50"
+    <FormSheet
+      title={isEdit ? "Edit deadline" : "New deadline"}
+      sub={isEdit ? undefined : "Everyone in the classroom sees it on their dashboard and the classroom page."}
+      crumb={
+        <>
+          Academics /{" "}
+          <Link to={`/academics/classroom/${classroomId}`} className={crumbLink}>
+            Classroom
+          </Link>
+        </>
+      }
+    >
+      <form onSubmit={handleSubmit} noValidate>
+        <FormSection first>
+          <Field id="deadline-type" label="Type" group full error={errors.type}>
+            <ChoiceChips options={TYPES} value={form.type} onChange={(type) => setValue("type", type)} />
+          </Field>
+          <Field
+            id="deadline-title"
+            label="Title"
+            error={errors.title}
+            full
+            aside={<Counter value={form.title} max={MAX_TITLE} />}
           >
+            <input
+              id="deadline-title"
+              type="text"
+              name="title"
+              value={form.title}
+              onChange={handleChange}
+              maxLength={MAX_TITLE}
+              placeholder="e.g. DBMS Assignment 3"
+              className={inputClass(errors.title)}
+              {...describedBy("deadline-title", errors.title)}
+            />
+          </Field>
+          <Field
+            id="deadline-dueDate"
+            label="Due"
+            error={errors.dueDate}
+            hint={
+              isUrgent(form.dueDate) ? (
+                <span className={tone.warn}>Within 48 hours, so students see it marked as due soon.</span>
+              ) : undefined
+            }
+          >
+            <input
+              id="deadline-dueDate"
+              type="datetime-local"
+              name="dueDate"
+              value={form.dueDate}
+              onChange={handleChange}
+              min={isEdit ? undefined : minDate}
+              className={inputClass(errors.dueDate)}
+              {...describedBy("deadline-dueDate", errors.dueDate)}
+            />
+          </Field>
+          <Field
+            id="deadline-description"
+            label="Details"
+            optional
+            error={errors.description}
+            full
+            aside={<Counter value={form.description} max={MAX_DESC} warnAt={100} />}
+          >
+            <textarea
+              id="deadline-description"
+              name="description"
+              value={form.description}
+              onChange={handleChange}
+              maxLength={MAX_DESC}
+              rows={4}
+              placeholder="Instructions, weightage or how to submit"
+              className={`${inputClass(errors.description)} resize-none py-2.5 leading-[1.55]`}
+              {...describedBy("deadline-description", errors.description)}
+            />
+          </Field>
+        </FormSection>
+
+        <FormBar message={submitError || fixMessage(errors)}>
+          <button type="button" onClick={() => navigate(-1)} disabled={loading} className={btnGhost}>
             Cancel
           </button>
-          <button
-            type="submit"
-            disabled={loading}
-            className="flex items-center gap-2 px-5 py-2 text-sm font-medium bg-gray-900 text-white rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? (
-              <>
-                <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                {isEdit ? "Saving..." : "Adding..."}
-              </>
-            ) : isEdit ? (
-              "Save Changes"
-            ) : (
-              "Add Deadline"
-            )}
+          <button type="submit" disabled={loading} className={btn}>
+            {loading ? <Busy>{isEdit ? "Saving…" : "Adding…"}</Busy> : isEdit ? "Save changes" : "Add deadline"}
           </button>
-        </div>
+        </FormBar>
       </form>
-    </div>
+    </FormSheet>
   );
 }

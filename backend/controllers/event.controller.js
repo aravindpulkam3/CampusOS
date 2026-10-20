@@ -5,6 +5,7 @@ import asyncHandler from "../utils/asyncHandler.js";
 import sendResponse from "../utils/sendResponse.js";
 import ApiError from "../utils/apiError.js";
 import escapeRegex from "../utils/escapeRegex.js";
+import { normalizeSearch, parseQueryInt } from "../utils/queryParams.js";
 import { notifyClubFollowers, notifyEventRegistrants } from "../services/notification.service.js";
 import { getJSON, setJSON, del } from "../utils/cache.js";
 import { assertClubAdmin } from "../middleware/clubAdminMiddleware.js";
@@ -106,8 +107,8 @@ export const getAllEvents = asyncHandler(async (req, res) => {
   // Strings only (Express 4 turns `?category[$ne]=x` into an object, and this
   // is an aggregate, which Mongoose does not cast); offset clamped to >= 0.
   const category = typeof req.query.category === "string" ? req.query.category : undefined;
-  const search = req.query.search;
-  const skipCount = Math.max(0, parseInt(req.query.offset, 10) || 0);
+  const search = normalizeSearch(req.query.search);
+  const skipCount = parseQueryInt(req.query.offset, 0, 0);
   const limitCount = 15;
   const now = new Date();
 
@@ -118,8 +119,8 @@ export const getAllEvents = asyncHandler(async (req, res) => {
     matchConditions.category = category;
   }
 
-  if (typeof search === "string" && search.trim() !== "") {
-    const searchRegex = new RegExp(escapeRegex(search.trim()), "i");
+  if (search) {
+    const searchRegex = new RegExp(escapeRegex(search), "i");
     matchConditions.$or = [
       { eventName: searchRegex },
       { venue: searchRegex },
@@ -131,47 +132,47 @@ export const getAllEvents = asyncHandler(async (req, res) => {
   const pipeline = [
     { $match: matchConditions },
     {
-      $addFields: {
-        tier: {
-          $switch: {
-            branches: [
-              {
-                case: {
-                  $and: [
-                    { $lte: ["$startDateTime", now] },
-                    { $gte: ["$endDateTime", now] }
-                  ]
-                },
-                then: 1 // Ongoing
-              },
-              {
-                case: { $gt: ["$startDateTime", now] },
-                then: 2 // Upcoming
-              }
-            ],
-            default: 3 // Completed
-          }
-        }
-      }
-    },
-    {
-      $addFields: {
-        sortDate: {
-          $cond: {
-            if: { $eq: ["$tier", 3] },
-            // For completed events, most recent first (descending end date)
-            then: { $multiply: [{ $toLong: "$endDateTime" }, -1] },
-            // For ongoing/upcoming, nearest first (ascending start date)
-            else: { $toLong: "$startDateTime" }
-          }
-        }
-      }
-    },
-    { $sort: { tier: 1, sortDate: 1 } },
-    {
       $facet: {
         metadata: [{ $count: "totalRecords" }],
         data: [
+          {
+            $addFields: {
+              tier: {
+                $switch: {
+                  branches: [
+                    {
+                      case: {
+                        $and: [
+                          { $lte: ["$startDateTime", now] },
+                          { $gte: ["$endDateTime", now] }
+                        ]
+                      },
+                      then: 1 // Ongoing
+                    },
+                    {
+                      case: { $gt: ["$startDateTime", now] },
+                      then: 2 // Upcoming
+                    }
+                  ],
+                  default: 3 // Completed
+                }
+              }
+            }
+          },
+          {
+            $addFields: {
+              sortDate: {
+                $cond: {
+                  if: { $eq: ["$tier", 3] },
+                  // For completed events, most recent first (descending end date)
+                  then: { $multiply: [{ $toLong: "$endDateTime" }, -1] },
+                  // For ongoing/upcoming, nearest first (ascending start date)
+                  else: { $toLong: "$startDateTime" }
+                }
+              }
+            }
+          },
+          { $sort: { tier: 1, sortDate: 1, _id: 1 } },
           { $skip: skipCount },
           { $limit: limitCount },
           {
@@ -321,6 +322,7 @@ export const getUpcomingEvents = asyncHandler(async (req, res) => {
   const events = await Event.find({
     // Keeps events that are either currently running or haven't started yet
     endDateTime: { $gte: now },
+    status: { $ne: "Cancelled" },
   })
     .populate("organizerClub", "clubName logo")
     .sort({ startDateTime: 1 }) // Keeps the closest events at the top

@@ -9,6 +9,8 @@ import ApiError from "../utils/apiError.js";
 import { notifyClubFollowers, notifyEventRegistrants } from "../services/notification.service.js";
 import { isClubAdmin } from "../middleware/clubAdminMiddleware.js";
 import { canManageEvent } from "../middleware/eventManagerMiddleware.js";
+import escapeRegex from "../utils/escapeRegex.js";
+import { normalizeSearch, parseQueryInt } from "../utils/queryParams.js";
 // TODO: implement controller functions
 export const createAnnouncement = asyncHandler(async (req, res) => {
   const { targetType, targetId } = req.params;
@@ -97,29 +99,56 @@ export const getCommunityFeed = asyncHandler(async (req, res) => {
   const userId = req.user._id;
 
   // 1. Parse individual category page cursors/offsets
-  const offsetParam = (value) => Math.max(0, parseInt(value, 10) || 0);
-  const eventOffset = offsetParam(req.query.eventOffset);
-  const clubOffset = offsetParam(req.query.clubOffset);
-  const generalOffset = offsetParam(req.query.generalOffset);
+  const eventOffset = parseQueryInt(req.query.eventOffset, 0, 0);
+  const clubOffset = parseQueryInt(req.query.clubOffset, 0, 0);
+  const generalOffset = parseQueryInt(req.query.generalOffset, 0, 0);
+  const search = normalizeSearch(req.query.search);
+  const type = req.query.type === "club" || req.query.type === "event"
+    ? req.query.type
+    : "All";
 
   // 2. Resolve Targeted Entity Relationship Lists
   const followedClubIds = req.user.followedClubs || [];
   const registeredEventIds = req.user.registeredEvents || [];
 
   // 3. Define the Core Matching Criteria Filters
-  const eventFilter = {
+  const eventAudience = {
     targetType: "event",
     event: { $in: registeredEventIds },
   };
-  const clubFilter = { targetType: "club", club: { $in: followedClubIds } };
+  const clubAudience = { targetType: "club", club: { $in: followedClubIds } };
 
   //  Club announcements NOT followed AND Event announcements NOT registered for
-  const generalFilter = {
+  const generalAudience = {
     $or: [
       { targetType: "club", club: { $nin: followedClubIds } },
       { targetType: "event", event: { $nin: registeredEventIds } },
     ],
   };
+
+  // Keep the three audience buckets intact. Search and type are additional
+  // conditions, not replacements for their existing $or relationship rules.
+  const conditions = [];
+  if (type !== "All") conditions.push({ targetType: type });
+  if (search) {
+    const regex = new RegExp(escapeRegex(search), "i");
+    const [matchingClubs, matchingEvents] = await Promise.all([
+      Club.find({ clubName: regex }).select("_id").lean(),
+      Event.find({ eventName: regex }).select("_id").lean(),
+    ]);
+    conditions.push({ $or: [
+      { title: regex },
+      { body: regex },
+      { club: { $in: matchingClubs.map((club) => club._id) } },
+      { event: { $in: matchingEvents.map((event) => event._id) } },
+    ] });
+  }
+  const withConditions = (audience) => conditions.length
+    ? { $and: [audience, ...conditions] }
+    : audience;
+  const eventFilter = withConditions(eventAudience);
+  const clubFilter = withConditions(clubAudience);
+  const generalFilter = withConditions(generalAudience);
 
   // 4. Define target consumption baseline quotas
   let targetEvent = 8;
@@ -176,7 +205,7 @@ export const getCommunityFeed = asyncHandler(async (req, res) => {
       ? Announcement.find(eventFilter)
           .populate("event", "eventName bannerUrl image")
           .populate("postedBy", "firstName lastName profilePicture")
-          .sort({ createdAt: -1 })
+          .sort({ createdAt: -1, _id: -1 })
           .skip(eventOffset)
           .limit(targetEvent)
           .lean()
@@ -186,7 +215,7 @@ export const getCommunityFeed = asyncHandler(async (req, res) => {
       ? Announcement.find(clubFilter)
           .populate("club", "clubName logo")
           .populate("postedBy", "firstName lastName profilePicture")
-          .sort({ createdAt: -1 })
+          .sort({ createdAt: -1, _id: -1 })
           .skip(clubOffset)
           .limit(targetClub)
           .lean()
@@ -197,7 +226,7 @@ export const getCommunityFeed = asyncHandler(async (req, res) => {
           .populate("club", "clubName logo")
           .populate("event", "eventName bannerUrl image")
           .populate("postedBy", "firstName lastName profilePicture")
-          .sort({ createdAt: -1 })
+          .sort({ createdAt: -1, _id: -1 })
           .skip(generalOffset)
           .limit(targetGeneral)
           .lean()

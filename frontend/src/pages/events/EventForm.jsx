@@ -1,86 +1,48 @@
 import { useState, useEffect } from "react";
-import { useNavigate, useParams, useLocation } from "react-router-dom";
-import { ArrowLeft, X, Plus } from "lucide-react";
-import { createEvent, getEventById, updateEvent } from "../../api/event.api.js"; // Added getEventById & updateEvent
+import { Link, useNavigate, useParams, useLocation } from "react-router-dom";
+import { createEvent, getEventById, updateEvent } from "../../api/event.api.js";
 import { BRANCHES } from "../../constants/branches.js";
 import { EVENT_CATEGORIES } from "../../constants/categories.js";
-import useAuth from "../../hooks/useAuth.js";
+import { YEARS } from "../../constants/years.js";
 import ImageUploadZone from "../../components/forms/ImageUploadZone.jsx";
-
-const YEARS = [1, 2, 3, 4];
+import { toLocalDateInput, toLocalDateTimeInput } from "../../utils/formatDate.js";
+import { Alert, btn, btnGhost, crumbLink } from "../../components/common/ui";
+import {
+  Busy,
+  Field,
+  FormBar,
+  FormSection,
+  FormSheet,
+  Picks,
+  TagField,
+  describedBy,
+  fixMessage,
+  focusFirstError,
+  inputClass,
+} from "../../components/forms/formBits";
 
 // Date inputs work in LOCAL time, while toISOString() is UTC — slicing an ISO
 // string would shift the date for times between local midnight and the UTC
-// offset. These format a Date the way <input type="date|datetime-local"> expects.
-const pad = (n) => String(n).padStart(2, "0");
-const toLocalDate = (d) =>
-  `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-const toLocalDateTime = (d) =>
-  `${toLocalDate(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+// offset. The shared helpers format dates for these inputs.
 
-// ─── Reusable Field Components ────────────────────────────────
-const Label = ({ children, required }) => (
-  <label className="block text-xs font-medium text-gray-700 mb-1.5">
-    {children} {required && <span className="text-red-400">*</span>}
-  </label>
-);
-
-const Input = ({ ...props }) => (
-  <input
-    {...props}
-    className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 placeholder:text-gray-300 transition-colors"
-  />
-);
-
-const Textarea = ({ ...props }) => (
-  <textarea
-    {...props}
-    className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 placeholder:text-gray-300 transition-colors resize-none"
-  />
-);
-
-const Select = ({ children, ...props }) => (
-  <select
-    {...props}
-    className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 text-gray-700 transition-colors"
-  >
-    {children}
-  </select>
-);
-
-const FieldError = ({ message }) =>
-  message ? <p className="text-xs text-red-400 mt-1">{message}</p> : null;
-
-const TogglePill = ({ label, selected, onClick }) => (
-  <button
-    type="button"
-    onClick={onClick}
-    className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-all duration-150
-      ${
-        selected
-          ? "bg-gray-900 text-white border-gray-900"
-          : "bg-white text-gray-500 border-gray-200 hover:border-gray-400 hover:text-gray-700"
-      }`}
-  >
-    {label}
-  </button>
-);
-
-const Section = ({ title, children }) => (
-  <div className="bg-white border border-gray-100 rounded-xl p-5 flex flex-col gap-4">
-    <h3 className="text-sm font-semibold text-gray-900 pb-2 border-b border-gray-50">
-      {title}
-    </h3>
-    {children}
-  </div>
-);
+// Field order on the page, so focus can go to the first one that needs fixing.
+const ORDER = [
+  "eventName", "description", "category", "startDate", "startTime",
+  "endDate", "endTime", "venue", "registrationDeadline", "organizerClub",
+];
+const idFor = (key) => `event-${key}`;
 
 // ─── Skeleton Loader for Edit Fetch Fallback ──────────────────
 const FormSkeleton = () => (
-  <div className="max-w-3xl mx-auto animate-pulse px-4 py-6 space-y-6">
-    <div className="w-20 h-4 bg-gray-100 rounded" />
-    <div className="h-32 bg-gray-100 rounded-xl" />
-    <div className="h-48 bg-gray-100 rounded-xl" />
+  <div className="max-w-[760px] animate-pulse pb-10" aria-busy="true">
+    <div className="mt-1 h-4 w-32 rounded bg-soft lg:mt-4" />
+    <div className="mt-2 h-9 w-64 rounded-lg bg-soft" />
+    <div className="mt-12 h-4 w-40 rounded bg-soft" />
+    <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2">
+      {[0, 1, 2, 3].map((i) => (
+        <div key={i} className="h-[66px] rounded-[11px] bg-soft" />
+      ))}
+    </div>
   </div>
 );
 
@@ -89,13 +51,11 @@ const EventForm = ({ mode = "create" }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { clubId, eventId } = useParams(); // Can capture either dependent parameter from layout routes
-  const { user } = useAuth();
 
   const isEditMode = mode === "edit";
 
   const [loading, setLoading] = useState(isEditMode);
   const [submitting, setSubmitting] = useState(false);
-  const [tagInput, setTagInput] = useState("");
   const [errors, setErrors] = useState({});
 
   const [form, setForm] = useState({
@@ -153,12 +113,12 @@ const EventForm = ({ mode = "create" }) => {
     setForm({
       eventName: eventData.eventName || "",
       description: eventData.description || "",
-      startDate: toLocalDate(start),
+      startDate: toLocalDateInput(start),
       startTime: start.toTimeString().split(" ")[0].slice(0, 5),
-      endDate: toLocalDate(end),
+      endDate: toLocalDateInput(end),
       endTime: end.toTimeString().split(" ")[0].slice(0, 5),
       registrationDeadline: eventData.registrationDeadline
-        ? toLocalDateTime(new Date(eventData.registrationDeadline))
+        ? toLocalDateTimeInput(eventData.registrationDeadline)
         : "",
       venue: eventData.venue || "",
       category: eventData.category || "",
@@ -170,38 +130,13 @@ const EventForm = ({ mode = "create" }) => {
     });
   };
 
-  const set = (field) => (e) => {
-    setForm((prev) => ({ ...prev, [field]: e.target.value }));
-    if (errors[field]) {
-      setErrors((prev) => ({ ...prev, [field]: "" }));
+  const setValue = (field, value) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+    if (errors[field] || errors.submit) {
+      setErrors((prev) => ({ ...prev, [field]: "", submit: "" }));
     }
   };
-
-  const toggleBranch = (branch) =>
-    setForm((prev) => ({
-      ...prev,
-      eligibleBranches: prev.eligibleBranches.includes(branch)
-        ? prev.eligibleBranches.filter((b) => b !== branch)
-        : [...prev.eligibleBranches, branch],
-    }));
-
-  const toggleYear = (year) =>
-    setForm((prev) => ({
-      ...prev,
-      eligibleYears: prev.eligibleYears.includes(year)
-        ? prev.eligibleYears.filter((y) => y !== year)
-        : [...prev.eligibleYears, year],
-    }));
-
-  const addTag = () => {
-    const tag = tagInput.trim();
-    if (!tag || form.tags.includes(tag)) return;
-    setForm((prev) => ({ ...prev, tags: [...prev.tags, tag] }));
-    setTagInput("");
-  };
-
-  const removeTag = (tag) =>
-    setForm((prev) => ({ ...prev, tags: prev.tags.filter((t) => t !== tag) }));
+  const set = (field) => (e) => setValue(field, e.target.value);
 
   const validate = () => {
     const e = {};
@@ -219,7 +154,7 @@ const EventForm = ({ mode = "create" }) => {
       const start = new Date(`${form.startDate}T${form.startTime}`);
       const end = new Date(`${form.endDate}T${form.endTime}`);
       if (end <= start) {
-        e.endDate = "End date and time must be after start date and time";
+        e.endDate = "The event has to end after it starts";
       }
       // Mirrors the server rule (assertEventDates).
       if (form.registrationDeadline && new Date(form.registrationDeadline) > start) {
@@ -234,6 +169,7 @@ const EventForm = ({ mode = "create" }) => {
     const errs = validate();
     if (Object.keys(errs).length) {
       setErrors(errs);
+      focusFirstError(errs, ORDER, idFor);
       return;
     }
 
@@ -262,10 +198,13 @@ const EventForm = ({ mode = "create" }) => {
     try {
       if (isEditMode) {
         await updateEvent(eventId, payload);
-        navigate(`/community/events/${eventId}`); // Route back to refreshed Detail page
+        // Back to the refreshed detail page
+        navigate(`/community/events/${eventId}`, { state: { toast: "Changes saved." } });
       } else {
         await createEvent(payload);
-        navigate(`/community/clubs/${clubId || form.organizerClub}`);
+        navigate(`/community/clubs/${clubId || form.organizerClub}`, {
+          state: { toast: "Event published." },
+        });
       }
     } catch (err) {
       console.error(err);
@@ -281,267 +220,133 @@ const EventForm = ({ mode = "create" }) => {
 
   if (loading) return <FormSkeleton />;
 
+  const input = (key, label, { type = "text", hint, full, optional, placeholder, min } = {}) => (
+    <Field id={idFor(key)} label={label} hint={hint} error={errors[key]} full={full} optional={optional}>
+      <input
+        id={idFor(key)}
+        type={type}
+        value={form[key]}
+        onChange={set(key)}
+        placeholder={placeholder}
+        min={min}
+        className={inputClass(errors[key])}
+        {...describedBy(idFor(key), errors[key])}
+      />
+    </Field>
+  );
+
   return (
-    <div className="max-w-3xl mx-auto px-4 py-6">
-      {/* Back Button */}
-      <button
-        onClick={() => navigate(-1)}
-        className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-700 transition-colors mb-6"
-      >
-        <ArrowLeft size={14} /> Back
-      </button>
-
-      {/* Page Header */}
-      <div className="mb-6">
-        <h2 className="text-lg font-semibold text-gray-900">
-          {isEditMode ? "Edit Event" : "Create Event"}
-        </h2>
-        <p className="text-xs text-gray-400 mt-0.5">
-          {isEditMode
-            ? "Modify modifications to tweak this running event config details"
-            : "Fill in the details to publish a new club event configuration"}
-        </p>
-      </div>
-
-      {errors.submit && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-100 rounded-lg text-xs text-red-600">
-          {errors.submit}
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        {/* Basic Information */}
-        <Section title="Basic Information">
-          <div>
-            <Label required>Event Name</Label>
-            <Input
-              type="text"
-              placeholder="e.g. National Hackathon 2026"
-              value={form.eventName}
-              onChange={set("eventName")}
-            />
-            <FieldError message={errors.eventName} />
-          </div>
-
-          <div>
-            <Label required>Description</Label>
-            <Textarea
-              rows={4}
-              placeholder="Describe the event — what it's about, what participants can expect..."
+    <FormSheet
+      title={isEditMode ? "Edit event" : "New event"}
+      crumb={
+        <>
+          <Link to="/community" className={crumbLink}>Community</Link> /{" "}
+          <Link to="/community/events" className={crumbLink}>Events</Link>
+        </>
+      }
+      sub={isEditMode ? undefined : "Students can find it in Events and on your club's page once it's published."}
+    >
+      <form onSubmit={handleSubmit} noValidate>
+        <FormSection first title="About the event">
+          {input("eventName", "Event name", { full: true, placeholder: "e.g. Hack Night 2026" })}
+          <Field id="event-description" label="Description" error={errors.description} full>
+            <textarea
+              id="event-description"
+              rows={5}
+              placeholder="What the event is about and what people can expect"
               value={form.description}
               onChange={set("description")}
+              className={`${inputClass(errors.description)} resize-none py-2.5 leading-[1.55]`}
+              {...describedBy("event-description", errors.description)}
             />
-            <FieldError message={errors.description} />
-          </div>
-
-          <div>
-            <Label required>Category</Label>
-            <Select value={form.category} onChange={set("category")}>
-              <option value="">Select a category</option>
+          </Field>
+          <Field id="event-category" label="Category" error={errors.category}>
+            <select
+              id="event-category"
+              value={form.category}
+              onChange={set("category")}
+              className={inputClass(errors.category)}
+              {...describedBy("event-category", errors.category)}
+            >
+              <option value="">Choose a category</option>
               {EVENT_CATEGORIES.map((c) => (
                 <option key={c} value={c}>
                   {c}
                 </option>
               ))}
-            </Select>
-            <FieldError message={errors.category} />
-          </div>
-        </Section>
-
-        {/* Date, Time & Venue Updates */}
-        <Section title="Schedule & Location">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <Label required>Start Date</Label>
-              <Input
-                type="date"
-                value={form.startDate}
-                onChange={set("startDate")}
-                min={isEditMode ? undefined : new Date().toISOString().split("T")[0]}
-              />
-              <FieldError message={errors.startDate} />
-            </div>
-
-            <div>
-              <Label required>Start Time</Label>
-              <Input
-                type="time"
-                value={form.startTime}
-                onChange={set("startTime")}
-              />
-              <FieldError message={errors.startTime} />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <Label required>End Date</Label>
-              <Input
-                type="date"
-                value={form.endDate}
-                onChange={set("endDate")}
-                min={form.startDate || new Date().toISOString().split("T")[0]}
-              />
-              <FieldError message={errors.endDate} />
-            </div>
-
-            <div>
-              <Label required>End Time</Label>
-              <Input
-                type="time"
-                value={form.endTime}
-                onChange={set("endTime")}
-              />
-              <FieldError message={errors.endTime} />
-            </div>
-          </div>
-
-          <div>
-            <Label required>Venue</Label>
-            <Input
-              type="text"
-              placeholder="e.g. Seminar Hall A, Lab 3, Open Air Stage"
-              value={form.venue}
-              onChange={set("venue")}
-            />
-            <FieldError message={errors.venue} />
-          </div>
-
-          <div>
-            <Label>Registration Deadline</Label>
-            <p className="text-xs text-gray-400 mb-1.5">
-              Optional. Registration closes at this time. Leave empty to close it when the event starts.
-            </p>
-            {/* datetime-local is parsed as local time by new Date(), so the
-                stored instant is exactly the time the organizer picked. */}
-            <Input
-              type="datetime-local"
-              value={form.registrationDeadline}
-              onChange={set("registrationDeadline")}
-              min={isEditMode ? undefined : toLocalDateTime(new Date())}
-            />
-            <FieldError message={errors.registrationDeadline} />
-          </div>
-        </Section>
-
-        {/* Eligibility Parameters */}
-        <Section title="Eligibility Criteria">
-          <p className="text-xs text-gray-400 -mt-2">
-            Leave all unselected to keep the event open to everyone.
-          </p>
-
-          <div>
-            <Label>Eligible Branches</Label>
-            <div className="flex flex-wrap gap-2 mt-1">
-              {BRANCHES.map((b) => (
-                <TogglePill
-                  key={b}
-                  label={b}
-                  selected={form.eligibleBranches.includes(b)}
-                  onClick={() => toggleBranch(b)}
-                />
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <Label>Eligible Years</Label>
-            <div className="flex gap-2 mt-1">
-              {YEARS.map((y) => (
-                <TogglePill
-                  key={y}
-                  label={`Year ${y}`}
-                  selected={form.eligibleYears.includes(y)}
-                  onClick={() => toggleYear(y)}
-                />
-              ))}
-            </div>
-          </div>
-        </Section>
-
-        {/* Tags */}
-        <Section title="Tags">
-          <p className="text-xs text-gray-400 -mt-2">
-            Add relevant keywords to help students find this event.
-          </p>
-
-          <div className="flex gap-2">
-            <Input
-              type="text"
-              placeholder="e.g. hackathon, webdev, cloud"
-              value={tagInput}
-              onChange={(e) => setTagInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  addTag();
-                }
-              }}
-            />
-            <button
-              type="button"
-              onClick={addTag}
-              className="flex items-center gap-1 px-3 py-2 text-xs font-medium bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors flex-shrink-0"
-            >
-              <Plus size={13} /> Add
-            </button>
-          </div>
-
-          {form.tags.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {form.tags.map((tag) => (
-                <span
-                  key={tag}
-                  className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium bg-gray-100 text-gray-600 rounded-full"
-                >
-                  {tag}
-                  <button
-                    type="button"
-                    onClick={() => removeTag(tag)}
-                    className="text-gray-400 hover:text-gray-700 transition-colors"
-                  >
-                    <X size={11} />
-                  </button>
-                </span>
-              ))}
+            </select>
+          </Field>
+          {input("venue", "Venue", { placeholder: "e.g. LT-2, Seminar Hall" })}
+          {errors.organizerClub && (
+            <div className="sm:col-span-2">
+              <Alert>{errors.organizerClub}</Alert>
             </div>
           )}
-        </Section>
+        </FormSection>
 
-        {/* Banner Link Asset handling */}
-        <Section title="Banner Image">
-          <ImageUploadZone
-            label="Banner Asset"
-            value={form.banner}
-            folder="event-banners"
-            onChange={(uploadedUrl) =>
-              setForm((prev) => ({ ...prev, banner: uploadedUrl }))
-            }
-          />
-          <p className="text-xs text-gray-400 mt-1">
-            This asset will automatically sync down through Cloudinary CDN.
-          </p>
-        </Section>
+        <FormSection title="When" hint="Registration closes when the event starts unless you set an earlier time.">
+          {input("startDate", "Starts on", { type: "date", min: isEditMode ? undefined : toLocalDateInput(new Date()) })}
+          {input("startTime", "Start time", { type: "time" })}
+          {input("endDate", "Ends on", { type: "date", min: form.startDate || toLocalDateInput(new Date()) })}
+          {input("endTime", "End time", { type: "time" })}
+          {/* datetime-local is parsed as local time by new Date(), so the
+              stored instant is exactly the time the organizer picked. */}
+          {input("registrationDeadline", "Registration closes", {
+            type: "datetime-local",
+            min: isEditMode ? undefined : toLocalDateTimeInput(new Date()),
+            optional: true,
+          })}
+        </FormSection>
 
-        {/* Submission Panel Form Interactions */}
-        <div className="flex items-center justify-end gap-3 pt-2 pb-6">
-          <button
-            type="button"
-            onClick={() => navigate(-1)}
-            className="px-4 py-2 text-sm font-medium text-gray-500 border border-gray-200 rounded-lg hover:border-gray-400 hover:text-gray-700 transition-colors"
-          >
+        <FormSection title="Who can join" hint="Pick nothing to keep the event open to everyone.">
+          <Field id="event-branches" label="Branches" group full>
+            <Picks
+              options={BRANCHES}
+              value={form.eligibleBranches}
+              onChange={(v) => setValue("eligibleBranches", v)}
+            />
+          </Field>
+          <Field id="event-years" label="Years" group full>
+            <Picks
+              options={YEARS.map((y) => ({ value: y, label: `Year ${y}` }))}
+              value={form.eligibleYears}
+              onChange={(v) => setValue("eligibleYears", v)}
+            />
+          </Field>
+        </FormSection>
+
+        <FormSection title="Find and show it">
+          <Field id="event-tags" label="Tags" optional full hint="Keywords that help students find the event.">
+            <TagField
+              id="event-tags"
+              tags={form.tags}
+              onChange={(tags) => setValue("tags", tags)}
+              placeholder="e.g. hackathon, webdev"
+            />
+          </Field>
+          <div className="sm:col-span-2">
+            <ImageUploadZone
+              label="Banner"
+              value={form.banner}
+              folder="event-banners"
+              onChange={(uploadedUrl) => setValue("banner", uploadedUrl)}
+            />
+            <p className="mt-1.5 text-[13px] text-ink-3">
+              Shown at the top of the event page and on its card. Without one, the date is shown instead.
+            </p>
+          </div>
+        </FormSection>
+
+        <FormBar message={errors.submit || fixMessage(errors)}>
+          <button type="button" onClick={() => navigate(-1)} className={btnGhost}>
             Cancel
           </button>
-          <button
-            type="submit"
-            disabled={submitting}
-            className="px-5 py-2 text-sm font-medium bg-gray-900 text-white rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-xs"
-          >
-            {submitting ? "Saving..." : isEditMode ? "Save Changes" : "Publish Event"}
+          <button type="submit" disabled={submitting} className={btn}>
+            {submitting ? <Busy>Saving…</Busy> : isEditMode ? "Save changes" : "Publish event"}
           </button>
-        </div>
+        </FormBar>
       </form>
-    </div>
+    </FormSheet>
   );
 };
 

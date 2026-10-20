@@ -1,81 +1,69 @@
 import { Link } from "react-router-dom";
-import { Briefcase } from "lucide-react";
-import { Section, Empty } from "./Section";
-import Row, { RowList } from "./Row";
+import { LogoTile, Row, Rows, SectionHead, focusRing } from "../common/ui";
 import { describeDue } from "./format";
+
+const ROWS = 3;
+
+const note = "py-1.5 text-[14.5px] text-ink-2";
+const noteLink = `rounded font-[550] text-ink underline decoration-ink/25 underline-offset-[3px] hover:decoration-ink ${focusRing}`;
 
 // Keyed on the TWO independent profile flags:
 //   canEvaluateEligibility false → we cannot tell; claim nothing
 //   evaluable but incomplete     → show drives, note the imprecision
-const EligibleDrives = ({ drives = [], profile = {} }) => {
+// `shownAbove` holds the dontMiss ids of drives already in the attention feed,
+// so a drive closing today is not listed twice on the page.
+const EligibleDrives = ({ drives = [], profile = {}, shownAbove }) => {
   const { canEvaluateEligibility = true, placementProfileComplete = true } = profile;
+  const others = drives.filter((drive) => !shownAbove?.has(`drive-${drive.id}`));
+  const rows = (others.length > 0 ? others : drives).slice(0, ROWS);
 
   return (
-    <Section
-      title="Eligible Drives"
-      icon={Briefcase}
-      linkTo="/career/drives"
-      linkLabel="All drives"
-      footer={
-        canEvaluateEligibility &&
-        !placementProfileComplete && (
-          <Link
-            to="/profile"
-            className="text-[11px] text-gray-400 hover:text-gray-700 transition-colors"
-          >
-            Add backlog information for more accurate eligibility →
-          </Link>
-        )
-      }
-    >
+    <section className="min-w-0">
+      <SectionHead title="Drives open to you" linkTo="/career/drives" linkLabel="All drives" />
       {!canEvaluateEligibility ? (
-        <RowList>
-          <li>
-            <Row url="/profile">
-              <p className="flex-1 text-sm text-gray-600">
-                Complete your placement profile to see eligible drives
-              </p>
-            </Row>
-          </li>
-        </RowList>
-      ) : drives.length > 0 ? (
-        <RowList>
-          {drives.map((drive) => {
+        // CGPA and backlogs are the roster's: the student can look, not edit.
+        <p className={note}>
+          Your CGPA is not on record yet, so the drives you are eligible for can't be listed. The
+          placement office adds it;{" "}
+          <Link to="/profile" className={noteLink}>
+            your profile
+          </Link>{" "}
+          shows what is on file.
+        </p>
+      ) : rows.length > 0 ? (
+        <Rows>
+          {rows.map((drive) => {
             const due = describeDue(drive.registrationDeadline);
+            const pay = drive.ctc || drive.stipend;
             return (
-              <li key={drive.id}>
-                <Row
-                  url={drive.url}
-                  trailing={
-                    due && (
-                      <span className={`text-xs font-semibold flex-shrink-0 ${due.color}`}>
-                        {due.label}
-                      </span>
-                    )
-                  }
-                >
-                  <span className="w-6 h-6 rounded-md border border-gray-100 bg-gray-50 flex items-center justify-center flex-shrink-0 overflow-hidden">
-                    {drive.companyLogo ? (
-                      <img src={drive.companyLogo} alt="" className="w-full h-full object-contain p-0.5" />
-                    ) : (
-                      <span className="text-[9px] font-bold text-gray-500">
-                        {drive.companyName?.slice(0, 2).toUpperCase()}
-                      </span>
-                    )}
-                  </span>
-                  <p className="flex-1 min-w-0 text-sm text-gray-900 truncate">
-                    <span className="font-medium">{drive.companyName}</span>
-                    {drive.role && <span className="text-gray-500"> — {drive.role}</span>}
-                  </p>
-                </Row>
-              </li>
+              <Row
+                key={drive.id}
+                to={drive.url}
+                lead={<LogoTile src={drive.companyLogo} name={drive.companyName} />}
+                title={drive.companyName}
+                meta={[drive.role, due && `closes ${due.phrase}`].filter(Boolean).join(", ")}
+                end={
+                  pay && (
+                    <b className="text-[15px] font-[650] tracking-[-0.02em] text-ink">{pay}</b>
+                  )
+                }
+              />
             );
           })}
-        </RowList>
+        </Rows>
       ) : (
-        <Empty message="No eligible drives currently accepting applications." />
+        <p className={note}>No eligible drives are accepting applications right now.</p>
       )}
-    </Section>
+      {canEvaluateEligibility && !placementProfileComplete && (
+        <p className="mt-3 text-[13.5px] text-ink-3">
+          Your backlog count is not on record yet, so this list may include drives you are not
+          eligible for.{" "}
+          <Link to="/profile" className={`rounded underline underline-offset-[3px] transition-colors hover:text-ink ${focusRing}`}>
+            See your profile
+          </Link>
+        </p>
+      )}
+    </section>
   );
 };
 

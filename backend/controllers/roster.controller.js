@@ -5,6 +5,7 @@ import asyncHandler from "../utils/asyncHandler.js";
 import sendResponse from "../utils/sendResponse.js";
 import ApiError from "../utils/apiError.js";
 import escapeRegex from "../utils/escapeRegex.js";
+import { normalizeSearch, parseQueryInt } from "../utils/queryParams.js";
 import { withTransaction } from "../utils/transaction.js";
 
 // The roster is the authoritative student list (see models/RosterEntry.js).
@@ -371,11 +372,12 @@ export const importRoster = asyncHandler(async (req, res) => {
 
 // ─── GET /api/admin/roster  (superadmin) ──────────────────────────────────────
 export const listRoster = asyncHandler(async (req, res) => {
-  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
-  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 50));
+  const page = parseQueryInt(req.query.page, 1);
+  const limit = parseQueryInt(req.query.limit, 50, 1, 100);
 
   const query = {};
-  const { branch, section, batch, search, claimed } = req.query;
+  const { branch, section, batch, claimed } = req.query;
+  const search = normalizeSearch(req.query.search);
   if (typeof branch === "string" && branch) query.branch = branch;
   if (typeof section === "string" && section)
     query.section = section.toUpperCase();
@@ -383,8 +385,8 @@ export const listRoster = asyncHandler(async (req, res) => {
     query.batch = Number(batch);
   if (claimed === "true") query.claimedBy = { $ne: null };
   if (claimed === "false") query.claimedBy = null;
-  if (typeof search === "string" && search.trim()) {
-    const prefix = new RegExp(`^${escapeRegex(search.trim())}`, "i");
+  if (search) {
+    const prefix = new RegExp(`^${escapeRegex(search)}`, "i");
     query.$or = [{ rollNumber: prefix }, { email: prefix }];
   }
 

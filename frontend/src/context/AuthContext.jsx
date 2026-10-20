@@ -1,5 +1,6 @@
 import { createContext, useState, useEffect, useCallback } from "react";
 import { getMeApi, logoutApi } from "../api/auth.api.js";
+import { refreshAccessToken } from "../api/axios.js";
 
 export const AuthContext = createContext(null);
 
@@ -11,8 +12,21 @@ export const AuthProvider = ({ children }) => {
     try {
       const res = await getMeApi();
       setUser(res.data.data);
-    } catch {
-      setUser(null);
+    } catch (err) {
+      // /auth/me is left out of the interceptor's refresh-and-retry, so a tab
+      // opened after the access token lapsed would read as signed out although
+      // the refresh cookie is still good. Renew once through the shared
+      // single-flight and ask again; if that fails there is no session.
+      let restored = null;
+      if (err.response?.status === 401) {
+        try {
+          await refreshAccessToken();
+          restored = (await getMeApi()).data.data;
+        } catch {
+          restored = null;
+        }
+      }
+      setUser(restored);
     } finally {
       setLoading(false);
     }

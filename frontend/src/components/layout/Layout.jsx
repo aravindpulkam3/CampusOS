@@ -1,45 +1,46 @@
-import { useState, useEffect } from 'react'
-import { Outlet } from 'react-router-dom'
-import Sidebar from './Sidebar'
-import Navbar from './Navbar'
+import { Outlet, useLocation } from 'react-router-dom'
+import useAuth from '../../hooks/useAuth'
+import TopBar from './TopBar'
+import SectionTabs from './SectionTabs'
+import TabBar from './TabBar'
 import Footer from './Footer'
 import NotificationToasts from './NotificationToasts'
+import FlashMessage from './FlashMessage'
+import { getSections, sectionKeyFor } from './navConfig'
 
-// Tailwind's lg breakpoint. Below it the sidebar is an overlay drawer, hidden
-// by default; from lg up it's the usual open sidebar / collapsed rail.
-const DESKTOP = '(min-width: 64rem)'
-
+// App shell: the top bar, the current section's tabs, the page, and (below lg)
+// a bottom tab bar. <main> is the only scroller, so an over-wide row pans the
+// page area and never the whole document.
 const Layout = () => {
-  const [sidebarOpen, setSidebarOpen] = useState(() => window.matchMedia(DESKTOP).matches)
+  const { pathname } = useLocation()
+  const { user } = useAuth()
 
-  // Crossing the breakpoint resets the sidebar: open on desktop, closed on mobile.
-  useEffect(() => {
-    const mq = window.matchMedia(DESKTOP)
-    const sync = () => setSidebarOpen(mq.matches)
-    mq.addEventListener('change', sync)
-    return () => mq.removeEventListener('change', sync)
-  }, [])
-
-  // The drawer's close button, its links and the backdrop all close it on
-  // mobile; on desktop the sidebar stays as the user left it.
-  const closeOnMobile = () => {
-    if (!window.matchMedia(DESKTOP).matches) setSidebarOpen(false)
-  }
+  const sections = getSections(user)
+  const activeKey = sectionKeyFor(pathname)
+  const active = sections.find((section) => section.key === activeKey)
 
   return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden">
+    <div className="page-wash flex h-dvh flex-col overflow-hidden bg-white">
+      {/* The first thing Tab reaches: jumps past the top bar and section tabs */}
+      <a
+        href="#content"
+        className="fixed left-4 top-3 z-[200] -translate-y-24 rounded-[10px] bg-ink px-4 py-2.5 text-[14px] font-semibold text-white shadow-panel transition-transform focus:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/40 focus-visible:ring-offset-2"
+      >
+        Skip to content
+      </a>
       <NotificationToasts />
-      <Sidebar isOpen={sidebarOpen} onClose={closeOnMobile} />
-      {sidebarOpen && (
-        <div className="fixed inset-0 z-30 bg-gray-900/20 lg:hidden" onClick={closeOnMobile} aria-hidden="true" />
-      )}
-      <div className={`flex flex-col flex-1 overflow-hidden transition-all duration-300 ${sidebarOpen ? 'lg:ml-64' : 'lg:ml-16'}`}>
-        <Navbar onToggleSidebar={() => setSidebarOpen(prev => !prev)} sidebarOpen={sidebarOpen} />
-        <main className="flex-1 overflow-y-auto px-6 py-6">
-          <Outlet />
-        </main>
+      <FlashMessage />
+      <TopBar sections={sections} activeKey={activeKey} />
+      <main className="flex flex-1 flex-col overflow-y-auto">
+        <div className="mx-auto w-full max-w-[1184px] flex-1 px-4 sm:px-8">
+          {active?.tabs && <SectionTabs tabs={active.tabs} label={active.label} />}
+          <div id="content" tabIndex={-1} className="py-6 outline-none">
+            <Outlet />
+          </div>
+        </div>
         <Footer />
-      </div>
+      </main>
+      <TabBar sections={sections} activeKey={activeKey} />
     </div>
   )
 }

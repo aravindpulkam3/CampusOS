@@ -1,1 +1,83 @@
 @import "tailwindcss";
+
+/* Inter (SIL Open Font License, see assets/fonts/Inter-LICENSE.txt). Self-hosted,
+   so the app makes no third-party font request. */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("./assets/fonts/Inter-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("./assets/fonts/Inter-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* Design tokens. New and converted screens use these (text-ink, text-ink-2,
+   border-line, bg-soft, rounded-panel, shadow-panel, ...) instead of raw
+   gray/slate values. */
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  /* Every text colour below passes WCAG AA (4.5:1) as small text on white and
+     on the soft fill. ink-3 was #8d919a (3.2:1) in the approved prototype. */
+  --color-ink: #0e0f11;
+  --color-ink-2: #5b5f68;
+  --color-ink-3: #6d7077;
+  --color-line: #ececef;
+  --color-line-2: #dedee3;
+  --color-soft: #f5f5f7;
+
+  /* Meaning, not decoration: happening now, urgent, closing soon. Darkened from
+     the prototype's #12a150, #e5484d and #b76e00 to reach 4.5:1 as text. */
+  --color-live: #0e8140;
+  --color-urgent: #c83f43;
+  --color-warn: #a26100;
+
+  --radius-panel: 1.125rem;
+  --shadow-panel: 0 1px 2px rgb(14 15 17 / 0.04), 0 24px 48px -32px rgb(14 15 17 / 0.22);
+}
+
+@layer base {
+  body {
+    color: var(--color-ink);
+    letter-spacing: -0.011em;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+/* People who ask their system for less motion get no pulsing, spinning or
+   sliding: the skeletons and spinners hold still, transitions are instant. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Scrolls as usual but hides the scrollbar (category chip strips, tab rows). */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* The faint colour wash behind the top of the app shell. */
+@utility page-wash {
+  background-image:
+    radial-gradient(700px 320px at 18% -8%, #e6eaff 0, transparent 70%),
+    radial-gradient(620px 300px at 78% -12%, #ffebdd 0, transparent 70%),
+    radial-gradient(500px 260px at 52% 0, #e9f7ef 0, transparent 70%);
+  background-repeat: no-repeat;
+}

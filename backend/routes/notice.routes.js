@@ -1,8 +1,10 @@
 import express from "express";
 import authMiddleware from "../middleware/authMiddleware.js";
+import roleMiddleware from "../middleware/roleMiddleware.js";
 import {
   createNotice,
   getNotices,
+  listPlatformNotices,
   getNoticeById,
   deleteNotice,
   togglePin,
@@ -13,6 +15,7 @@ const noticeRouter = express.Router();
 
 // Public — any logged in user can read notices for their target
 noticeRouter.get("/",     authMiddleware, getNotices);
+noticeRouter.get("/manage/platform", authMiddleware, roleMiddleware("superadmin"), listPlatformNotices);
 noticeRouter.get("/:id",  authMiddleware, getNoticeById);
 
 // Write — auth required; controller enforces role-based permission per targetType

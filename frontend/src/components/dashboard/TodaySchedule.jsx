@@ -1,78 +1,111 @@
-import { CalendarClock } from "lucide-react";
-import { Section, Empty } from "./Section";
-import Row, { RowList } from "./Row";
-import { formatTime } from "./format";
+import { Link } from "react-router-dom";
+import useNow from "../../hooks/useNow";
+import { daysFromToday, formatClock, formatClockRange, formatShortDate } from "../../utils/formatDate";
+import { focusRing } from "../common/ui";
 
-const typeStyle = {
-  class: { label: "Class", tick: "bg-sky-400", badge: "text-sky-700 bg-sky-50" },
-  event: { label: "Event", tick: "bg-violet-400", badge: "text-violet-700 bg-violet-50" },
-  drive: { label: "Placement", tick: "bg-emerald-400", badge: "text-emerald-700 bg-emerald-50" },
+const MAX_PER_ROW = 5;
+
+// Where an item stands at `now`. Drive rounds have no end time: they are never
+// "now" and stay listed for the rest of the day.
+const stateOf = (item, now) => {
+  const start = new Date(item.startAt).getTime();
+  const end = item.endAt ? new Date(item.endAt).getTime() : null;
+  if (end !== null && end <= now) return "past";
+  if (end !== null && start <= now) return "now";
+  return "next";
 };
 
-const TimeCell = ({ item }) => {
-  if (item.isOngoing)
-    return <span className="text-xs font-semibold text-emerald-600">Ongoing</span>;
-  if (!item.hasTime)
-    return <span className="text-[11px] font-medium text-gray-400">Time TBA</span>;
+const timeLabel = (item, current, now) => {
+  if (current) {
+    const end = new Date(item.endAt);
+    const mins = Math.ceil((end - now) / 60000);
+    if (mins < 60) return `Now, ${mins} min left`;
+    return `Now, until ${daysFromToday(end) === 0 ? formatClock(end) : formatShortDate(end)}`;
+  }
+  if (!item.hasTime) return "Time TBA";
+  return item.endAt ? formatClockRange(item.startAt, item.endAt) : formatClock(item.startAt);
+};
+
+const Slot = ({ item, now, edge }) => {
+  const current = stateOf(item, now) === "now";
+  const meta = [item.location, item.subtitle].filter(Boolean).join(", ");
+  const start = new Date(item.startAt).getTime();
+  const done = current ? ((now - start) / (new Date(item.endAt).getTime() - start)) * 100 : 0;
+
   return (
-    <>
-      <span className="block text-xs font-semibold text-gray-900 tabular-nums">
-        {formatTime(item.startAt)}
-      </span>
-      {item.endAt && (
-        <span className="block text-[11px] text-gray-400 tabular-nums">
-          {formatTime(item.endAt)}
-        </span>
-      )}
-    </>
+    <li className={`border-line ${edge}`}>
+      <Link
+        to={item.url}
+        className={`block h-full px-[18px] py-4 transition-colors hover:bg-ink/[0.025] lg:px-6 lg:pb-6 lg:pt-[22px] ${focusRing} focus-visible:ring-inset`}
+      >
+        <p
+          className={`flex items-center gap-2 text-[13px] ${
+            current ? "font-semibold text-live" : "font-medium text-ink-3"
+          }`}
+        >
+          {current && (
+            <span aria-hidden="true" className="size-[7px] flex-none rounded-full bg-live ring-4 ring-live/15" />
+          )}
+          {timeLabel(item, current, now)}
+        </p>
+        <p className="mt-1.5 line-clamp-3 text-[15.5px] font-[620] leading-[1.3] tracking-[-0.02em] text-ink lg:mt-7">
+          {item.title}
+        </p>
+        {meta && <p className="mt-[3px] truncate text-[13.5px] text-ink-2">{meta}</p>}
+        {current && (
+          <div aria-hidden="true" className="mt-3.5 h-[3px] overflow-hidden rounded-sm bg-line">
+            <div className="h-full bg-ink" style={{ width: `${done}%` }} />
+          </div>
+        )}
+      </Link>
+    </li>
   );
 };
 
-const TodaySchedule = ({ schedule = [], classroomId }) => (
-  <Section
-    title="Today's Schedule"
-    icon={CalendarClock}
-    variant="primary"
-    linkTo={classroomId ? `/academics/classroom/${classroomId}` : undefined}
-    linkLabel="Timetable"
-    footer={
-      !classroomId && (
-        <p className="text-[11px] text-gray-400">
-          No classroom assigned yet — class periods will appear once your class rep sets it up.
+// What is left of today: classes, events the student registered for and drive
+// rounds they have reached, in one strip. Finished items drop off.
+const TodaySchedule = ({ schedule = [], classroomId }) => {
+  const now = useNow();
+  const left = schedule.filter((item) => stateOf(item, now) !== "past");
+  // Up to five across; a longer day wraps into rows of equal length (7 → 4 + 3).
+  const perRow = Math.ceil(left.length / Math.ceil(left.length / MAX_PER_ROW)) || 1;
+
+  return (
+    <section aria-label="Rest of your day" className="mt-8">
+      <div className="overflow-hidden rounded-panel border border-line-2 bg-white/[0.78] shadow-panel">
+        {left.length > 0 ? (
+          <ol
+            className="grid grid-cols-1 lg:grid-cols-[repeat(var(--per-row),minmax(0,1fr))]"
+            style={{ "--per-row": perRow }}
+          >
+            {left.map((item, i) => (
+              <Slot
+                key={item.id}
+                item={item}
+                now={now}
+                edge={`${i > 0 ? "max-lg:border-t" : ""} ${i % perRow ? "lg:border-l" : ""} ${
+                  i >= perRow ? "lg:border-t" : ""
+                }`}
+              />
+            ))}
+            {/* Empty cells that finish the last row, so the dividing lines run the full width */}
+            {Array.from({ length: (perRow - (left.length % perRow)) % perRow }).map((_, i) => (
+              <li key={i} aria-hidden="true" className="border-l border-t border-line max-lg:hidden" />
+            ))}
+          </ol>
+        ) : (
+          <p className="px-[18px] py-5 text-[14.5px] text-ink-2 lg:px-6">
+            {schedule.length > 0 ? "That's everything for today." : "Nothing scheduled today."}
+          </p>
+        )}
+      </div>
+      {!classroomId && (
+        <p className="mt-3 text-[13.5px] text-ink-3">
+          No classroom assigned yet. Class periods will appear once your class rep sets it up.
         </p>
-      )
-    }
-  >
-    {schedule.length > 0 ? (
-      <RowList>
-        {schedule.map((item) => {
-          const style = typeStyle[item.type] || typeStyle.class;
-          const meta = [item.location, item.subtitle].filter(Boolean).join(" · ");
-          return (
-            <li key={item.id}>
-              <Row url={item.url}>
-                <div className="w-16 flex-shrink-0">
-                  <TimeCell item={item} />
-                </div>
-                <span className={`w-0.5 self-stretch rounded-full flex-shrink-0 ${style.tick}`} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">{item.title}</p>
-                  {meta && <p className="text-xs text-gray-500 truncate">{meta}</p>}
-                </div>
-                <span
-                  className={`hidden sm:inline text-[10px] font-semibold px-1.5 py-0.5 rounded flex-shrink-0 ${style.badge}`}
-                >
-                  {style.label}
-                </span>
-              </Row>
-            </li>
-          );
-        })}
-      </RowList>
-    ) : (
-      <Empty message="Nothing scheduled today." />
-    )}
-  </Section>
-);
+      )}
+    </section>
+  );
+};
 
 export default TodaySchedule;

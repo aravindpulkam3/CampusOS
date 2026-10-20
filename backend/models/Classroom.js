@@ -10,6 +10,7 @@ const periodSchema = new mongoose.Schema({
       "Thursday",
       "Friday",
       "Saturday",
+      "Sunday",
     ],
     required: true,
   },

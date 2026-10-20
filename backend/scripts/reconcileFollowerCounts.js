@@ -17,7 +17,7 @@ import User from "../models/User.js";
 import redisClient, { connectRedis } from "../config/redis.js";
 
 const DRY_RUN = process.argv.includes("--dry-run");
-const CLUB_CACHE_KEYS = ["cache:clubs:all", "cache:clubs:popular"];
+const CLUB_CACHE_KEYS = ["cache:clubs:active", "cache:clubs:popular:active"];
 
 const log = (...args) => console.log(DRY_RUN ? "[dry-run]" : "[reconcile]", ...args);
 
@@ -51,10 +51,14 @@ const run = async () => {
   if (!DRY_RUN) {
     log(`fixed: ${fixed}${changedDuringRun ? `, changed during run (re-run to fix): ${changedDuringRun}` : ""}`);
     if (fixed && redisClient) {
-      await connectRedis();
+      await connectRedis({ timeoutMs: 8_000 });
       if (redisClient.isReady) {
-        await redisClient.del(CLUB_CACHE_KEYS);
-        log(`cache keys deleted: ${CLUB_CACHE_KEYS.join(", ")}`);
+        try {
+          await redisClient.del(CLUB_CACHE_KEYS);
+          log(`cache keys deleted: ${CLUB_CACHE_KEYS.join(", ")}`);
+        } catch {
+          console.warn("[reconcile] cache cleanup failed; club keys will expire on their own");
+        }
       } else {
         log("Redis unavailable — cached club lists expire on their own (popular: 1h, all: 24h)");
       }
