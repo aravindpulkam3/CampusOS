@@ -358,7 +358,7 @@ export const importRoster = asyncHandler(async (req, res) => {
         err instanceof ApiError ? err.message : "could not be updated",
       );
       if (!(err instanceof ApiError))
-        console.error("[ROSTER] claimed-row update failed:", err);
+        req.log.error({ err, row }, "roster claimed-row update failed");
     }
   }
 

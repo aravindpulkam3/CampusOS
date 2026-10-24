@@ -1,5 +1,8 @@
 import redisClient from "../config/redis.js";
 import { env } from "../config/env.js";
+import logger from "../config/logger.js";
+
+const log = logger.child({ module: "cache" });
 
 // Best-effort: isReady bypasses Redis while unset/down/reconnecting; callers
 // then read MongoDB. disableOfflineQueue is a separate guard for disconnects
@@ -30,13 +33,13 @@ const count = (key, field) => {
 export const getCacheMetrics = () =>
   Object.fromEntries([...metrics].map(([family, values]) => [family, { ...values }]));
 
-// Existing console logging, aggregated instead of logging each hit. These are
+// Metrics are logged aggregated instead of logging each hit. These are
 // per-process cumulative counters; report only when activity occurred.
 const reportIntervalMs = env.isDevelopment ? 60_000 : env.isProduction ? 300_000 : 0;
 if (reportIntervalMs) {
   setInterval(() => {
     if (!activitySinceReport) return;
-    console.log(`[CACHE] metrics ${JSON.stringify(getCacheMetrics())}`);
+    log.info({ metrics: getCacheMetrics() }, "cache metrics");
     activitySinceReport = false;
   }, reportIntervalMs).unref();
 }
@@ -53,7 +56,7 @@ const read = async (key) => {
     return { status: value === null ? "miss" : "hit", value };
   } catch (err) {
     count(key, "getError");
-    console.error(`[CACHE] GET failed family=${familyOf(key)} type=${errorType(err)}`);
+    log.error({ family: familyOf(key), type: errorType(err) }, "GET failed");
     return { status: "error", value: null };
   }
 };
@@ -73,7 +76,7 @@ export const set = async (key, value, ttlSeconds) => {
     await redisClient.set(key, value, { EX: ttlSeconds });
   } catch (err) {
     count(key, "setError");
-    console.error(`[CACHE] SET failed family=${familyOf(key)} type=${errorType(err)}`);
+    log.error({ family: familyOf(key), type: errorType(err) }, "SET failed");
   }
 };
 
@@ -86,7 +89,7 @@ export const del = async (key) => {
     await redisClient.del(key);
   } catch (err) {
     count(key, "delError");
-    console.error(`[CACHE] DEL failed family=${familyOf(key)} type=${errorType(err)}`);
+    log.error({ family: familyOf(key), type: errorType(err) }, "DEL failed");
   }
 };
 
@@ -103,7 +106,7 @@ export const getJSON = async (key) => {
   } catch (err) {
     count(key, "parseError");
     count(key, "miss");
-    console.error(`[CACHE] JSON parse failed family=${familyOf(key)} type=${errorType(err)}; deleting entry`);
+    log.error({ family: familyOf(key), type: errorType(err) }, "JSON parse failed; deleting entry");
     await del(key); // exact corrupted key; DEL failure is logged and swallowed
     return null;
   }
@@ -114,6 +117,6 @@ export const setJSON = async (key, value, ttlSeconds) => {
     await set(key, JSON.stringify(value), ttlSeconds);
   } catch (err) {
     count(key, "serializeError");
-    console.error(`[CACHE] JSON serialize failed family=${familyOf(key)} type=${errorType(err)}`);
+    log.error({ family: familyOf(key), type: errorType(err) }, "JSON serialize failed");
   }
 };

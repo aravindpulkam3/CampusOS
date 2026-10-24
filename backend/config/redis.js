@@ -1,16 +1,20 @@
 import { createClient } from "redis";
 import { env } from "./env.js";
+import logger from "./logger.js";
 
 // Redis is a cache only, never a hard dependency. Every failure mode below
 // (URL unset, URL malformed, server down at boot, outage mid-run) leaves the
 // app running with caching disabled — utils/cache.js checks isReady.
 const RECONNECT_MAX_DELAY_MS = 5000;
+const log = logger.child({ module: "redis" });
+// Only the error code/name is logged, never the error: its message can echo
+// the connection URL, which can embed a password.
 const errorType = (err) =>
   String(err?.code || err?.name || "Error").replace(/[^A-Za-z0-9_]/g, "").slice(0, 40) || "Error";
 
 const createRedisClient = () => {
   if (!env.redisUrl) {
-    console.warn("[REDIS] REDIS_URL not set: caching disabled");
+    log.warn("REDIS_URL not set: caching disabled");
     return null;
   }
 
@@ -32,7 +36,7 @@ const createRedisClient = () => {
     });
   } catch {
     // Deliberately not echoing the value — it can embed a password.
-    console.error("[REDIS] invalid REDIS_URL: caching disabled");
+    log.error("invalid REDIS_URL: caching disabled");
     return null;
   }
 };
@@ -46,13 +50,11 @@ if (redisClient) {
   redisClient.on("error", (err) => {
     if (outageLogged) return;
     outageLogged = true;
-    console.error(
-      `[REDIS] unavailable, serving without cache: ${errorType(err)}`
-    );
+    log.error({ type: errorType(err) }, "unavailable, serving without cache");
   });
 
   redisClient.on("ready", () => {
-    if (outageLogged) console.log("[REDIS] reconnected, cache re-enabled");
+    if (outageLogged) log.info("reconnected, cache re-enabled");
     outageLogged = false;
   });
 }
@@ -70,7 +72,7 @@ export const connectRedis = ({ timeoutMs } = {}) => {
       .connect()
       .then(() => true)
       .catch((err) => {
-        console.error(`[REDIS] Initial connection failed: ${errorType(err)}`);
+        log.error({ type: errorType(err) }, "initial connection failed");
         return false;
       })
       .finally(() => {
@@ -84,11 +86,11 @@ export const connectRedis = ({ timeoutMs } = {}) => {
   return new Promise((resolve) => {
     const timer = setTimeout(() => {
       if (redisClient.isReady) return resolve(true);
-      console.warn(`[REDIS] connection not ready after ${timeoutMs}ms; stopping script attempt`);
+      log.warn({ timeoutMs }, "connection not ready; stopping script attempt");
       try {
         if (redisClient.isOpen) redisClient.destroy();
       } catch (err) {
-        console.warn(`[REDIS] failed to stop connection attempt: ${errorType(err)}`);
+        log.warn({ type: errorType(err) }, "failed to stop connection attempt");
       }
       resolve(false);
     }, timeoutMs);

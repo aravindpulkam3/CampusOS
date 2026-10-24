@@ -1,4 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { captureLogger } from "./logCapture.js";
+
+// Cache failures are logged; the test reads the real JSON lines.
+const logs = vi.hoisted(() => []);
+vi.mock("../config/logger.js", (importOriginal) => captureLogger(importOriginal, logs));
 
 const cacheState = vi.hoisted(() => ({ ready: true, store: new Map() }));
 vi.mock("../config/redis.js", () => ({
@@ -45,12 +50,7 @@ describe("Redis JSON cache helper", () => {
     cacheState.store.set(key, "{bad json");
     cacheState.store.set(otherKey, "[]");
     const before = { ...stats() };
-    const log = vi.spyOn(console, "error").mockImplementation(() => {});
-    try {
-      expect(await getJSON(key)).toBeNull();
-    } finally {
-      log.mockRestore();
-    }
+    expect(await getJSON(key)).toBeNull();
     expect(redisClient.del).toHaveBeenCalledWith(key);
     expect(cacheState.store.has(key)).toBe(false);
     expect(cacheState.store.get(otherKey)).toBe("[]");
@@ -66,12 +66,7 @@ describe("Redis JSON cache helper", () => {
     cacheState.store.set(key, "{bad json");
     redisClient.del.mockRejectedValueOnce(new Error("unavailable"));
     const before = { ...stats() };
-    const log = vi.spyOn(console, "error").mockImplementation(() => {});
-    try {
-      expect(await getJSON(key)).toBeNull();
-    } finally {
-      log.mockRestore();
-    }
+    expect(await getJSON(key)).toBeNull();
     expect(stats().delError - (before.delError ?? 0)).toBe(1);
     expect(cacheState.store.has(key)).toBe(true);
   });
@@ -80,12 +75,7 @@ describe("Redis JSON cache helper", () => {
     const circular = {};
     circular.self = circular;
     const before = { ...stats() };
-    const log = vi.spyOn(console, "error").mockImplementation(() => {});
-    try {
-      await expect(setJSON(key, circular, 60)).resolves.toBeUndefined();
-    } finally {
-      log.mockRestore();
-    }
+    await expect(setJSON(key, circular, 60)).resolves.toBeUndefined();
     expect(redisClient.set).not.toHaveBeenCalled();
     expect(stats().serializeError - (before.serializeError ?? 0)).toBe(1);
   });
@@ -93,16 +83,13 @@ describe("Redis JSON cache helper", () => {
   it("logs the cache family without exposing search text or cached payload", async () => {
     const searchKey = "cache:search:v2:private query";
     cacheState.store.set(searchKey, "private malformed payload");
-    const log = vi.spyOn(console, "error").mockImplementation(() => {});
-    try {
-      expect(await getJSON(searchKey)).toBeNull();
-      const messages = log.mock.calls.map((args) => args.join(" ")).join("\n");
-      expect(messages).toContain("family=search");
-      expect(messages).not.toContain("private query");
-      expect(messages).not.toContain("private malformed payload");
-    } finally {
-      log.mockRestore();
-    }
+    logs.length = 0;
+    expect(await getJSON(searchKey)).toBeNull();
+    const failure = logs.find((line) => line.module === "cache" && line.level === "error");
+    expect(failure).toMatchObject({ family: "search", msg: "JSON parse failed; deleting entry" });
+    const output = JSON.stringify(logs);
+    expect(output).not.toContain("private query");
+    expect(output).not.toContain("private malformed payload");
   });
 
   it("serves an API read from MongoDB after corrupted JSON, then uses the refill", async () => {
@@ -112,13 +99,7 @@ describe("Redis JSON cache helper", () => {
     });
     const agent = await loginAs(await makeUser());
     cacheState.store.set(key, "{broken");
-    const log = vi.spyOn(console, "error").mockImplementation(() => {});
-    let first;
-    try {
-      first = await agent.get("/api/clubs");
-    } finally {
-      log.mockRestore();
-    }
+    const first = await agent.get("/api/clubs");
     expect(first.status).toBe(200);
     expect(first.body.data.some((row) => row._id === String(club._id))).toBe(true);
     expect(redisClient.del).toHaveBeenCalledWith(key);
@@ -158,14 +139,9 @@ describe("Redis JSON cache helper", () => {
     redisClient.get.mockRejectedValueOnce(new Error("unavailable"));
     redisClient.set.mockRejectedValueOnce(new Error("unavailable"));
     redisClient.del.mockRejectedValueOnce(new Error("unavailable"));
-    const log = vi.spyOn(console, "error").mockImplementation(() => {});
-    try {
-      expect(await getJSON(key)).toBeNull();
-      await setJSON(key, [], 60);
-      await del(key);
-    } finally {
-      log.mockRestore();
-    }
+    expect(await getJSON(key)).toBeNull();
+    await setJSON(key, [], 60);
+    await del(key);
     expect(stats().getError - (before.getError ?? 0)).toBe(1);
     expect(stats().setError - (before.setError ?? 0)).toBe(1);
     expect(stats().delError - (before.delError ?? 0)).toBe(1);

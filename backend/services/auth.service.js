@@ -21,7 +21,19 @@ import { findClassroomForUser } from "./classroom.service.js";
 import ApiError from "../utils/apiError.js";
 import { withTransaction } from "../utils/transaction.js";
 import { env } from "../config/env.js";
+import logger from "../config/logger.js";
 import { getIO } from "../sockets/socketHandler.js";
+
+const log = logger.child({ module: "auth" });
+
+// Security events are logged by user id only — never an email or a token.
+// A mail error's message can quote the recipient address, so only its codes
+// are logged.
+const logMailFailure = (kind) => (err) =>
+  log.error(
+    { kind, code: err?.code, responseCode: err?.responseCode },
+    "email failed to send",
+  );
 
 // ─── sessions ─────────────────────────────────────────────────────────────────
 // Per-device sessions (models/Session.js). A session lives at most
@@ -209,9 +221,7 @@ export const requestAccountClaim = async (email) => {
   // Not awaited: response timing must not reveal roster membership, and a
   // mail failure must not either. The user can request a new link after the
   // resend interval.
-  sendAccountClaimEmail(normalized, token).catch((err) =>
-    console.error(`[MAIL] account claim email failed: ${err.message}`),
-  );
+  sendAccountClaimEmail(normalized, token).catch(logMailFailure("account_claim"));
 };
 
 // The one password rule, shared by activation, password change and reset.
@@ -441,8 +451,9 @@ export const refreshSession = async (incomingRefreshToken) => {
       user: userId,
     });
     if (deletedCount > 0) {
-      console.warn(
-        `[SECURITY] refresh token reuse: user=${userId} sid=${sid} — session revoked`,
+      log.warn(
+        { event: "refresh_token_reuse", user: String(userId), sid: String(sid) },
+        "refresh token reuse, session revoked",
       );
     }
     throw new ApiError(401, "Session expired. Please log in again.");
@@ -484,6 +495,7 @@ export const logoutAllSessions = async (userId) => {
   await Session.deleteMany({ user: userId });
   // Drop live sockets too; their reconnect needs a refresh, which now fails.
   getIO()?.in(`user:${userId}`).disconnectSockets(true);
+  log.info({ event: "logout_all", user: String(userId) }, "all sessions revoked");
 };
 
 // ─── password change / reset ──────────────────────────────────────────────────
@@ -528,6 +540,7 @@ export const changeUserPassword = async (
     await Session.deleteMany({ user: user._id }, { session });
   });
   getIO()?.in(`user:${user._id}`).disconnectSockets(true);
+  log.info({ event: "password_changed", user: String(user._id) }, "password changed");
 };
 
 // Always resolves without revealing anything: the controller answers every
@@ -563,9 +576,7 @@ export const requestPasswordReset = async (email) => {
   }
 
   // Not awaited: a mail failure must not change the response.
-  sendPasswordResetEmail(user.email, token).catch((err) =>
-    console.error(`[MAIL] password reset email failed: ${err.message}`),
-  );
+  sendPasswordResetEmail(user.email, token).catch(logMailFailure("password_reset"));
 };
 
 // One transaction: using the token, writing the new password and revoking
@@ -598,6 +609,7 @@ export const resetUserPassword = async (token, newPassword) => {
     return user._id;
   });
   getIO()?.in(`user:${userId}`).disconnectSockets(true);
+  log.info({ event: "password_reset", user: String(userId) }, "password reset");
 };
 
 export const getProfileData = async (userId) => {

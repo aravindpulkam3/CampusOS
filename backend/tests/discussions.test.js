@@ -387,3 +387,88 @@ describe("discussion comments and replies — pagination", () => {
     });
   });
 });
+
+describe("discussion search", () => {
+  let author, agent;
+
+  beforeAll(async () => {
+    author = await makeUser();
+    agent = await loginAs(await makeUser());
+  });
+
+  const search = (params) => agent.get("/api/discussions").query({ limit: 50, ...params });
+  const titles = (res) => res.body.data.discussions.map((d) => d.title);
+
+  it("matches part of a word in any case, across title, content and tags", async () => {
+    await makeDiscussion(author, { title: "Vexmoor deployment checklist" });
+    await makeDiscussion(author, { title: "Cluster notes", content: "We moved vexmoor to KUBERNETES last week" });
+    await makeDiscussion(author, { title: "Tagged only", content: "vexmoor", tags: ["observability"] });
+
+    expect(titles(await search({ search: "DEPLO" }))).toEqual(["Vexmoor deployment checklist"]);
+    expect(titles(await search({ search: "kube" }))).toEqual(["Cluster notes"]);
+    expect(titles(await search({ search: "vexmoor observ" }))).toEqual(["Tagged only"]);
+  });
+
+  it("requires every word, without dropping any", async () => {
+    await makeDiscussion(author, { title: "Qelvin react hooks", content: "state" });
+    await makeDiscussion(author, { title: "Qelvin react classes", content: "state" });
+    await makeDiscussion(author, { title: "Qelvin a b c d e", content: "f g" });
+    await makeDiscussion(author, { title: "Qelvin a b c d e", content: "f" });
+
+    expect(titles(await search({ search: "qelvin react hooks" }))).toEqual(["Qelvin react hooks"]);
+    const seven = await search({ search: "qelvin a b c d e g" });
+    expect(seven.body.data.discussions).toHaveLength(1);
+    expect(seven.body.data.discussions[0].content).toBe("f g");
+  });
+
+  it("ranks title matches first, more title words higher, then the tab's order", async () => {
+    // Created oldest first; "newest" would otherwise list them in reverse.
+    const twoInTitle = await makeDiscussion(author, { title: "Morvane gradle build", content: "x" });
+    const oneInTitleOld = await makeDiscussion(author, { title: "Morvane notes", content: "gradle" });
+    const oneInTitleNew = await makeDiscussion(author, { title: "Morvane again", content: "gradle" });
+    const contentOnly = await makeDiscussion(author, { title: "Unrelated", content: "morvane gradle" });
+
+    const res = await search({ search: "morvane gradle" });
+    expect(res.body.data.discussions.map((d) => String(d._id))).toEqual(
+      [twoInTitle, oneInTitleNew, oneInTitleOld, contentOnly].map((d) => String(d._id)),
+    );
+    // The response keeps its shape: populated author, vote counts, no ranking field.
+    const [first] = res.body.data.discussions;
+    expect(first.author).toMatchObject({ firstName: expect.any(String) });
+    expect(first).toHaveProperty("upvoteCount", 0);
+    expect(first).not.toHaveProperty("titleHits");
+    expect(first).not.toHaveProperty("upvotes");
+  });
+
+  it("pages ranked results without overlap and counts with the category filter", async () => {
+    // Equal relevance and equal timestamps: only _id orders them.
+    const same = new Date("2026-02-01T00:00:00.000Z");
+    await Discussion.collection.insertMany(
+      Array.from({ length: 5 }, (_, i) => ({
+        title: `Tarnwick ${i}`, content: "x", category: "coding", author: author._id, tags: [],
+        upvotes: [], bookmarks: [], views: 0, isPinned: false, isLocked: false, isDeleted: false,
+        commentCount: 0, lastActivityAt: same, createdAt: same, updatedAt: same,
+      })),
+    );
+    await makeDiscussion(author, { title: "Tarnwick elsewhere", category: "research" });
+    await makeDiscussion(author, { title: "Tarnwick gone", isDeleted: true });
+
+    const page1 = await search({ search: "tarnwick", category: "coding", limit: 3, page: 1 });
+    const page2 = await search({ search: "tarnwick", category: "coding", limit: 3, page: 2 });
+    expect(page1.body.data.pagination).toEqual({ total: 5, page: 1, pages: 2 });
+    const seen = [...titles(page1), ...titles(page2)];
+    expect(seen).toHaveLength(5);
+    expect(new Set(seen)).toEqual(new Set([0, 1, 2, 3, 4].map((i) => `Tarnwick ${i}`)));
+  });
+
+  it("matches regex characters literally", async () => {
+    await makeDiscussion(author, { title: "Learning c++ templates" });
+    const cpp = await search({ search: "c++" });
+    expect(cpp.status).toBe(200);
+    expect(titles(cpp)).toEqual(["Learning c++ templates"]);
+
+    const pattern = await search({ search: "(.*)" });
+    expect(pattern.status).toBe(200);
+    expect(pattern.body.data.discussions).toHaveLength(0);
+  });
+});

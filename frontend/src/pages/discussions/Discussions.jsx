@@ -131,47 +131,67 @@ const Discussions = () => {
   // The page whose request failed (null = no error), so Try again repeats it
   // with the current filters, sort and search.
   const [loadError, setLoadError] = useState(null);
+  const [loaded, setLoaded] = useState(false);
   const startButtonRef = useRef(null);
   const requestRef = useRef(0);
+  const inputRef = useRef("");
 
-  const debouncedSearch = useDebounce(search, 400);
+  // Typing waits 400 ms; clearing the box applies on the next tick, so the
+  // cleared value (not the previous word) is what the next word starts from.
+  const debouncedSearch = useDebounce(search, search.trim() ? 400 : 0);
+  const query = debouncedSearch.trim();
+  inputRef.current = search.trim();
+  // False while the box holds text not yet searched for.
+  const settled = search.trim() === query;
 
-  // Only the newest request may update the list, so a slow older response (or
-  // failure) can't overwrite the result for the current filters.
+  // A response applies only if it is the newest request AND still matches the
+  // box, so neither a slow older response (or failure) nor one that lands
+  // during the debounce can overwrite the list.
   const fetchDiscussions = useCallback(
     async (page = 1) => {
       const request = ++requestRef.current;
+      const isCurrent = () => request === requestRef.current && query === inputRef.current;
       setLoading(true);
       setLoadError(null);
       try {
         const res = await getDiscussions({
           category: activeCategory === "all" ? undefined : activeCategory,
-          search: debouncedSearch || undefined,
+          search: query || undefined,
           sort,
           page,
           limit: PAGE_SIZE,
         });
-        if (request !== requestRef.current) return;
+        if (!isCurrent()) return;
         setDiscussions(res.data.data.discussions);
         setPagination(res.data.data.pagination);
+        setLoaded(true);
       } catch (err) {
-        if (request !== requestRef.current) return;
+        if (!isCurrent()) return;
         console.error(err);
         setLoadError(page);
       } finally {
-        if (request === requestRef.current) setLoading(false);
+        if (isCurrent()) setLoading(false);
       }
     },
-    [activeCategory, debouncedSearch, sort],
+    [activeCategory, query, sort],
   );
 
+  // Fetches once the box settles, including when it is typed back to the
+  // query already searched (whose response may have been ignored meanwhile).
   useEffect(() => {
-    fetchDiscussions(1);
-  }, [fetchDiscussions]);
+    if (settled) fetchDiscussions(1);
+  }, [fetchDiscussions, settled]);
 
   const handleCreated = (newDiscussion) => {
+    if (query || activeCategory !== "all" || pagination.page !== 1) {
+      fetchDiscussions(1);
+      return;
+    }
     setDiscussions((prev) => [newDiscussion, ...prev]);
+    setPagination((prev) => ({ ...prev, total: prev.total + 1 }));
   };
+
+  const busy = loading || !settled;
 
   const { page, pages, total } = pagination;
   const first = (page - 1) * PAGE_SIZE + 1;
@@ -202,11 +222,16 @@ const Discussions = () => {
             onChange={setSearch}
             label="Search discussions"
             placeholder="Search discussions"
+            maxLength={100}
             className=""
           />
 
-          <div className="mt-2">
-            {loading ? (
+          {/* After the first load the list stays in place, dimmed, while a newer one is coming */}
+          <div
+            aria-busy={busy}
+            className={`mt-2 transition-opacity ${loaded && busy ? "opacity-60" : ""}`}
+          >
+            {!loaded && loading ? (
               <Skeleton />
             ) : loadError !== null ? (
               <div className="mt-5">
@@ -225,9 +250,9 @@ const Discussions = () => {
                   Showing {first} to {first + discussions.length - 1} of {plural(total, "discussion", "discussions")}
                 </PageNumbers>
               </>
-            ) : search ? (
+            ) : query ? (
               <p className={`mt-5 flex flex-wrap items-center gap-x-3 gap-y-1 ${note}`}>
-                No discussions match "{search}". Try different words or another topic.
+                No discussions match "{query}". Try different words or another topic.
                 <button
                   type="button"
                   onClick={() => setSearch("")}

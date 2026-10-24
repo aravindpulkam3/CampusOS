@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({ clients: [] }));
-vi.mock("../config/env.js", () => ({ env: { redisUrl: "redis://localhost:6379" } }));
+vi.mock("../config/env.js", () => ({
+  env: { redisUrl: "redis://localhost:6379", logLevel: "silent" },
+}));
 vi.mock("redis", () => ({
   createClient: () => {
     let open = false;
@@ -53,15 +55,8 @@ describe("Redis connection policy", () => {
   it("stops retries after a script opts into a bounded wait", async () => {
     const { connectRedis } = await import("../config/redis.js");
     const client = state.clients[0];
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const error = vi.spyOn(console, "error").mockImplementation(() => {});
-    try {
-      expect(await connectRedis({ timeoutMs: 25 })).toBe(false);
-      expect(client.destroy).toHaveBeenCalledOnce();
-      expect(client.isOpen).toBe(false);
-    } finally {
-      warn.mockRestore();
-      error.mockRestore();
-    }
+    expect(await connectRedis({ timeoutMs: 25 })).toBe(false);
+    expect(client.destroy).toHaveBeenCalledOnce();
+    expect(client.isOpen).toBe(false);
   });
 });

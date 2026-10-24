@@ -2,7 +2,9 @@ import express from "express";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import { env } from "./config/env.js";
+import logger from "./config/logger.js";
 import errorMiddleware, { notFound } from "./middleware/errorMiddleware.js";
+import requestLogger from "./middleware/requestLogger.js";
 import originCheck from "./middleware/originCheck.js";
 import securityHeaders from "./middleware/securityHeaders.js";
 import authRouter from "./routes/auth.routes.js";
@@ -31,20 +33,24 @@ app.disable("x-powered-by");
 // config/env.js. Unset/"false" (local dev): disabled, req.ip is the socket peer.
 // Setting it here additionally rejects a malformed subnet/alias list.
 const configureTrustProxy = () => {
+  const log = logger.child({ module: "config" });
   if (env.trustProxy === false) {
-    console.log("[CONFIG] trust proxy: disabled");
+    log.info("trust proxy: disabled");
     return;
   }
   try {
     app.set("trust proxy", env.trustProxy);
   } catch (err) {
-    console.error(`[CONFIG] invalid TRUST_PROXY "${env.trustProxy}": ${err.message}`);
+    log.fatal({ err, trustProxy: env.trustProxy }, "invalid TRUST_PROXY");
     process.exit(1);
   }
-  console.log(`[CONFIG] trust proxy: ${env.trustProxy}`);
+  log.info({ trustProxy: env.trustProxy }, "trust proxy configured");
 };
 configureTrustProxy();
 
+// First, so every response is logged — including originCheck's 403s, rate
+// limiting's 429s and unknown routes.
+app.use(requestLogger);
 app.use(securityHeaders);
 app.use(cors({ origin: env.clientUrl, credentials: true }));
 app.use("/api", originCheck);

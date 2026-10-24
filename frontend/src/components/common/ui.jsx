@@ -251,7 +251,7 @@ export const Chips = ({ label, options, value, onChange, className = "" }) => (
   </div>
 );
 
-export const SearchField = ({ value, onChange, placeholder, label, className = "lg:w-60" }) => (
+export const SearchField = ({ value, onChange, placeholder, label, maxLength, className = "lg:w-60" }) => (
   <div
     className={`flex h-9 w-full flex-none items-center gap-2 rounded-[10px] border border-line-2 bg-white px-3 transition-colors focus-within:border-ink-3 focus-within:ring-2 focus-within:ring-ink/10 ${className}`}
   >
@@ -261,6 +261,7 @@ export const SearchField = ({ value, onChange, placeholder, label, className = "
       aria-label={label}
       placeholder={placeholder}
       value={value}
+      maxLength={maxLength}
       onChange={(e) => onChange(e.target.value)}
       className="w-full min-w-0 bg-transparent text-[14.5px] text-ink outline-none placeholder:text-ink-3"
     />

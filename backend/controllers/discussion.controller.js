@@ -6,6 +6,7 @@ import asyncHandler from "../utils/asyncHandler.js";
 import sendResponse from "../utils/sendResponse.js";
 import ApiError from "../utils/apiError.js";
 import { normalizeSearch, parseQueryInt } from "../utils/queryParams.js";
+import escapeRegex from "../utils/escapeRegex.js";
 import { createNotification } from "../services/notification.service.js";
 
 // Who upvoted or bookmarked what is not public: responses carry counts plus the
@@ -155,9 +156,20 @@ export const getDiscussions = asyncHandler(async (req, res) => {
   const page = parseQueryInt(req.query.page, 1);
   const limit = parseQueryInt(req.query.limit, 5, 1, 50);
 
+  // Every word must appear, as part of a word in any case, in the title,
+  // content or a tag. Escaped, so input can't inject a pattern. Unanchored
+  // regexes can't use an index; the scan is bounded to non-deleted (and, with a
+  // topic, one category's) discussions.
+  const words = [...new Set(search.toLowerCase().split(/\s+/).filter(Boolean))].map(escapeRegex);
+
   const query = { isDeleted: false };
   if (category && category !== "all") query.category = category;
-  if (search) query.$text = { $search: search };
+  if (words.length) {
+    query.$and = words.map((w) => {
+      const re = new RegExp(w, "i");
+      return { $or: [{ title: re }, { content: re }, { tags: re }] };
+    });
+  }
 
   // _id breaks ties, so skip/limit pages can't overlap or skip equal rows.
   const sortMap = {
@@ -166,18 +178,38 @@ export const getDiscussions = asyncHandler(async (req, res) => {
     unanswered: { isPinned: -1, commentCount: 1, createdAt: -1, _id: -1 },
     active:     { isPinned: -1, lastActivityAt: -1, _id: -1 },
   };
+  const tabSort = Object.hasOwn(sortMap, sort) ? sortMap[sort] : sortMap.newest;
 
   const skip = (page - 1) * limit;
 
-  const [discussions, total] = await Promise.all([
-    Discussion.find(query)
-      .populate("author", "firstName lastName branch year")
-      .sort(Object.hasOwn(sortMap, sort) ? sortMap[sort] : sortMap.newest)
-      .skip(skip)
-      .limit(limit)
-      .lean(),
-    Discussion.countDocuments(query),
-  ]);
+  // While searching, posts with more search words in the title come first
+  // (0 = matched only in content or tags), then the tab's order. Ranked in
+  // Mongo, before skip/limit, so pages stay consistent.
+  const findPage = words.length
+    ? Discussion.aggregate([
+        { $match: query },
+        {
+          $addFields: {
+            titleHits: {
+              $add: words.map((w) => ({
+                $cond: [{ $regexMatch: { input: "$title", regex: w, options: "i" } }, 1, 0],
+              })),
+            },
+          },
+        },
+        { $sort: { titleHits: -1, ...tabSort } },
+        { $skip: skip },
+        { $limit: limit },
+        { $project: { titleHits: 0 } },
+      ]).then((rows) => Discussion.populate(rows, { path: "author", select: "firstName lastName branch year" }))
+    : Discussion.find(query)
+        .populate("author", "firstName lastName branch year")
+        .sort(tabSort)
+        .skip(skip)
+        .limit(limit)
+        .lean();
+
+  const [discussions, total] = await Promise.all([findPage, Discussion.countDocuments(query)]);
 
   sendResponse(res, 200, "Discussions fetched.", {
     discussions: discussions.map((d) => shapeVotes(d, req.user._id)),

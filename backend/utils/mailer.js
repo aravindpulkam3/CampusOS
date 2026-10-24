@@ -15,6 +15,10 @@ const transporter = env.smtp
 
 export const sendMail = async ({ to, subject, text }) => {
   if (!transporter) {
+    // Deliberately console, not the logger: the text holds a one-time token
+    // (activation / reset link). Reachable only with NODE_ENV=development and
+    // no SMTP — production can't boot without SMTP, and every other mode
+    // throws below. Covered by tests/mailer.test.js.
     if (env.isDevelopment) {
       console.log(`[MAIL:dev] to=${to} subject="${subject}"\n${text}`);
       return;
