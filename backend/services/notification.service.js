@@ -2,6 +2,9 @@ import Notification from "../models/Notification.js";
 import User from "../models/User.js";
 import Application from "../models/Application.js";
 import { getIO } from "../sockets/socketHandler.js";
+import logger from "../config/logger.js";
+
+const log = logger.child({ module: "notification" });
 
 // ─── single error-handling boundary ───────────────────────────────────────────
 // A notification is a side effect of some other action, never the action itself.
@@ -12,7 +15,7 @@ const safe = (fn) => async (...args) => {
   try {
     return await fn(...args);
   } catch (err) {
-    console.error("[notification service]", err);
+    log.error({ err, fn: fn.name }, "notification failed");
   }
 };
 

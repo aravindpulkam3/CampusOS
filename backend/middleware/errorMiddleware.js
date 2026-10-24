@@ -78,8 +78,16 @@ const classify = (err) => {
 const isDbUnavailable = (err) =>
   DB_UNAVAILABLE.has(err.name) || /buffering timed out/i.test(err.message ?? "");
 
+// Logging: this handler writes no log line of its own. Setting res.err hands the
+// error to the request's completion line (middleware/requestLogger.js), which
+// logs it with its stack, the request id and the status — once per request.
+// Recognised client errors don't set it: their warn-level access line (status,
+// path) says enough, and a stack per typo'd form field is noise.
 const errorMiddleware = (err, req, res, next) => {
-  if (res.headersSent) return next(err);
+  if (res.headersSent) {
+    res.err = err;
+    return next(err);
+  }
 
   const known = classify(err);
   if (known) {
@@ -89,7 +97,7 @@ const errorMiddleware = (err, req, res, next) => {
   }
 
   if (isDbUnavailable(err)) {
-    console.error("[ERROR] database unavailable", req.method, req.originalUrl, err.stack);
+    res.err = err;
     return res
       .status(503)
       .json({ success: false, message: "Service temporarily unavailable." });
@@ -99,14 +107,14 @@ const errorMiddleware = (err, req, res, next) => {
   // status, but answer with the standard reason phrase, not its message.
   const status = err.statusCode ?? err.status;
   if (Number.isInteger(status) && status >= 400 && status < 500) {
-    console.warn(`[WARN] ${status} ${req.method} ${req.originalUrl}: ${err.message}`);
+    res.err = err;
     return res
       .status(status)
       .json({ success: false, message: http.STATUS_CODES[status] ?? "Bad request." });
   }
 
   // Unexpected: a bug or a dependency failure.
-  console.error("[ERROR]", req.method, req.originalUrl, `user=${req.user?._id ?? "-"}`, err.stack ?? err);
+  res.err = err;
   // Fail closed: internal details only in explicit development mode.
   return res.status(500).json({
     success: false,

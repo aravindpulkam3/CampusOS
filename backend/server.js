@@ -2,6 +2,7 @@ import http from "http";
 import { Server } from "socket.io";
 import mongoose from "mongoose";
 import { env } from "./config/env.js";
+import logger from "./config/logger.js";
 import connectDB from "./config/db.js";
 import redisClient, { connectRedis } from "./config/redis.js";
 import app from "./app.js";
@@ -26,8 +27,13 @@ initSocket(io);
 // HOST unset (development): all interfaces. Production requires loopback
 // (enforced in config/env.js): only Nginx on the same machine can connect.
 httpServer.listen(env.port, env.host, () =>
-  console.log(`Server running on ${env.host ?? "all interfaces"}, port ${env.port}`),
+  logger.info(
+    { host: env.host ?? "all interfaces", port: env.port },
+    "server listening",
+  ),
 );
+
+const log = logger.child({ module: "shutdown" });
 
 // ─── graceful shutdown ─────────────────────────────────────────────────────────
 const SHUTDOWN_DRAIN_MS = 10_000; // in-flight requests get this long to finish
@@ -38,10 +44,10 @@ let shuttingDown = false;
 const shutdown = async (reason, exitCode = 0) => {
   if (shuttingDown) return;
   shuttingDown = true;
-  console.log(`[SHUTDOWN] ${reason}: draining connections...`);
+  log.info({ reason }, "draining connections");
 
   setTimeout(() => {
-    console.error("[SHUTDOWN] still not done, forcing exit");
+    log.error("still not done, forcing exit");
     process.exit(1);
   }, SHUTDOWN_BACKSTOP_MS).unref();
 
@@ -61,19 +67,19 @@ const shutdown = async (reason, exitCode = 0) => {
   clearTimeout(drainTimer);
 
   if (!drained) {
-    console.warn(
-      `[SHUTDOWN] requests still open after ${SHUTDOWN_DRAIN_MS / 1000}s, closing them`,
+    log.warn(
+      `requests still open after ${SHUTDOWN_DRAIN_MS / 1000}s, closing them`,
     );
     httpServer.closeAllConnections();
     await closed;
   }
-  console.log("[SHUTDOWN] HTTP server and Socket.IO closed");
+  log.info("HTTP server and Socket.IO closed");
 
   try {
     await mongoose.connection.close();
-    console.log("[SHUTDOWN] MongoDB connection closed");
+    log.info("MongoDB connection closed");
   } catch (err) {
-    console.error("[SHUTDOWN] MongoDB close failed:", err.message);
+    log.error({ err }, "MongoDB close failed");
   }
 
   if (redisClient?.isOpen) {
@@ -81,9 +87,9 @@ const shutdown = async (reason, exitCode = 0) => {
       // close() waits for pending commands; destroy() also stops a reconnect loop.
       if (redisClient.isReady) await redisClient.close();
       else redisClient.destroy();
-      console.log("[SHUTDOWN] Redis connection closed");
+      log.info("Redis connection closed");
     } catch (err) {
-      console.error("[SHUTDOWN] Redis close failed:", err.message);
+      log.error({ err }, "Redis close failed");
     }
   }
 
@@ -95,13 +101,14 @@ process.on("SIGINT", () => shutdown("SIGINT"));
 
 // Last-resort crash logging — not a substitute for asyncHandler/errorMiddleware.
 // A stray rejection leaves the process consistent, so drain gracefully; an
-// uncaught exception may not, so exit immediately.
+// uncaught exception may not, so exit immediately. pino writes stdout
+// synchronously and flushes its dev transport on exit, so the line isn't lost.
 process.on("unhandledRejection", (reason) => {
-  console.error("[FATAL] unhandledRejection:", reason?.stack ?? reason);
+  logger.fatal({ err: reason }, "unhandledRejection");
   shutdown("unhandledRejection", 1);
 });
 
 process.on("uncaughtException", (err) => {
-  console.error("[FATAL] uncaughtException:", err?.stack ?? err);
+  logger.fatal({ err }, "uncaughtException");
   process.exit(1);
 });

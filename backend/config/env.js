@@ -63,6 +63,17 @@ const duration = (name, fallback) => {
 const accessExpirySec = duration("JWT_ACCESS_EXPIRY", "15m");
 const refreshExpirySec = duration("JWT_REFRESH_EXPIRY", "7d");
 
+// ─── Logging ──────────────────────────────────────────────────────────────────
+// Tuning knob read by utils/logger.js. Defaults: silent in tests, debug in
+// development, info in production.
+const LOG_LEVELS = ["fatal", "error", "warn", "info", "debug", "trace", "silent"];
+let logLevel = raw("LOG_LEVEL")?.toLowerCase();
+if (logLevel !== undefined && !LOG_LEVELS.includes(logLevel)) {
+  console.warn(`[CONFIG] LOG_LEVEL="${logLevel}" is not one of ${LOG_LEVELS.join(", ")}; using default`);
+  logLevel = undefined;
+}
+logLevel ??= nodeEnv === "test" ? "silent" : isDevelopment ? "debug" : "info";
+
 // ─── URLs / services ──────────────────────────────────────────────────────────
 const mongoUri = required("MONGO_URI");
 
@@ -207,6 +218,7 @@ export const env = Object.freeze({
   nodeEnv,
   isProduction,
   isDevelopment,
+  logLevel,
   port,
   host,
   mongoUri,

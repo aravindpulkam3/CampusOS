@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 import { verifyAccessToken } from "../utils/generateToken.js";
+import logger from "../config/logger.js";
 
 let ioInstance = null;
 
@@ -38,7 +39,7 @@ export const initSocket = (io) => {
       // auth failure — the client refreshes and reconnects on "Unauthorized".
       // Anything else (e.g. the DB lookup failing) is ours, not the client's.
       if (err instanceof jwt.JsonWebTokenError) return next(new Error("Unauthorized"));
-      console.error("[SOCKET] handshake failed:", err.message);
+      logger.error({ err, module: "socket" }, "handshake failed");
       next(new Error("Service unavailable"));
     }
   });

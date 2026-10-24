@@ -1,6 +1,7 @@
 import Classroom from "../models/Classroom.js";
 import "../models/Curriculum.js";
 import { getJSON, setJSON, del } from "../utils/cache.js";
+import logger from "../config/logger.js";
 
 const ACADEMIC_CLASSROOM_TTL = 60 * 60;
 const academicCacheKey = (classroomId) =>
@@ -37,8 +38,9 @@ export const invalidateAcademicClassroomsForCurriculum = async (
     await Promise.all(classroomIds.map(invalidateAcademicClassroom));
   } catch (err) {
     // A failed cache invalidation must not turn an already-saved edit into 500.
-    console.error(
-      `[CACHE] Classroom curriculum invalidation failed: ${err.message}`,
+    logger.error(
+      { err, module: "classroom", curriculum: String(curriculumId) },
+      "classroom curriculum cache invalidation failed",
     );
   }
 };

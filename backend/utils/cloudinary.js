@@ -2,6 +2,7 @@ import { v2 as cloudinary } from "cloudinary";
 import fs from "fs";
 import ApiError from "./apiError.js";
 import { env } from "../config/env.js";
+import logger from "../config/logger.js";
 
 // Configure credentials. env.cloudinary is null only outside production (it is
 // required there); uploads then fail at Cloudinary and return null below.
@@ -48,7 +49,7 @@ export const uploadOnCloudinary = async (localFilePath, folder = "eventsphere") 
     if (error?.http_code === 400) {
       throw new ApiError(400, "Unsupported or corrupted file.");
     }
-    console.error("Cloudinary upload failed utility error:", error);
+    logger.error({ err: error, module: "cloudinary", folder }, "upload failed");
     return null;
   }
 };

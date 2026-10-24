@@ -194,6 +194,7 @@ The backend's source of truth is [`backend/config/env.js`](backend/config/env.js
 | `REDIS_URL` | Optional cache connection. |
 | `TRUST_PROXY` | Proxy trust for correct client IPs and rate limits; required in production. Use `loopback` with local Nginx. |
 | `RATE_LIMIT_*` | Optional auth rate-limit tuning; see [`rateLimitMiddleware.js`](backend/middleware/rateLimitMiddleware.js). |
+| `LOG_LEVEL` | Optional: `fatal`, `error`, `warn`, `info`, `debug`, `trace` or `silent`. Defaults to `debug` in development, `info` in production, `silent` in tests. |
 | `TZ` | Set to `Asia/Kolkata` if campus day boundaries should use IST. Dashboard date logic uses server-local time. |
 
 `VITE_API_URL` is the only frontend environment variable used here. For a production build served from the same origin as the API, set it to `/api` **before** running `npm run build`. The reverse proxy must forward both `/api` and `/socket.io` to the backend.
@@ -242,6 +243,8 @@ The test runner may download a MongoDB binary on its first run. There is current
 ## Deployment and existing data
 
 For a single-VM production deployment, serve the built client over HTTPS and reverse-proxy `/api` and `/socket.io` to Node. Set `HOST=127.0.0.1`, `TRUST_PROXY=loopback`, `CLIENT_URL` to the public HTTPS frontend origin, and `VITE_API_URL=/api` at build time. The backend validates these production settings. Auth cookies use `SameSite=Strict`, so the client and API should share a site. Keep Node behind the proxy; rate-limit counters are process-local, so run one API process unless you add a shared rate-limit store.
+
+The API logs to stdout only: one JSON object per line (pretty-printed in development), with one line per request carrying a request ID that is also returned as the `X-Request-Id` response header. Collect it with the process manager or container runtime; nothing is written to files.
 
 The API sets security headers for API responses. The server hosting the SPA must also set headers for `index.html` and static assets. Roll out a Content Security Policy in report-only mode first and account for Socket.IO and hosted media.
 
