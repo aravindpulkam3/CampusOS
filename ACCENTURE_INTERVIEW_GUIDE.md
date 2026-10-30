@@ -334,6 +334,7 @@ I'd be upfront: the **competitive prep** page is a frontend prototype with no ba
 Code: `README.md` ("Project status"), `frontend/src/pages/academics/competitive/CompetitivePrep.jsx`, `backend/models/Resource.js`
 
 ---
+
 ## 2. Architecture
 
 ### Must Know
@@ -429,6 +430,7 @@ On `SIGTERM`/`SIGINT`, `server.js` runs a **graceful shutdown** once (guarded ag
 Code: `backend/server.js` (`shutdown`)
 
 ---
+
 ## 3. Frontend (React)
 
 ### Must Know
@@ -623,6 +625,7 @@ To avoid **resource enumeration**. For example, `getNoticeById` returns **404** 
 Two reasons. **Timing**: if the response waited for SMTP only when the email is on the roster, response time would reveal whether an address exists — an **account enumeration** side channel. And **reliability**: an SMTP failure shouldn't change the response. So `sendAccountClaimEmail(...).catch(logMailFailure(...))` runs in the background, and every request gets the same generic message: "If this address is on the college roster, an activation link has been sent."
 
 ---
+
 ## 5. Database (MongoDB + Mongoose)
 
 ### Must Know
@@ -731,6 +734,7 @@ I tested it. `discussions.test.js` has a "query plans" test that runs `.explain(
 A classroom holds only its **current** semester: `currentSemesterNumber`, `curriculum` and `periods`. When a new semester starts, those are **overwritten** and the timetable is cleared. Deadlines and classroom notices store a **snapshot** `semesterNumber` at creation. Queries filter `semesterNumber: currentSemesterNumber`, so old deadlines naturally stop showing. Old-semester deadlines become read-only — you can't edit them because their subject may no longer exist in the current curriculum. It's a deliberate, documented trade-off: simpler model, no timetable history.
 
 ---
+
 ## 6. Authentication & Security
 
 ### Must Know
@@ -925,6 +929,7 @@ That came from a real bug. By default the Redis client **queues commands while d
 The key is built from the **normalized query**: trimmed, lowercased, multiple spaces collapsed — `cache:search:v2:<query>`. The regex is built from the **same normalized string**, otherwise "a  b" (no match) could cache an empty result under the key for "a b". Queries over 100 characters or under 2 return empty before touching cache or DB, so nobody can create unlimited huge keys. The `v2` prefix let me change the result shape without serving old-format entries.
 
 ---
+
 ## 8. Socket.IO (Real-Time Notifications)
 
 ### Must Know
@@ -986,6 +991,7 @@ Right now there's one Node process, so `io.to(room).emit()` reaches every socket
 It's **fan-out on write**: one platform notice creates **one document per user** with `insertMany`, and `notifyAllUsers` loads every user ID into memory. For a college of a few thousand students that's fine, but for much larger numbers it's heavy and runs inside the API process. Improvements: move fan-out to a **background job queue** (BullMQ on Redis) so the request returns immediately and work is retried on failure; batch `insertMany`; or store **one platform notice** and compute per-user read state on read (**fan-out on read**) for broadcast-type messages.
 
 ---
+
 ## 9. Important Features — Technical Flows
 
 ### Must Know
@@ -1126,6 +1132,7 @@ For drives I already use a MongoDB **text index** (`$text`). For discussions I s
 No, and I wouldn't claim numbers I haven't measured. My testing is functional and concurrency-focused — for example, firing parallel registrations to prove only one succeeds. If I load tested, I'd use **k6** with realistic flows (login → dashboard → drive list → apply), watch p95 latency and error rate, the cache hit/miss metrics the app already logs, and MongoDB's slow query log.
 
 ---
+
 ## 11. Deployment & DevOps
 
 ### Must Know
@@ -1177,6 +1184,7 @@ Fail-fast **config validation**; DB-before-listen; **graceful shutdown** with dr
 The `/socket.io/` location must proxy with HTTP/1.1 and pass the upgrade headers — `proxy_http_version 1.1; proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "upgrade";` — plus `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for` and `Host`, and a longer `proxy_read_timeout` so idle sockets aren't cut. With more than one Node process, I'd need sticky sessions or WebSocket-only transport plus the Redis adapter. *(This is planned configuration — I haven't deployed it yet.)*
 
 ---
+
 ## 12. Testing & Debugging
 
 ### Must Know
@@ -1232,6 +1240,7 @@ No **frontend** unit or component tests, no **end-to-end** browser tests, no **l
 By design: notifications are side effects wrapped in `safe()`, so failures are logged, not thrown; cache failures fall back to MongoDB; cache invalidation failures are logged; email failures are logged by error code only (the message can contain the address). Database outages return **503**. Crashes are logged at `fatal` before exit. Visibility is through logs only — no metrics or alerting yet, which I'd add (CloudWatch or Grafana) with alerts on 5xx rate.
 
 ---
+
 ## 13. Technical Challenges
 
 Use the **STAR** structure: Situation → Task → Action → Result. These are real problems visible in the commit history.
@@ -1275,6 +1284,7 @@ Live notifications **stopped silently after 15 minutes**. The socket was authent
 Three things. **Concurrency is the default** — double clicks, retries and multiple tabs happen, so writes must be atomic or idempotent. **Optional dependencies must fail fast**, or they become hard dependencies. And **business rules need one home** — duplicated logic drifts. I also learned to **reproduce a bug as a test first**, then fix it.
 
 ---
+
 ## 14. Scenario-Based Questions
 
 ### Must Know
@@ -1393,6 +1403,7 @@ Utility classes keep styles next to the markup, make a **consistent design syste
 Most of my important bugs were about **real database behaviour** — unique indexes, transactions, conditional updates, `matchedCount` vs `modifiedCount`, query plans. Mocking Mongoose would hide exactly those bugs. An **in-memory replica set** runs the real MongoDB engine with transactions, Supertest exercises the real middleware chain, and Vitest is fast, ESM-native and has a Jest-compatible API.
 
 ---
+
 ## 16. Cross-Question Drills
 
 Interviewers dig deeper on whatever you say. Practice these chains out loud — each follow-up is what usually comes next.
@@ -1461,6 +1472,7 @@ Interviewers dig deeper on whatever you say. Practice these chains out loud — 
 - *"What about the frontend?"* → Not tested yet — I'd add React Testing Library and Playwright.
 
 ---
+
 ## 17. HR + Project Questions
 
 ### Must Know
