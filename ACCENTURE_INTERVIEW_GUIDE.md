@@ -1073,12 +1073,59 @@ Two steps so a coordinator can't make a mistake blindly. **Preview** (pure read)
 The profile page shows roster data (name, roll number, branch, year, CGPA) as read-only and lets the student edit bio, GitHub, LinkedIn, portfolio, profile picture and resume. Images/PDFs are uploaded first through `ImageUploadZone` → `/api/v1/upload?folder=user-profiles` or `student-resumes` (with a 5 MB client-side check), which returns a Cloudinary URL; then `PATCH /auth/profile` saves that URL after `isHttpUrl` validation. `getProfileData` returns stats — clubs followed, events registered, discussions created, applications — computed with parallel queries.
 
 ---
-<!-- SECTION:c10 -->
 ## 10. Performance & Scalability
 
-_Not written yet. This section is filled in by a later commit._
-<!-- /SECTION:c10 -->
+### Must Know
 
+**Q131. What performance optimizations did you implement?**
+
+- **Indexes** for every main query, including compound indexes that match **filter + sort** (comments/replies keyset, notices, notifications, deadlines).
+- **Keyset pagination** for comments and replies, and **limits everywhere** — page sizes are capped (e.g. discussions ≤ 50, drives ≤ 100, applicants ≤ 200).
+- **Parallel queries** with `Promise.all` and the dashboard's wave structure.
+- **No N+1**: grouped populates, `insertMany`, `bulkWrite`, `distinct`.
+- **`.lean()` and `.select()`** to fetch only needed fields as plain objects.
+- **Redis cache-aside** for shared reads.
+- One **dashboard endpoint** instead of many client requests; **debounced, abortable** search on the frontend.
+
+**Q132. Where are the current bottlenecks?**
+
+Being honest about it:
+1. `GET /api/drives` loads **all matching drives** into memory, computes eligibility and sort weight per drive, sorts in JavaScript and then slices the page. Fine for hundreds of drives, not for tens of thousands.
+2. **Regex search** with unanchored patterns can't use a normal index, so discussion and global search scan documents (bounded by filters and limits).
+3. **Notification fan-out** for platform notices writes one document per user inside the request.
+4. **bcryptjs** hashing runs on the main thread.
+5. **Offset pagination** with `skip` gets slower on deep pages.
+6. `authMiddleware` does one `User.findById` on **every** request.
+
+**Q133. How would CampusOS handle thousands of students at once — say, a drive deadline?**
+
+Today it's a **single Node process**, so first I'd measure with a load test (k6 or autocannon) instead of guessing. Things that help already: indexed queries, short responses, cached shared reads, unique index for applications so duplicates are impossible. To scale up: run **multiple Node processes** (PM2 cluster or several containers) behind Nginx or a load balancer — but before that, move **rate-limit counters** and **Socket.IO** to Redis (shared store + Redis adapter), and store uploads directly in Cloudinary instead of a local temp folder. Then use **MongoDB Atlas** with a replica set (reads can go to secondaries for non-critical data), move notification fan-out to a **queue**, and cache the user lookup in auth middleware for a short time.
+
+### Important Follow-Ups
+
+**Q134. How would you find a slow query?**
+
+Look at request durations in the Pino logs (each request line has `responseTime`) to find the slow endpoint, then run the query with `.explain("executionStats")`. I check for `COLLSCAN` vs `IXSCAN`, an in-memory `SORT` stage, and compare `totalDocsExamined` with `nReturned`. Then I add or adjust a compound index following the **ESR rule** — Equality fields first, then Sort, then Range. I already have tests asserting the comment/reply queries have no in-memory sort.
+
+**Q135. What would block horizontal scaling right now?**
+
+Three things are **process-local**: (1) the **rate-limit store** is in memory — the code comment literally says to move to `rate-limit-redis` before scaling out, otherwise each process counts separately; (2) **Socket.IO** has no adapter, so emits only reach sockets on the same process; (3) the **Multer temp directory** is local disk, which is fine per-request but shouldn't be relied on across instances. The cache metrics are also per process. MongoDB and Redis themselves are already shared.
+
+**Q136. Why is `skip` a problem at scale?**
+
+`skip(n)` still makes MongoDB **walk past n documents** — page 1000 reads 1000 × pageSize entries before returning anything. It also has **consistency issues**: if new items are inserted while you page, items shift and you see duplicates or miss some. Keyset pagination fixes both by remembering the last `(createdAt, _id)`. I used keyset where lists are long and append-heavy (comments/replies) and offset where users expect page numbers.
+
+### Advanced
+
+**Q137. How would you make search scale?**
+
+For drives I already use a MongoDB **text index** (`$text`). For discussions I switched **from `$text` to regex** on purpose, because `$text` matches whole stemmed words and users wanted partial matches ("deplo" → "deployment") and all-words matching. The cost is scanning. At scale I'd use **MongoDB Atlas Search** (Lucene-based, supports autocomplete/partial matching with indexes) or Elasticsearch/OpenSearch, keeping the same API response shape.
+
+**Q138. Have you load tested it?**
+
+No, and I wouldn't claim numbers I haven't measured. My testing is functional and concurrency-focused — for example, firing parallel registrations to prove only one succeeds. If I load tested, I'd use **k6** with realistic flows (login → dashboard → drive list → apply), watch p95 latency and error rate, the cache hit/miss metrics the app already logs, and MongoDB's slow query log.
+
+---
 <!-- SECTION:c11 -->
 ## 11. Deployment & DevOps
 
