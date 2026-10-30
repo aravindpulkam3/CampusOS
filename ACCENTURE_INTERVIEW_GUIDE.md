@@ -1526,12 +1526,91 @@ Validation schemas (Zod) from day one; authorization designed with each endpoint
 "Ask me about any part. For example, I can explain why the follow endpoint checks `matchedCount` instead of `modifiedCount` — Mongoose timestamps add `updatedAt` to every update, so `modifiedCount` is 1 even when nothing really changed. Or why refresh tokens are hashed with SHA-256 but passwords with bcrypt." *(Pick two details you know cold.)*
 
 ---
-<!-- SECTION:partD -->
 # Part D — Potential Weak Points
 
-_Not written yet. This section is filled in by a later commit._
-<!-- /SECTION:partD -->
+Things an interviewer could challenge, with honest, defensible answers. The pattern for each: **acknowledge → explain the trade-off → give the fix**. Admitting a limitation clearly sounds far more senior than defending it badly.
 
+### Architecture & scale
+
+**1. "It's a single Node process. It won't scale."**
+True today, and it's documented in the code. Three things are process-local: the **rate-limit store**, **Socket.IO** rooms, and per-process cache metrics. Before scaling out I'd move rate limits to `rate-limit-redis` and add the **Socket.IO Redis adapter** — the code even marks `getIO()` as the place for it. Everything else (MongoDB, Redis cache, Cloudinary) is already shared.
+
+**2. "`GET /api/drives` loads every drive into memory."**
+Yes — it fetches all matching drives, computes eligibility and a sort weight in JavaScript, then slices the page. I chose this because the custom ordering ("open and not applied" first) depends on per-user application data. It's fine for hundreds of drives. The fix is to compute `hasApplied` with a `$lookup` on applications and the sort weight with `$addFields` in an **aggregation**, so MongoDB sorts and paginates.
+
+**3. "Notification fan-out runs inside the request."**
+`notifyAllUsers` loads every user ID and inserts one notification per user. It's not awaited, so the response isn't delayed, but it still uses the API process and has no retry. The fix is a **job queue** (BullMQ on Redis) for fan-out, and **fan-out on read** for broadcast-style platform notices.
+
+**4. "Every request queries the user from MongoDB."**
+Intentional: it gives fresh role and account state, so a role change or deleted user takes effect immediately. The cost is one indexed `findById` per request. If it became a bottleneck, I'd cache the user for a short TTL in Redis and invalidate on role/profile changes.
+
+### Database
+
+**5. "Some counters aren't updated atomically with their data."**
+`commentCount`/`replyCount` and `Drive.applicationCount` are updated in a second write after creating the comment/application, not in a transaction. A crash in between could make a counter off by one. They're display counters; the real data is correct. Fixes: a transaction, or a reconciliation script like the one I wrote for follower counts.
+
+**6. "`acceptAnswer` isn't atomic."**
+It clears `isAcceptedAnswer` on all comments, then sets it on one — two writes. For a moment there's no accepted answer, and two concurrent accepts could race. Only the discussion author can do it, so real conflict is unlikely. A transaction would close it.
+
+**7. "The shortlist guard can match the wrong array element."**
+The filter `{ "rounds._id": roundId, "rounds.processedAt": null }` can be satisfied by **two different** array elements. The controller checks `processedAt` before, so this only matters in a real race, but the correct form is `rounds: { $elemMatch: { _id: roundId, processedAt: null } }`.
+
+**8. "Why does the shortlist service fall back to no transaction?"**
+`withOptionalTransaction` was written so it would still work on a standalone MongoDB. Now that the app requires a replica set anyway, I'd remove the fallback so behaviour is the same everywhere.
+
+**9. "Deleting a drive leaves orphan applications."**
+`deleteDrive` is a hard delete; applications aren't removed. The student views filter out applications whose drive no longer exists, so nothing breaks, but the data is left behind. Better: only allow deleting drives with no applications, or cascade/soft delete.
+
+**10. "Plain edits are last-write-wins."**
+Two coordinators editing the same drive description at once — the last one wins. State transitions are protected (compare-and-set on `currentRoundId`, status guards), but free-form edits have no version check. Fix: **optimistic concurrency** with a version field.
+
+**11. "Regex search doesn't use indexes."**
+True for discussion and global search — unanchored, case-insensitive regex scans documents. I switched discussions from `$text` to regex on purpose, for partial-word and all-words matching. It's bounded by filters and limits. At scale: **Atlas Search**.
+
+### Security
+
+**12. "There's no validation library."**
+Validation is manual (type checks, allow-lists, length caps) plus Mongoose validators, and `validateMiddleware.js` is an empty stub. It works but it's repetitive and easy to miss a field. I'd add **Zod schemas** per route.
+
+**13. "Some image URL fields aren't validated."**
+Profile links, resume URL and drive URLs go through `isHttpUrl`, but club logo/banner, event banner and announcement image don't. They're rendered as `<img src>`, where `javascript:` doesn't execute, and the frontend uses `safeHref` for links — but validation should be consistent on the server too.
+
+**14. "Logout doesn't immediately invalidate the access token."**
+Correct — access tokens are stateless, so another device's token stays valid up to **15 minutes** after logout-all or a password change. Their refresh fails, and sockets are disconnected immediately. That's the standard trade-off of short-lived JWTs. If instant revocation were required, I'd add a per-user "tokens valid after" timestamp checked in `authMiddleware` (cheap, since it already loads the user).
+
+**15. "Strict rotation can log users out."**
+If the server rotates the refresh token but the response never reaches the browser, the next refresh looks like reuse and the session is revoked. It's documented as intentional: a grace window would reopen a replay window for stolen tokens. The frontend's single-flight and Web Locks make legitimate double use very unlikely.
+
+**16. "bcryptjs is slow and blocks."**
+It's pure JavaScript on the main thread. Login is rate-limited, so attackers can't force unlimited hashing, but under heavy legitimate load I'd switch to native `bcrypt` or `argon2` (thread pool).
+
+### Product & process
+
+**17. "Club admins can't be assigned through the app."**
+Right — `clubAdmins` and `eventOrganizers` are set directly in the database. The edit form sends `adminIds` but the API deliberately doesn't accept it, because changing who administers a club is a privilege change that deserves its own superadmin-only endpoint with checks. That endpoint is on my list.
+
+**18. "There's no superadmin bootstrap."**
+Staff accounts are provisioned by an administrator (directly in the DB); the README says so. A small one-time CLI script that creates the first superadmin from environment variables would fix it.
+
+**19. "Semester transition deletes the timetable."**
+Intentional and documented: a classroom stores only its current semester. Deadlines and notices keep a `semesterNumber` snapshot, so they stay correct. If history were needed, I'd add a `SemesterRecord` collection and archive periods before clearing them.
+
+**20. "Dashboard dates depend on server time zone."**
+"Today" is computed in server-local time, so the server must run with `TZ=Asia/Kolkata` — the README says this. A more robust version would store the campus time zone in config and compute day boundaries with a time-zone-aware library.
+
+**21. "No deployment, no CI, no frontend tests."**
+All true. The backend is well tested and production-aware, but I haven't shipped it. That's my top next step: GitHub Actions running the existing tests on every PR, then deploy to AWS (Q140, Q144).
+
+**22. "Some routes aren't RESTful."**
+`POST /events/create`, `PUT /events/:id/update`, `PUT /clubs/:clubId/update` have verbs in the URL — they're from the first version. Newer endpoints follow REST and idempotent PUT/DELETE. I'd rename them in a versioned API so the frontend can migrate.
+
+**23. "Missed real-time notifications after a reconnect."**
+Notifications are stored, but the client only fetches the list on login/app load, not on socket reconnect. One line fixes it: refetch in the socket `connect` handler.
+
+**24. "Unused code is in the repo."**
+`useFetch`, `Resource` model, `drive.service.js`, `resource.service.js`, `config/cloudinary.js`, `validateMiddleware.js` are stubs or unused. They're placeholders for planned features; I'd remove or finish them.
+
+---
 <!-- SECTION:partE -->
 # Part E — Technical Keywords Cheat Sheet
 
