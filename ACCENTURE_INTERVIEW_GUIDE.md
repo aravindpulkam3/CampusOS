@@ -925,12 +925,67 @@ That came from a real bug. By default the Redis client **queues commands while d
 The key is built from the **normalized query**: trimmed, lowercased, multiple spaces collapsed — `cache:search:v2:<query>`. The regex is built from the **same normalized string**, otherwise "a  b" (no match) could cache an empty result under the key for "a b". Queries over 100 characters or under 2 return empty before touching cache or DB, so nobody can create unlimited huge keys. The `v2` prefix let me change the result shape without serving old-format entries.
 
 ---
-<!-- SECTION:c8 -->
 ## 8. Socket.IO (Real-Time Notifications)
 
-_Not written yet. This section is filled in by a later commit._
-<!-- /SECTION:c8 -->
+### Must Know
 
+**Q106. How do real-time notifications work end to end?**
+
+Example: a club admin posts an announcement.
+1. `createAnnouncement` saves it, then calls `notifyClubFollowers(clubId, actorId, fields)` **without await**.
+2. The service finds followers (`User.find({ followedClubs: clubId })`, indexed), removes the actor, and **removes users who muted that club**.
+3. It writes all notifications with one **`insertMany`** — MongoDB is the **source of truth**.
+4. For each created notification it emits `notification:new` to the room **`user:<recipientId>`**.
+5. In the browser, `NotificationContext` receives it, adds it to the list, increments unread count, and shows a toast.
+6. If the user was offline, nothing is lost — next time they load the app, `GET /api/notifications` and `/unread-count` return it.
+
+Code: `backend/services/notification.service.js`, `backend/sockets/socketHandler.js`, `frontend/src/context/NotificationContext.jsx`
+
+**Q107. Why WebSockets instead of plain HTTP? Why Socket.IO instead of raw WebSockets?**
+
+HTTP is **request–response** — the server can't speak first. For notifications, the alternatives are **polling** (wasteful: most requests return nothing, and there's a delay) or a **persistent connection** where the server pushes when something happens. WebSocket gives a full-duplex connection over one TCP connection. I chose **Socket.IO** over raw `ws` because it gives **rooms**, automatic **reconnection**, a **fallback to HTTP long-polling** if WebSockets are blocked, handshake middleware for auth, and event names instead of parsing raw messages.
+
+**Q108. What are rooms and how do you use them?**
+
+A room is a server-side group of sockets; emitting to a room sends to every socket in it. On connection, each socket joins **`user:<userId>`**. One user can have several tabs or devices, so a room naturally delivers to all of them, and the service never needs to track socket IDs. Socket.IO removes the socket from rooms automatically on disconnect.
+
+**Q109. How do you authenticate socket connections?**
+
+In `io.use(...)` handshake middleware: parse the `accessToken` cookie from `socket.handshake.headers.cookie`, verify it with the **same** `verifyAccessToken` as HTTP, check the user exists, and store `socket.userId` and the token's `exp`. Bad or expired JWT → `next(new Error("Unauthorized"))`. Any other failure (like the DB lookup) → "Service unavailable", so the client doesn't try a pointless token refresh. Clients connect with `withCredentials: true` so the cookie is sent.
+
+### Important Follow-Ups
+
+**Q110. What happens when the access token expires while the socket is connected?**
+
+The handshake is the only auth check, so a socket shouldn't outlive its token — otherwise a revoked session would keep receiving notifications. On connection the server sets a **timer** to `socket.disconnect(true)` exactly when the token expires. On the client, `useSocket` listens for `disconnect` with reason `"io server disconnect"` and for `connect_error` with "Unauthorized"; in both cases it calls the **shared** `refreshAccessToken()` (never a separate refresh, to avoid refresh-token reuse) and reconnects — once per failure cycle. This fixed a real bug where live notifications silently stopped after 15 minutes until reload.
+
+**Q111. Did you protect the WebSocket handshake from cross-site attacks?**
+
+Yes. CORS only applies to the HTTP long-polling transport; a **WebSocket upgrade isn't subject to CORS**. A malicious site could try to open a socket using the victim's cookies (**cross-site WebSocket hijacking**). So the server has `allowRequest`: if an `Origin` header is present and isn't our frontend origin, the handshake is refused. SameSite=Strict cookies also help.
+
+**Q112. What delivery guarantee do notifications have?**
+
+The **socket push is best-effort** (at most once) — if the user is offline or the socket drops, that emit is gone. But the notification is **written to MongoDB first**, so it's never lost; it's fetched on next app load. One honest gap: after a socket **reconnect**, the client doesn't automatically refetch, so something sent during a short disconnect shows up on the next reload, not instantly. The fix is to call `fetchNotifications()` in the socket's `connect` handler. Also, `markAllAsRead` and per-item read state are stored server-side, so unread counts survive reconnects.
+
+**Q113. How do you avoid duplicate notifications on the client?**
+
+A `seenNotificationIds` **Set** in a `useRef`. Every notification from the initial fetch and every socket event is checked against it; if the ID was seen, it's ignored. When merging the fetch result, notifications that arrived over the socket **during** the fetch are kept on top, and duplicates are removed.
+
+**Q114. How does muting a club work?**
+
+`PUT /clubs/:id/mute` adds the club to `User.mutedClubs` (`$addToSet`). In `createNotificationsBulk`, if a notification has a `sourceClub`, it filters recipients with `mutedClubs: { $ne: sourceClub }`. That's the **only** place mute is checked, and only `notifyClubFollowers` passes a `sourceClub` — so important notifications like application results, classroom deadlines or platform notices **can't be muted** by design.
+
+### Advanced
+
+**Q115. How would you scale Socket.IO to multiple servers?**
+
+Right now there's one Node process, so `io.to(room).emit()` reaches every socket. With multiple instances, a user might be connected to server B while the event is emitted on server A. The fix is the **Socket.IO Redis adapter** (`@socket.io/redis-adapter`), which uses Redis **pub/sub** to broadcast emits across instances — `getIO()` is where it would attach. The load balancer also needs **sticky sessions** if long-polling is used (or force WebSocket-only transport), and Nginx needs the `Upgrade`/`Connection` headers for WebSockets.
+
+**Q116. What's the cost of notification fan-out?**
+
+It's **fan-out on write**: one platform notice creates **one document per user** with `insertMany`, and `notifyAllUsers` loads every user ID into memory. For a college of a few thousand students that's fine, but for much larger numbers it's heavy and runs inside the API process. Improvements: move fan-out to a **background job queue** (BullMQ on Redis) so the request returns immediately and work is retried on failure; batch `insertMany`; or store **one platform notice** and compute per-user read state on read (**fan-out on read**) for broadcast-type messages.
+
+---
 <!-- SECTION:c9 -->
 ## 9. Important Features — Technical Flows
 
