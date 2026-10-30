@@ -1336,12 +1336,63 @@ For the critical multi-document writes — activation, password reset, follow + 
 For the **roster**, nothing is written for invalid rows — each is reported with its row number and reason (bad email, year not 1–4, duplicated in file, belongs to another account, or trying to change a claimed student's identity), and valid rows still import. For **shortlists**, the **preview** shows unknown roll numbers, duplicates, students who never applied and already-decided students before anything changes, and **confirm re-validates** on the server, so a stale preview can't apply wrong data.
 
 ---
-<!-- SECTION:c15 -->
 ## 15. "Why" Questions
 
-_Not written yet. This section is filled in by a later commit._
-<!-- /SECTION:c15 -->
+### Must Know
 
+**Q175. Why MongoDB instead of SQL?**
+
+A few reasons from this project. A lot of the data is naturally **document-shaped**: a drive with its ordered rounds, a classroom with its periods, an application with its status timeline — each is read and updated as one unit, so embedding fits. The schema **changed a lot** while I built it (adding backlogs, sessions, roster), and with Mongoose that was cheap. And it's **JSON end to end** with JavaScript. But I'd be honest: the data is also quite **relational** — users, clubs, events, applications — so I used **references, unique compound indexes and transactions** where consistency matters. **PostgreSQL would have worked well too**; for a heavily relational, reporting-focused version (like placement statistics), SQL joins and constraints would be a strong choice.
+
+**Q176. Why React?**
+
+**Component-based** UI fits this app — cards, feeds, forms and layouts are reused across workspaces. React's **declarative** rendering makes state-driven UI simple (loading, error, empty states), hooks let me extract logic like `useSocket` and `useCursorList`, and the ecosystem (React Router, Axios) is mature. I knew JavaScript already, so the full stack is one language.
+
+**Q177. Why Node.js?**
+
+The workload is **I/O-bound** — database calls, cache calls, HTTP to Cloudinary and SMTP — which suits Node's **non-blocking event loop**. It has first-class support for **Socket.IO**, same language as the frontend, and npm has everything I needed (Mongoose, jsonwebtoken, express-rate-limit, Pino). The trade-off is CPU-heavy work like bcrypt blocks the event loop, which I'm aware of (Q52).
+
+**Q178. Why Redis?**
+
+It's an **in-memory** key-value store with **built-in TTL** (`SET key value EX seconds`), which is exactly what a cache needs. It's the standard choice, and later it can serve other roles this project would need to scale — a **shared rate-limit store**, the **Socket.IO adapter** via pub/sub, and a **job queue** (BullMQ). I deliberately kept it **optional**.
+
+**Q179. Why Socket.IO instead of polling?**
+
+With polling, every client asks "anything new?" every few seconds — thousands of mostly empty requests, plus a delay up to the polling interval. With Socket.IO, the server pushes **only when something happens**, instantly, over one long-lived connection. Socket.IO also handles reconnection, rooms and a long-polling **fallback**. For a notification feature that's a clear win. I still keep a REST endpoint for the list and unread count, so the socket is just the "push" layer.
+
+**Q180. Why JWT? Why not server sessions?**
+
+Actually I use a **hybrid**. The **access token is a stateless JWT** — verified with a signature check, no session-store lookup, and the same token authenticates the socket handshake. The **refresh token is tied to a stateful `Session` document**, so I get what pure JWT lacks: **revocation** (logout, logout-all, password change), **per-device sessions**, and **reuse detection**. A pure server-session approach would also have worked; the hybrid gives short-lived stateless checks with revocable long-lived sessions.
+
+### Important Follow-Ups
+
+**Q181. Why this architecture instead of alternatives?**
+
+A **layered monolith** with a separate SPA: simple to build and deploy alone, transactions across collections are easy, and the frontend can be served from a CDN independently. Alternatives I considered: **server-side rendering with Next.js** — good for SEO, but this is a logged-in app with no SEO need; **microservices** — too much overhead at this scale (Q19); **GraphQL** — useful for flexible queries, but the dashboard endpoint already solves the "many requests" problem with one tailored REST call.
+
+**Q182. Why Cloudinary instead of storing files on the server or S3?**
+
+Storing uploads on the API server's disk doesn't survive redeploys and doesn't scale across instances. Cloudinary gives **CDN delivery**, image transformations, and — importantly — it **inspects the actual file bytes** with `resource_type: "image"` and `allowed_formats`, which blocks disguised files. S3 + CloudFront would also work; I'd then need to do content validation myself.
+
+**Q183. Why Vite instead of Create React App?**
+
+CRA is no longer maintained. Vite's dev server uses **native ES modules**, so startup and hot reload are near-instant, its production build uses **Rollup**, and it has a simple **proxy** config I use for `/api` and `/socket.io`.
+
+**Q184. Why Mongoose instead of the native MongoDB driver?**
+
+**Schemas and validation** (required, enum, min/max), **middleware hooks** (password hashing), `populate` for references, and index definitions next to the schema. The trade-off is some magic — for example, update queries bypass `save` hooks, and `timestamps` changes what `modifiedCount` means. I hit both and handled them.
+
+**Q185. Why Tailwind CSS?**
+
+Utility classes keep styles next to the markup, make a **consistent design system** easy (spacing, colors, radii), and the build only ships classes that are used. It made the responsive redesign faster than maintaining separate CSS files.
+
+### Advanced
+
+**Q186. Why Vitest + Supertest + in-memory MongoDB instead of mocking the database?**
+
+Most of my important bugs were about **real database behaviour** — unique indexes, transactions, conditional updates, `matchedCount` vs `modifiedCount`, query plans. Mocking Mongoose would hide exactly those bugs. An **in-memory replica set** runs the real MongoDB engine with transactions, Supertest exercises the real middleware chain, and Vitest is fast, ESM-native and has a Jest-compatible API.
+
+---
 <!-- SECTION:c16 -->
 ## 16. Cross-Question Drills
 
