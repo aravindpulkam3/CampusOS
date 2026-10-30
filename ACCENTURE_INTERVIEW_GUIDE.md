@@ -1275,12 +1275,67 @@ Live notifications **stopped silently after 15 minutes**. The socket was authent
 Three things. **Concurrency is the default** — double clicks, retries and multiple tabs happen, so writes must be atomic or idempotent. **Optional dependencies must fail fast**, or they become hard dependencies. And **business rules need one home** — duplicated logic drifts. I also learned to **reproduce a bug as a test first**, then fix it.
 
 ---
-<!-- SECTION:c14 -->
 ## 14. Scenario-Based Questions
 
-_Not written yet. This section is filled in by a later commit._
-<!-- /SECTION:c14 -->
+### Must Know
 
+**Q163. What happens if MongoDB goes down?**
+
+At **startup**, `connectDB()` fails and the process **exits** — it never serves requests without a database. At **runtime**, the MongoDB driver **reconnects automatically**, and connection events are logged (`disconnected`, `reconnected`). While it's down, Mongoose buffers operations and then they fail; the error middleware recognizes `MongoNetworkError`, `MongoServerSelectionError` and "buffering timed out" and returns **503 "Service temporarily unavailable"** instead of a confusing 500. Even endpoints with cached data fail, because every route is authenticated and `authMiddleware` loads the user from MongoDB on each request — so in practice the API is down until MongoDB is back. With Atlas, a **replica set** gives automatic failover to a secondary, so a single node failure is usually a few seconds of errors.
+
+**Q164. What if Redis fails?**
+
+Nothing breaks — it's **cache-only**. `isReady` is false, so every cache call is skipped and reads go to MongoDB (more DB load, slower). Commands never hang because the offline queue is disabled. The outage is logged once, and when Redis comes back the client reconnects and caching resumes. One side effect: invalidations during the outage are skipped, so a value cached before the outage can be stale until its TTL ends.
+
+**Q165. What happens when a JWT expires?**
+
+**Access token** (15 min): `authMiddleware` throws `TokenExpiredError` → 401 → the Axios interceptor does one shared refresh → retries the original request — the user notices nothing. **Socket**: the server disconnects at expiry → the client refreshes and reconnects. **Refresh token** (7-day idle, 30-day absolute session): refresh returns 401 and clears the cookies → the request fails → the user is effectively logged out and `ProtectedRoute` sends them to login.
+
+**Q166. What if two users update the same data at the same time?**
+
+Depends on the data:
+- **Membership-style** (follow, register, vote): atomic `$addToSet`/`$pull` or conditional `$push` — both converge correctly.
+- **One-time actions**: a **unique index** (one application per drive), **conditional claim** (`claimedBy: null`), or atomic `findOneAndDelete` for one-time tokens.
+- **State machines**: **compare-and-set** — advancing a round only succeeds if `currentRoundId` is still the value I read; the loser gets 409 "please refresh". Shortlist uses a `processedAt` guard in a transaction.
+- **Plain edits** (e.g. two coordinators editing a drive's description): **last write wins** — there's no version check. If needed, I'd add **optimistic locking** with a version field and `updateOne({ _id, __v })`.
+
+**Q167. Thousands of students open the platform at 9 AM on placement day. What happens?**
+
+All requests hit one Node process. The shared reads — club lists, upcoming events, drive catalogue, search — come from Redis. Per-user work (dashboard, eligibility) hits MongoDB but uses indexed queries. Applying is safe from duplicates because of the unique index. Likely pain points: the drive list's in-memory processing, CPU for bcrypt if many log in at once, and possibly the campus **shared IP** hitting the per-IP login limit (100 failed attempts / 15 min, successful logins don't count). To prepare I'd load test first, then scale out with the shared rate-limit store, Socket.IO Redis adapter and more processes (Q133).
+
+**Q168. A notification fails to deliver. What happens?**
+
+There are two parts. If the **database insert** fails, `safe()` catches and logs it, and the main action still succeeds — the user just doesn't get that notification (there's no retry queue yet; a job queue would fix that). If the **socket emit** doesn't reach the user (offline, disconnected), the notification is already **stored**, so it appears on the next app load with the correct unread count. The gap: after a brief disconnect, the client doesn't refetch on reconnect, so it shows on reload rather than instantly.
+
+### Important Follow-Ups
+
+**Q169. What if Cloudinary is down during an upload?**
+
+`uploadOnCloudinary` catches the error, deletes the temp file, logs it and returns null; the route throws **502** "File upload failed. Please try again." If Cloudinary rejects the file itself (not a real image/PDF), that's a **400** "Unsupported or corrupted file". The rest of the app is unaffected.
+
+**Q170. What if the SMTP server fails during signup?**
+
+The email is sent **without await**, so the user still sees the standard "if this address is on the roster…" message. The failure is logged with only the error codes. The verification record exists, and after the **1-minute resend interval** (max 5 per day) the student can request a new link. In development without SMTP, links are printed to the console instead.
+
+**Q171. What if someone steals a refresh token?**
+
+If the attacker uses it first, they get a new token — but when the real user's browser refreshes with the old one, it's a **reuse**, so the **entire session is deleted** and both are logged out; the event is logged as `refresh_token_reuse`. If the real user refreshes first, the stolen token is already dead, and using it triggers the same revocation. Limits: the refresh cookie is httpOnly (XSS can't read it), `Secure`, scoped to `/api/auth`, and the user can **log out of all devices**.
+
+**Q172. What if the user has the app open in two tabs?**
+
+Both share cookies. When the access token expires, the **Web Lock** makes one tab refresh first; the other waits and then uses the new cookie (at worst it does one extra valid rotation). Each tab has its own socket in the same `user:<id>` room, so both get notifications. If one tab registers for an event and the other tries too, the server returns 409 and the UI treats it as "already registered" and refreshes the count.
+
+### Advanced
+
+**Q173. The server crashes in the middle of a write. Is data consistent?**
+
+For the critical multi-document writes — activation, password reset, follow + count, roster + user, shortlist, finish drive — they're in **transactions**, so either everything commits or nothing does. Non-transactional pairs are the honest risk: e.g. creating a comment and then incrementing `commentCount`, or creating an application and then incrementing `applicationCount`; a crash between them could make a counter off by one. These are display counters, and the fix would be a transaction or a periodic reconciliation, like the follower-count script.
+
+**Q174. An admin uploads a CSV with mistakes. What happens?**
+
+For the **roster**, nothing is written for invalid rows — each is reported with its row number and reason (bad email, year not 1–4, duplicated in file, belongs to another account, or trying to change a claimed student's identity), and valid rows still import. For **shortlists**, the **preview** shows unknown roll numbers, duplicates, students who never applied and already-decided students before anything changes, and **confirm re-validates** on the server, so a stale preview can't apply wrong data.
+
+---
 <!-- SECTION:c15 -->
 ## 15. "Why" Questions
 
