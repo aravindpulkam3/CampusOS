@@ -839,12 +839,92 @@ An attacker could forge access tokens for any user. Response: **rotate** `JWT_AC
 1. **Schema validation** with Zod on every route. 2. A **shared rate-limit store** (Redis) before running multiple processes. 3. A **CSP and HSTS** for the SPA at Nginx/CloudFront. 4. Consistent `isHttpUrl` validation for every image URL field (club logo/banner, event banner, announcement image currently aren't validated server-side). 5. **Audit logs** for admin actions like roster and CGPA changes. 6. Optional **2FA** for staff. 7. **Dependency scanning** (npm audit / Dependabot) in CI.
 
 ---
-<!-- SECTION:c7 -->
 ## 7. Redis Caching
 
-_Not written yet. This section is filled in by a later commit._
-<!-- /SECTION:c7 -->
+### Must Know
 
+**Q93. Why did you add Redis, and what do you cache?**
+
+Some reads are **shared by every student and change rarely** — the club list, the five upcoming events, classroom academic data, search results. Without a cache, every page load hits MongoDB for the same data. Redis is an **in-memory key-value store**, so reads are much cheaper. I cache only **shared data**:
+
+| Key | TTL | Invalidated by |
+|---|---|---|
+| `cache:clubs:active` | 24 h | create/update club, follow/unfollow |
+| `cache:clubs:popular:active` | 1 h | same as above |
+| `cache:events:upcoming` | 15 min | create/update event |
+| `cache:search:v2:<normalized query>` | 60 s | TTL only |
+| `cache:classroom:<id>:academic` | 1 h | period, semester, classroom and curriculum edits |
+| `cache:notices:classroom:<id>` | ≤ 5 min | notice create/delete/pin/archive, semester change |
+| `cache:drives:catalog:default` | 60 s | create/update/delete/finish/cancel drive |
+
+I haven't benchmarked the speed-up, so I wouldn't quote a number. The helper does record **hit/miss counters**, which is how I'd measure it.
+
+**Q94. Explain cache-aside with your code.**
+
+**Cache-aside** (lazy loading) means the application owns the cache logic: check the cache; on a **hit** return it; on a **miss** read the database, write the result to the cache with a TTL, and return it. Writes go to the database and then **delete** the key. From `getAllClubs`:
+
+```js
+const cached = await getJSON("cache:clubs:active");
+if (cached) return sendResponse(res, 200, "...", cached);   // hit
+const data = await Club.find({ isActive: true }).lean();   // miss → DB
+await setJSON("cache:clubs:active", data, 60 * 60 * 24);   // fill with TTL
+```
+
+And in `createClub`, after `Club.create(...)`, it calls `del("cache:clubs:active")` and `del("cache:clubs:popular:active")`. The next read refills them.
+
+Code: `backend/utils/cache.js`, `backend/controllers/club.controller.js`
+
+**Q95. How did you choose the TTLs?**
+
+Based on **how often the data changes** and **how bad stale data would be**. Club details rarely change and writes invalidate them → 24 hours. Popular-club ranking moves with follows → 1 hour. Upcoming events drift as events end even without writes → 15 minutes. Search has many query variants and **isn't invalidated on writes** → only 60 seconds. The drive catalogue is short because applications and deadlines move quickly → 60 seconds. TTL is the **upper bound on staleness** if an invalidation is missed.
+
+**Q96. How does invalidation work?**
+
+**Delete on write**. After the MongoDB write succeeds, the controller deletes the affected key — never updates it in place, because recomputing in two places is error-prone. Keys are scoped so invalidation is **exact**: a notice change deletes only `cache:notices:classroom:<that id>`. A curriculum subject edit finds every classroom using that curriculum and deletes each one's academic key. If the invalidation itself fails, it's logged and swallowed — a saved edit must not turn into a 500.
+
+**Q97. What happens if Redis goes down?**
+
+The app keeps working with caching disabled. `cache.js` checks `redisClient.isReady` before every command; if Redis isn't ready, it **bypasses** Redis and the caller reads MongoDB. The client is created with `disableOfflineQueue: true`, so commands **fail immediately** instead of queueing and hanging the request, and a `reconnectStrategy` that always retries in the background (up to 5 s apart). The outage is logged **once**, and "reconnected, cache re-enabled" is logged when it comes back. At startup, `connectRedis()` is called without `await` and never rejects, so Redis can't block the server from starting.
+
+Code: `backend/config/redis.js`, `backend/utils/cache.js`
+
+### Important Follow-Ups
+
+**Q98. Why don't you cache the dashboard?**
+
+Every section of the dashboard depends on **(this user, right now)**. Caching per user wouldn't be shared, so the hit rate would be low, and the time dependency makes it wrong quickly — something "closing today" cached at 11:50 PM is wrong at 12:01 AM. Instead, the dashboard reuses the **shared** cached classroom data and computes everything else per request.
+
+**Q99. When can users see stale data?**
+
+Cache-aside has known stale windows, and I documented them in the README: (1) if Redis is down during a write, the delete is **skipped**, and the old value lives until its TTL; (2) a **race** — a read misses, reads the old DB value, then a write happens and deletes the key, then the read writes the old value back; (3) search keys aren't invalidated, so results can be up to 60 s old. TTL bounds all of these. Personal data — eligibility, application status, registration — is **never cached**, so it's always live.
+
+**Q100. Why does the drive catalogue cache only some fields?**
+
+`cache:drives:catalog:default` stores only what's needed to **sort and paginate** before personalization: ID, deadline, createdAt and the eligibility criteria. For each request, I still read the student's applications live, compute eligibility and sort weight, paginate, and then **re-read the final page's full documents from MongoDB** — so `applicationCount`, `currentRoundId` and other fields on screen are always fresh. The cache saves the big scan; correctness-sensitive data stays live.
+
+**Q101. Why is the classroom notice TTL dynamic?**
+
+Notices can have an `expiresAt`. If I cached the feed for 5 minutes and one notice expired after 2 minutes, students would keep seeing it. So the TTL is `min(5 minutes, time until the earliest visible notice expires)`. On read, if any cached notice has already expired, it's treated as a miss. The cached rows store only the creator's **ID**, and the name/role is populated live, because a user's name can change. The **permission check runs before the cache read** on every request — the cache never decides who can see a classroom's notices.
+
+**Q102. What if a cached value is corrupted?**
+
+`getJSON` parses the value; if `JSON.parse` fails, it counts a `parseError` and a miss, **deletes that exact key**, and returns null — so the caller reads MongoDB and refills it. If serialization fails on write, it's logged and the request continues. The helper tracks hits, misses, bypasses and errors **per key family** and logs aggregated metrics every minute in development and every five minutes in production — without logging keys, search text or payloads, because a search query is user data.
+
+### Advanced
+
+**Q103. What is a cache stampede and do you handle it?**
+
+A **stampede** (thundering herd) is when a popular key expires and many requests miss at the same moment and all hit the database together. I **don't handle it** today — it's listed as a known limitation. At college scale, with these query sizes, it's acceptable. Fixes would be: a short **lock** in Redis (`SET key:lock NX EX 5`) so only one request refills while others wait or serve stale; **TTL jitter** so keys don't expire together; or **stale-while-revalidate**.
+
+**Q104. Why `disableOfflineQueue` and a custom reconnect strategy?**
+
+That came from a real bug. By default the Redis client **queues commands while disconnected** and waits for reconnect. During an outage, cached GETs **hung**, and club/event writes hung **after** their MongoDB write had already committed — because they were waiting on `del()`. Disabling the offline queue makes commands fail fast so the code falls back to MongoDB. The default reconnect strategy also **gives up permanently** after a socket timeout, so I replaced it with one that always returns a delay (`min(retries × 500, 5000)` ms).
+
+**Q105. How did you design the search cache key?**
+
+The key is built from the **normalized query**: trimmed, lowercased, multiple spaces collapsed — `cache:search:v2:<query>`. The regex is built from the **same normalized string**, otherwise "a  b" (no match) could cache an empty result under the key for "a b". Queries over 100 characters or under 2 return empty before touching cache or DB, so nobody can create unlimited huge keys. The `v2` prefix let me change the result shape without serving old-format entries.
+
+---
 <!-- SECTION:c8 -->
 ## 8. Socket.IO (Real-Time Notifications)
 
