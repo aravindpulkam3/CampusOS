@@ -51,12 +51,58 @@ A complete preparation guide for explaining, defending and discussing **CampusOS
 
 ---
 
-<!-- SECTION:facts -->
 ## Project Fact Sheet (verified from the code)
 
-_Not written yet. This section is filled in by a later commit._
-<!-- /SECTION:facts -->
+| Item | Fact |
+|---|---|
+| What it is | A full-stack college portal: dashboard, academics, community (clubs/events/announcements), discussions, placements, admin |
+| Repo layout | Two independent apps: `frontend/` (React client) and `backend/` (Express API); no root workspace |
+| Frontend | React 18, React Router 6, Vite 5, Tailwind CSS 4, Axios, socket.io-client, lucide-react |
+| Backend | Node.js (ES modules), Express 4, Mongoose 7, Socket.IO 4, jsonwebtoken, bcryptjs, Multer, Cloudinary, Nodemailer, csv-parse, express-rate-limit, Pino |
+| Database | MongoDB (**replica set required** — the app uses transactions) |
+| Cache | Redis (optional, cache-aside only) |
+| Auth | Access JWT (15 min) + refresh JWT (≤ 7 days idle, 30-day absolute session) in **httpOnly, SameSite=Strict cookies**; per-device `Session` documents with hashed, rotating refresh tokens |
+| Roles | Global: `student`, `placementCoordinator`, `superadmin`. Resource relationships: class representative, club admin, event organizer |
+| API | 15 router mounts under `/api` |
+| Collections | 18 Mongoose models in use (+ 1 unused `Resource` model) |
+| Real-time | Socket.IO, one room per user (`user:<id>`), 13 notification types, all persisted in MongoDB |
+| Tests | **111 backend integration tests in 18 files** — Vitest + Supertest + mongodb-memory-server (in-memory replica set). No frontend tests |
+| Logging | Pino structured JSON, one line per request, `X-Request-Id` header |
+| Deployment | **Not deployed.** Code is production-aware (config validation, loopback binding, trust proxy, secure cookies, graceful shutdown). No Docker, Nginx config or CI in the repo |
+| History | June 2026 → October 2026, single author, 53 commits, 3 merged PRs |
 
+> **Before the interview:** run `npm install && npm test` inside `backend/` on your own machine to confirm the suite passes. (It downloads a MongoDB binary on the first run. It could not be executed in the environment where this guide was written, because that download was blocked.)
+
+---
+
+## Implementation Status Map
+
+Use this to answer "is that implemented?" honestly.
+
+| Area | Status | Notes |
+|---|---|---|
+| Roster-based account activation, email verification, login, refresh rotation, logout / logout-all, password change and reset | ✅ | `services/auth.service.js` |
+| Global roles + resource-level permissions | ✅ | `middleware/*` |
+| Rate limiting (login, signup, refresh, forgot password, content, uploads) | ✅ | In-memory store → single process only |
+| Origin check, security headers, safe URLs, CSV formula escaping | ✅ | |
+| Personalized dashboard + global search | ✅ | `services/dashboard.service.js` |
+| Classrooms, timetable, deadlines, semester progression, curricula | ✅ | |
+| Clubs (follow/mute), events (register), announcements, community feed | ✅ | |
+| Assign club admins / event organizers via UI or API | ⏳ | Set directly in the DB; `EditClub` sends `adminIds` but the API ignores it |
+| Discussions: search, votes, bookmarks, comments, nested replies, accepted answer | ✅ | Cursor pagination for comments/replies |
+| Placement drives, eligibility, applications, rounds, CSV shortlist, finish/cancel | ✅ | |
+| Roster CSV import, academics/year updates | ✅ | |
+| Notifications (stored + Socket.IO push, mute) | ✅ | No auto-refetch after socket reconnect |
+| Redis caching with fallback and metrics | ✅ | No stampede protection |
+| Structured logging, graceful shutdown | ✅ | |
+| Request schema validation library (Joi/Zod) | ⏳ | `middleware/validateMiddleware.js` is an empty stub; validation is manual |
+| Competitive prep resources | 🟡 | Frontend-only prototype; no backend route; `Resource` model unused |
+| Moderation queue | ⏳ | Placeholder (per README) |
+| Frontend tests, E2E tests, load tests | ⏳ | |
+| Deployment (AWS EC2, Nginx, S3, CloudFront, HTTPS), CI/CD | ⏳ | Planned; code already enforces production settings |
+| Multi-instance scaling (shared rate-limit store, Socket.IO Redis adapter) | ⏳ | Seams noted in code comments |
+
+---
 <!-- SECTION:partA -->
 # Part A — Top 30 Most Likely Questions (Quick Revision)
 
