@@ -1611,12 +1611,119 @@ Notifications are stored, but the client only fetches the list on login/app load
 `useFetch`, `Resource` model, `drive.service.js`, `resource.service.js`, `config/cloudinary.js`, `validateMiddleware.js` are stubs or unused. They're placeholders for planned features; I'd remove or finish them.
 
 ---
-<!-- SECTION:partE -->
 # Part E — Technical Keywords Cheat Sheet
 
-_Not written yet. This section is filled in by a later commit._
-<!-- /SECTION:partE -->
+| Keyword | Meaning (one line) | Where in CampusOS |
+|---|---|---|
+| **Frontend** | | |
+| SPA | One HTML page; the router swaps views without full reloads | React app in `frontend/` |
+| Component / props | Reusable UI function; props are its inputs | Cards, feeds, forms in `components/` |
+| `useState` / `useEffect` | Local state / side effects after render, with cleanup | Every page; cleanup flags in Dashboard |
+| `useRef` | Mutable value that doesn't trigger re-render | `seenNotificationIds`, `cursorRef`, `abortRef` |
+| `useCallback` / `useMemo` | Memoize a function / computed value | `fetchNotifications`, `dismissToast` |
+| Context API | Share state without prop drilling | `AuthContext`, `NotificationContext` |
+| Custom hook | Reusable stateful logic in a `use*` function | `useSocket`, `useCursorList`, `useDebounce` |
+| React Router (nested routes, `Outlet`) | Client routing; parent layout renders children | `App.jsx`, `Layout.jsx` |
+| Protected route | Component that redirects unauthenticated users | `ProtectedRoute.jsx` (UX only) |
+| Axios interceptor | Hook that runs on every request/response | 401 → refresh → retry in `api/axios.js` |
+| Single-flight | Concurrent callers share one in-progress promise | `refreshAccessToken()` |
+| Web Locks API | Browser lock shared across tabs | `navigator.locks.request("campusos:auth-refresh")` |
+| Debounce | Wait until input stops before acting | `useDebounce` 400 ms |
+| AbortController | Cancel an in-flight fetch | `GlobalSearch.jsx` |
+| Optimistic update | Update UI before the server confirms | Mark notification read |
+| `Promise.allSettled` | Wait for all promises, keep each result | Dashboard + upcoming events |
+| StrictMode | Dev mode that double-invokes effects to find bugs | `main.jsx` |
+| Vite proxy | Dev server forwards paths to the backend | `/api`, `/socket.io` → :5000 |
+| **Backend** | | |
+| Event loop | Single-threaded loop running callbacks for non-blocking I/O | Node.js runtime |
+| Middleware | `(req, res, next)` function in the request pipeline | `backend/middleware/` |
+| `asyncHandler` | Wrapper sending async errors to `next()` | `utils/asyncHandler.js` |
+| Central error handler | Four-argument middleware mapping errors to responses | `errorMiddleware.js` |
+| Idempotent | Repeating a request has the same effect as once | PUT/DELETE follow, upvote, register |
+| Mass assignment | Client sets fields it shouldn't by sending extra keys | Prevented by allow-lists |
+| NoSQL injection | Operator objects like `{$ne: …}` injected into queries | Prevented by string type checks |
+| ReDoS / regex escaping | Malicious regex input causing slow matching or errors | `escapeRegex.js` |
+| Multer | Multipart/form-data parser for uploads | `multerMiddleware.js`, `csvUploadMiddleware.js` |
+| Structured logging | Logs as JSON fields, not free text | Pino in `config/logger.js` |
+| Request ID / correlation ID | ID linking a response to its log line | `X-Request-Id` |
+| Graceful shutdown | Finish in-flight work before exit | `server.js` `shutdown` |
+| Fail fast | Refuse to start with bad config | `config/env.js` |
+| **Database** | | |
+| Document / collection | JSON-like record / group of records | 18 collections |
+| Embedding vs referencing | Store child inside parent vs by ObjectId | Rounds embedded; comments referenced |
+| `populate` | Mongoose second query to fill references | Authors, clubs, drives |
+| `$lookup` | Join inside an aggregation | Events list → clubs |
+| Aggregation pipeline | Stages: `$match`, `$addFields`, `$sort`, `$facet`, … | Events list, discussion search, dashboard notices |
+| `$facet` | Several sub-pipelines on the same input | Count + page in one query |
+| Compound index | Index on several fields in order | `{discussion, createdAt, _id}` |
+| ESR rule | Index order: Equality, Sort, Range | Keyset indexes |
+| Unique index | DB rejects duplicate values | `{student, drive}` on Application |
+| TTL index | Auto-delete after a date | Session, EmailVerification, PasswordReset |
+| Text index | Full-text search on words | `Drive {companyName, role}` |
+| Keyset (cursor) pagination | Page by "after last seen key" | Comments, replies |
+| Offset pagination | `skip` + `limit` | Discussions, drives, notices |
+| `.lean()` | Plain objects instead of Mongoose documents | Read-only queries |
+| Atomic operators | `$addToSet`, `$pull`, `$push`, `$inc` on one document | Votes, follows, counters |
+| Conditional update | Filter includes the precondition | `registeredEvents: { $ne: id }` |
+| `matchedCount` vs `modifiedCount` | Matched filter vs actually changed | Timestamps make `modifiedCount` unreliable |
+| Compare-and-set | Update only if value is still what you read | `advanceRound` |
+| Transaction | Multiple writes commit or roll back together | `utils/transaction.js` |
+| Replica set | Primary + secondaries; needed for transactions | Required by README; tests use in-memory replica set |
+| Soft delete | Mark deleted instead of removing | Discussions, comments, replies |
+| `bulkWrite` / `insertMany` | Many writes in one round trip | Shortlist, roster import, notifications |
+| N+1 problem | One query per item in a loop | Avoided with grouped populate |
+| **Auth & Security** | | |
+| Authentication / Authorization | Who you are / what you may do | 401 vs 403 |
+| JWT | Signed token: header.payload.signature | Access + refresh tokens |
+| HS256 | HMAC-SHA256 symmetric signing | Pinned in `generateToken.js` |
+| Access / refresh token | Short-lived request token / long-lived renewal token | 15 min / ≤ 7 d |
+| Refresh token rotation | New refresh token every use | `refreshSession` |
+| Reuse detection | Old token used again → revoke session | `refresh_token_reuse` log |
+| httpOnly / Secure / SameSite | Cookie hidden from JS / HTTPS only / same-site only | Auth cookies |
+| RBAC | Permissions by role | `roleMiddleware` |
+| Resource-level authorization | Permission by relationship to an object | Class rep, club admin, event manager |
+| IDOR | Accessing another user's object by ID | Queries scoped by `student`/`recipient` |
+| bcrypt + salt + cost factor | Slow, salted password hash; cost 12 | `User` pre-save hook |
+| SHA-256 | Fast hash for high-entropy tokens | Session/claim/reset token hashes |
+| CORS | Browser rule on reading cross-origin responses | `cors({ origin, credentials })` |
+| CSRF | Forged cross-site request using victim's cookies | SameSite=Strict + `originCheck` |
+| XSS | Injected script runs in the victim's page | React escaping, `safeHref`, `isHttpUrl` |
+| CSWSH | Cross-site WebSocket hijacking | Socket `allowRequest` origin check |
+| CSP / nosniff / X-Frame-Options | Security headers | `securityHeaders.js` |
+| Rate limiting | Cap requests per key per time window | `rateLimitMiddleware.js` |
+| Password spraying / credential stuffing | One password on many accounts / leaked pairs | Per-IP and per-email limits |
+| Account enumeration | Learning which accounts exist from responses | Same message, unawaited email |
+| Trust proxy / X-Forwarded-For | Read real client IP behind a proxy | `TRUST_PROXY`, refuses `true` |
+| CSV/formula injection | Spreadsheet runs `=…` cell as formula | `escapeCsvCell` |
+| **Caching** | | |
+| Cache-aside (lazy loading) | App checks cache, falls back to DB, fills cache | `getJSON` / `setJSON` |
+| TTL | Time-to-live, auto-expiry | `SET key value EX seconds` |
+| Invalidation | Removing stale keys after writes | `del(key)` after DB write |
+| Cache hit / miss / bypass | Found / not found / Redis not ready | Metrics in `cache.js` |
+| Stale read | Serving old data | Bounded by TTL; documented |
+| Cache stampede | Many misses at once overload the DB | Not handled (known limitation) |
+| Offline queue | Client queues commands while disconnected | Disabled (`disableOfflineQueue`) |
+| **Real-time** | | |
+| WebSocket | Persistent full-duplex TCP connection | Socket.IO transport |
+| Long polling | Hold HTTP request until data is ready | Socket.IO fallback |
+| Room | Server-side group of sockets | `user:<id>` |
+| Handshake middleware | Auth before connection is accepted | `io.use(...)` |
+| Fan-out on write | Create a copy per recipient at send time | `createNotificationsBulk` |
+| Redis adapter / pub-sub | Broadcast emits across servers | Planned for scaling |
+| At-most-once delivery | Message may be lost, never duplicated | Socket push (DB is the backup) |
+| **Testing & DevOps** | | |
+| Integration test | Tests components together through real interfaces | Supertest → app → in-memory MongoDB |
+| Vitest / Supertest | Test runner / HTTP assertions | `backend/tests/` |
+| mongodb-memory-server | Real MongoDB started in memory for tests | Replica set in `globalSetup.js` |
+| Mocking | Replacing a module with a fake | `vi.mock` for mailer, Redis |
+| `explain()` | Show MongoDB query plan | Query-plan tests |
+| Reverse proxy | Server forwarding requests to the app | Nginx (planned) |
+| TLS termination | HTTPS decrypted at the proxy | Nginx/CloudFront (planned) |
+| CDN | Edge servers caching static files | CloudFront (planned) |
+| CI/CD | Automated test/build/deploy on each change | GitHub Actions (planned) |
+| Environment variables | Config outside code | `config/env.js`, `.env` |
 
+---
 <!-- SECTION:partF -->
 # Part F — Numbers to Remember & Code Map
 
