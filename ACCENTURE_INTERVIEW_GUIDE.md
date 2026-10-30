@@ -623,12 +623,114 @@ To avoid **resource enumeration**. For example, `getNoticeById` returns **404** 
 Two reasons. **Timing**: if the response waited for SMTP only when the email is on the roster, response time would reveal whether an address exists — an **account enumeration** side channel. And **reliability**: an SMTP failure shouldn't change the response. So `sendAccountClaimEmail(...).catch(logMailFailure(...))` runs in the background, and every request gets the same generic message: "If this address is on the college roster, an activation link has been sent."
 
 ---
-<!-- SECTION:c5 -->
 ## 5. Database (MongoDB + Mongoose)
 
-_Not written yet. This section is filled in by a later commit._
-<!-- /SECTION:c5 -->
+### Must Know
 
+**Q55. Explain your main collections and how they relate.**
+
+There are 18 collections in use:
+- **Identity:** `User`, `RosterEntry` (authoritative student list), `Session` (one per device), `EmailVerification`, `PasswordReset`.
+- **Academics:** `Classroom` (unique per branch + batch + section, with embedded `periods`), `Curriculum` (unique per branch + semester, with embedded `subjects`), `Deadline`.
+- **Community:** `Club`, `Event`, `Announcement`, `Discussion`, `Comment`, `Reply`.
+- **Placements:** `Drive` (with embedded `rounds`), `Application` (with embedded `timeline`).
+- **Messaging:** `Notice`, `Notification`.
+
+Relationships use **ObjectId references**: `User.classroom → Classroom`, `Event.organizerClub → Club`, `Application.student → User` and `.drive → Drive`, `Comment.discussion → Discussion`, `Reply.comment → Comment`. Many-to-many membership is stored as **arrays on User**: `followedClubs`, `registeredEvents`, `mutedClubs`. (There's also a `Resource` model that isn't used yet.)
+
+**Q56. How did you decide between embedding and referencing?**
+
+I **embed** when the child is owned by the parent, small, bounded, and always read with it: classroom `periods`, curriculum `subjects`, drive `rounds`, application `timeline`. One read gets everything, and updates are atomic on one document. I **reference** when the child is unbounded or queried on its own: comments and replies are separate collections because a discussion could have thousands of them and they're **paginated**; applications are separate because they're queried both by student and by drive. Embedding comments would risk the **16 MB document limit** and make pagination hard.
+
+**Q57. Which indexes did you create and why?**
+
+Every index matches a real query:
+- **Unique:** `User.email`, `User.rollNumber`, `Club.clubName`, `Classroom {branch, batch, section}`, `Curriculum {branch, semesterNumber}`, `Application {student, drive}` (one application per drive), `Session.tokenHash`.
+- **Keyset pagination:** `Comment {discussion, createdAt, _id}`, `Reply {comment, createdAt, _id}`.
+- **Membership lookups:** `User.registeredEvents`, `User.followedClubs` (counting registrations and finding followers to notify), `User.classroom`.
+- **Feeds:** `Notification {recipient, isRead, createdAt}`, `Notice {targetType, targetId, isArchived, createdAt}` and a second one ending in `expiresAt`, `Announcement {targetType, club|event, createdAt}`, `Deadline {classroom, semesterNumber, dueDate}`, `Event {organizerClub, startDateTime}`, `Drive {status, registrationDeadline}`.
+- **Text:** `Drive {companyName, role}` for `$text` search.
+- **TTL:** `Session.expiresAt`, `EmailVerification.expiresAt`, `PasswordReset.expiresAt`.
+
+**Q58. How did you implement pagination?**
+
+Two kinds. **Offset pagination** (`skip`/`limit`) for lists where users jump by page or "load more" — discussions, drives, notices, events, notifications, announcements. I always add `_id` as a **tie-breaker** in the sort so equal timestamps can't appear on two pages or be skipped. **Cursor (keyset) pagination** for comments and replies: the cursor is `"<ISO createdAt>_<_id>"` of the last row returned, and the next query asks for rows strictly after it: `createdAt > c` OR (`createdAt == c` AND `_id > id`). I fetch **limit + 1** rows to know if there's another page without a separate count. Keyset is stable when new comments are added between page loads and uses the compound index, so it doesn't slow down on deep pages like `skip` does.
+
+Code: `backend/controllers/discussion.controller.js` (`parseCursor`, `afterCursor`, `fetchPage`)
+
+**Q59. Where did you use aggregation pipelines?**
+
+Three places worth explaining:
+1. **Events list** (`getAllEvents`): `$match` (not cancelled, category, search) → `$facet` with one branch counting total records and the other computing a **tier** with `$switch` (1 ongoing, 2 upcoming, 3 completed), a `sortDate` (upcoming nearest first, completed most recent first by negating the end time), then `$sort`, `$skip`, `$limit`, and `$lookup` to the clubs collection with a sub-pipeline that projects only name and logo.
+2. **Discussion search**: when searching, `$addFields` computes `titleHits` — how many search words appear in the title using `$regexMatch` — and sorts by that first, **before** skip/limit so pages stay consistent.
+3. **Dashboard notices**: `$match` across five audience sources → `$addFields` priority weight → `$sort` pinned, priority, newest → `$limit 5`.
+
+**Q60. Where do you use transactions, and why?**
+
+When **two writes must never diverge**:
+- **Account activation**: consume the email token, claim the roster entry, create the user — all or nothing. If the password is rejected, nothing is saved and the link still works.
+- **Password change/reset**: write the new password and delete all sessions together.
+- **Club follow**: `User.followedClubs` and `Club.followerCount` update together.
+- **Roster academic update**: `RosterEntry` and the linked `User` get the same CGPA/backlogs.
+- **Shortlist confirm and finish drive**: mark the round processed and update all applications.
+
+MongoDB transactions need a **replica set**, so the README requires one, and tests use an in-memory replica set. `utils/transaction.js` uses `session.withTransaction()`, which also **retries transient errors**.
+
+### Important Follow-Ups
+
+**Q61. How do you stop a student applying twice to the same drive?**
+
+At the **database level** with a **unique compound index** `{ student: 1, drive: 1 }` on `Application`. The controller just calls `Application.create`; if two requests race, one gets error code **11000** and I return **409** "You have already applied". Checking first and then inserting would have a race window — the unique index closes it.
+
+**Q62. What are TTL indexes and where did you use them?**
+
+A **TTL index** tells MongoDB to delete documents automatically after a date field passes. I set `expireAfterSeconds: 0` on `expiresAt` for `Session`, `EmailVerification` and `PasswordReset`, so expired sessions and links clean themselves up. One detail: MongoDB's TTL monitor runs in the background (about once a minute), so deletion isn't instant. That's why the code also checks `expiresAt: { $gt: now }` in the actual query — the TTL index is cleanup, not the security check.
+
+**Q63. `populate` vs `$lookup` — and how did you avoid N+1 queries?**
+
+`populate` is Mongoose doing a **second query** with `$in` on the referenced IDs and stitching results in; `$lookup` is a join **inside** the aggregation pipeline. I use `populate` for normal finds and `$lookup` inside the events aggregation. To avoid **N+1**, I never query per item in a loop. For example, notices have a polymorphic `targetId` (club, event or drive), so I group notices by type and run **at most three populates** — one per model. Notifications to many users use one `insertMany`, not one insert per user.
+
+**Q64. Why do you use `.lean()`?**
+
+`lean()` returns **plain JavaScript objects** instead of full Mongoose documents — no getters, setters, change tracking or `save()`. It's faster and uses less memory, which is right for read-only responses. I don't use it when I need to modify and `save()` the document, or when I rely on document methods like `classroom.periods.id(...)`.
+
+**Q65. Why is the event registration count derived, but the club follower count stored?**
+
+Registration lives in **one place** — `User.registeredEvents` — and the count is `User.countDocuments({ registeredEvents: eventId })`, backed by an index. With no counter, there's nothing to get out of sync. Earlier the event had a stored `registrationCount`, and a migration removed it. For clubs, the popular-clubs list **sorts by** follower count, and counting for every club on every request is expensive, so `followerCount` is stored — but it changes only inside a **transaction** together with the membership, and only if membership actually changed. There's also a `reconcileFollowerCounts.js` script that recalculates counts from the real relationships, because the older toggle implementation could inflate them.
+
+**Q66. How do deletes work for discussions and comments?**
+
+**Soft delete** — set `isDeleted: true`. Reasons: replies under a deleted comment should still make sense, counts must stay correct, and it allows moderation later. Every read filters `isDeleted: false`. The delete is **idempotent**: `updateOne({ _id, isDeleted: false }, { $set: { isDeleted: true } })`, and the parent's `commentCount`/`replyCount` is decremented only if `matchedCount === 1`, so deleting twice never double-decrements.
+
+**Q67. Why is CGPA `null` by default instead of 0?**
+
+Because "not provided" and "0" mean different things. If CGPA were 0 by default, eligibility would say the student fails every drive with a minimum CGPA. With `null`, the eligibility service knows it **can't evaluate** and tells the student to get their CGPA on file instead of lying. Backlogs work the same way, but more leniently: unknown backlogs **skip** that criterion so an opportunity isn't hidden.
+
+**Q68. Which Mongoose middleware/hooks do you use, and what's the gotcha?**
+
+`User` has a `pre("save")` hook that hashes the password with bcrypt if it was modified, and a `comparePassword` method. `Announcement` has a `pre("validate")` hook ensuring a club announcement has a club and an event announcement has an event. The **gotcha**: `pre("save")` does **not** run for `updateOne`, `findByIdAndUpdate` or `$set`. If I set a password that way, it'd be stored in **plain text**. So the auth service has a comment rule: always assign `user.password` and call `save()`.
+
+### Advanced
+
+**Q69. How does the shortlist step prevent double processing?**
+
+Inside the transaction, the first write is a **guard**: `Drive.updateOne({ _id, "rounds._id": roundId, "rounds.processedAt": null }, { $set: { "rounds.$.processedAt": now } })`. If `modifiedCount !== 1`, it throws **409** "already processed". That makes the round a one-shot operation. A precise improvement I'd make: two separate array conditions can be satisfied by **different array elements**, so the strict form is `rounds: { $elemMatch: { _id: roundId, processedAt: null } }`. The controller also checks `processedAt` before calling, so this only matters under a real race — but `$elemMatch` is the correct pattern.
+
+Code: `backend/services/shortlist.service.js` (`applyShortlist`)
+
+**Q70. What's the difference between `withTransaction` and `withOptionalTransaction`?**
+
+`withTransaction` (`utils/transaction.js`) has **no fallback** — if transactions aren't supported, the request fails. It guards pairs of writes that must never diverge, like a roster entry and its user. `withOptionalTransaction` in the shortlist service **falls back** to running without a session on a standalone MongoDB; the `processedAt` and `status` guards still prevent duplicates, just without cross-collection atomicity. Honestly, I'd remove the fallback now that the app requires a replica set anyway, so behaviour is the same everywhere.
+
+**Q71. How do you know your indexes are used?**
+
+I tested it. `discussions.test.js` has a "query plans" test that runs `.explain("queryPlanner")` on the comment and reply page queries and asserts the winning plan uses `discussion_1_createdAt_1__id_1` / `comment_1_createdAt_1__id_1` and has **no in-memory `SORT` stage**. Another test checks the event count uses the `registeredEvents` index. In general, I'd use `explain("executionStats")` and look for `IXSCAN` instead of `COLLSCAN`, and compare `totalDocsExamined` with `nReturned`.
+
+**Q72. How do deadlines and notices stay "per semester" without a Semester collection?**
+
+A classroom holds only its **current** semester: `currentSemesterNumber`, `curriculum` and `periods`. When a new semester starts, those are **overwritten** and the timetable is cleared. Deadlines and classroom notices store a **snapshot** `semesterNumber` at creation. Queries filter `semesterNumber: currentSemesterNumber`, so old deadlines naturally stop showing. Old-semester deadlines become read-only — you can't edit them because their subject may no longer exist in the current curriculum. It's a deliberate, documented trade-off: simpler model, no timetable history.
+
+---
 <!-- SECTION:c6 -->
 ## 6. Authentication & Security
 
