@@ -1724,9 +1724,80 @@ Notifications are stored, but the client only fetches the list on login/app load
 | Environment variables | Config outside code | `config/env.js`, `.env` |
 
 ---
-<!-- SECTION:partF -->
 # Part F — Numbers to Remember & Code Map
 
-_Not written yet. This section is filled in by a later commit._
-<!-- /SECTION:partF -->
+### Numbers to remember (all from the code)
 
+| What | Value |
+|---|---|
+| Access token lifetime | 15 minutes (`JWT_ACCESS_EXPIRY`) |
+| Refresh token lifetime | up to 7 days (`JWT_REFRESH_EXPIRY`), capped by session expiry |
+| Absolute session lifetime | 30 days from login |
+| Max sessions per user | 10 (oldest removed) |
+| bcrypt cost | 12 |
+| Password length | 8–72 bytes |
+| Activation link | 24 hours; max 1 email/minute and 5/day per address |
+| Password reset link | 30 minutes |
+| JWT secrets | ≥ 32 characters, must differ |
+| Login rate limits | 10 failed / 15 min per email; 100 failed / 15 min per IP |
+| Signup / verify / reset | 100 / hour per IP; forgot password 3 / hour per email |
+| Refresh limit | 30 / 15 min per session |
+| Content / upload limits | 30 posts / 10 min per user; 20 uploads / hour per user |
+| Upload size | 5 MB, one file; CSV 2 MB |
+| Cache TTLs | clubs 24 h; popular clubs 1 h; upcoming events 15 min; search 60 s; classroom 1 h; classroom notices ≤ 5 min; drive catalogue 60 s |
+| Page sizes | comments 20, replies 10 (max 50); discussions default 5 (max 50); events 15; notifications 15; announcements 10; community feed 20 (8/8/4); dashboard notices 5 |
+| Search query length | 2–100 characters |
+| Shutdown timers | 10 s drain, 15 s backstop |
+| Redis reconnect | `min(retries × 500, 5000)` ms; connect timeout 5 s |
+| Tests | 111 in 18 files |
+| Notification types | 13 |
+| API router mounts | 15 |
+
+### Code map — what to re-read before the interview
+
+| Topic | File | Look at |
+|---|---|---|
+| Middleware pipeline | `backend/app.js` | order of `app.use` |
+| Startup / shutdown | `backend/server.js` | `connectDB`, `allowRequest`, `shutdown` |
+| Config validation | `backend/config/env.js` | `required`, `group`, `TRUST_PROXY` checks |
+| Auth flows | `backend/services/auth.service.js` | `requestAccountClaim`, `verifyAccountClaim`, `loginUser`, `refreshSession`, `logoutSession`, `resetUserPassword` |
+| Tokens | `backend/utils/generateToken.js` | HS256 pinning, `sid`/`jti` |
+| Auth guard | `backend/middleware/authMiddleware.js` | cookie → verify → `req.user` |
+| Permissions | `backend/middleware/roleMiddleware.js`, `clubAdminMiddleware.js`, `eventManagerMiddleware.js`, `classroomAuthMiddleware.js` | `assertClubAdmin`, `canManageEvent` |
+| CSRF / headers | `backend/middleware/originCheck.js`, `securityHeaders.js` | |
+| Rate limits | `backend/middleware/rateLimitMiddleware.js` | key generators |
+| Errors | `backend/middleware/errorMiddleware.js` | `classify` |
+| Cache | `backend/utils/cache.js`, `backend/config/redis.js` | `getJSON`, `isAvailable`, `disableOfflineQueue` |
+| Notifications | `backend/services/notification.service.js`, `backend/sockets/socketHandler.js` | `safe`, `createNotificationsBulk`, handshake |
+| Dashboard | `backend/services/dashboard.service.js` | `buildStudentDashboard`, `fetchNotices`, `searchAll` |
+| Eligibility | `backend/services/eligibility.service.js` | `buildEligibilityFilter`, `checkDriveEligibility` |
+| Drives & rounds | `backend/controllers/drive.controller.js`, `backend/utils/roundState.js` | `getDrives`, `advanceRound`, `deriveRoundStates` |
+| Shortlist | `backend/services/shortlist.service.js` | `buildPreview`, `applyShortlist`, `finishDrive` |
+| Events | `backend/controllers/event.controller.js` | `getAllEvents` pipeline, `registerForEvent` |
+| Clubs | `backend/controllers/club.controller.js` | `setClubFollow`, cache keys |
+| Discussions | `backend/controllers/discussion.controller.js` | cursor helpers, search aggregation, `setMembership` |
+| Community feed | `backend/controllers/announcement.controller.js` | `getCommunityFeed` |
+| Notices | `backend/controllers/notice.controller.js` | `canPost`, `getNotices`, classroom cache TTL |
+| Classroom | `backend/controllers/classroom.controller.js` | `findOverlap`, `startNextSemester` |
+| Roster | `backend/controllers/roster.controller.js` | `importRoster`, `applyAcademicUpdate` |
+| Transactions | `backend/utils/transaction.js` | `withTransaction` |
+| Schemas & indexes | `backend/models/*.js` | `schema.index(...)` lines |
+| Tests | `backend/tests/claim.test.js`, `auth.test.js`, `eventRegistration.test.js`, `discussions.test.js` | race, rotation, pagination, query-plan tests |
+| Frontend routing | `frontend/src/App.jsx`, `components/common/ProtectedRoute.jsx` | nested routes, `allowedRoles` |
+| Token refresh | `frontend/src/api/axios.js` | interceptor, `refreshAccessToken`, Web Locks |
+| State | `frontend/src/context/AuthContext.jsx`, `NotificationContext.jsx` | |
+| Sockets (client) | `frontend/src/hooks/useSocket.js` | refresh-and-reconnect |
+| Cursor list | `frontend/src/pages/discussions/useCursorList.js` | |
+| Frontend security | `frontend/src/utils/safeHref.js`, `frontend/src/utils/csv.js` | `safeHref`, `escapeCsvCell` |
+
+### Final checklist
+
+- [ ] Run `npm test` in `backend/` and confirm it passes on your machine.
+- [ ] Run the app locally once (backend `npm run dev`, frontend `npm run dev`) so you can demo it if asked.
+- [ ] Say the 3-minute script out loud three times.
+- [ ] Practise all 10 cross-question drills with a friend.
+- [ ] Re-read the weak points and practise saying "that's a known limitation — here's the fix".
+- [ ] Prepare your honest answers for Q6, Q187, Q192 and Q197 in your own words.
+- [ ] Re-read `auth.service.js`, `cache.js`, `notification.service.js` and `axios.js` — the four files most likely to come up.
+
+Good luck — you built something real. Explain it the way you'd explain it to a teammate.
