@@ -524,12 +524,105 @@ Code: `frontend/src/utils/safeHref.js`, `frontend/src/utils/csv.js`
 The global search is an accessible **combobox**: the input keeps focus and points to the highlighted option with `aria-activedescendant`, arrow keys move, Enter opens, Escape closes, and **Ctrl+K / ⌘K** focuses it. The notification panel closes on Escape and returns focus to the bell. Each page sets its document title via `useDocumentTitle`, which screen readers announce. The UI uses a consistent **Tailwind** design system and was audited for responsiveness (a PR was dedicated to that).
 
 ---
-<!-- SECTION:c4 -->
 ## 4. Backend (Node.js + Express)
 
-_Not written yet. This section is filled in by a later commit._
-<!-- /SECTION:c4 -->
+### Must Know
 
+**Q39. Why Node.js and Express for the backend?**
+
+Node.js is good for **I/O-heavy** apps like this — almost every request is "read/write MongoDB, maybe Redis, return JSON". Its **event loop** with non-blocking I/O handles many concurrent requests on one thread. It also lets me use **JavaScript on both sides**, share mental models with React, and use JSON natively with MongoDB. Express is minimal and flexible — I compose exactly the middleware I need: logging, security headers, CORS, auth, permissions, rate limits and a central error handler.
+
+**Q40. How did you design the REST APIs?**
+
+Resources are grouped under `/api`: `/auth`, `/dashboard`, `/clubs`, `/events`, `/announcements`, `/discussions`, `/notices`, `/notifications`, `/classroom`, `/admin/classroom`, `/admin/roster`, `/curriculum`, `/drives`, `/applications`, and `/v1/upload`. I use proper methods and status codes — **201** for creates, **400** bad input, **401** not authenticated, **403** not allowed, **404** not found, **409** conflicts like "already registered", **413** too large, **429** rate limited, **503** database unavailable. For membership-style actions like follow, mute, upvote, bookmark and event registration, I used **PUT to set and DELETE to clear**, which are **idempotent**. Nested resources reflect ownership: `/discussions/:id/comments/:commentId/replies`.
+
+Honest note: some older routes have verbs in the URL like `/events/create` and `/clubs/:clubId/update`; if I cleaned the API I'd make them `POST /events` and `PATCH /clubs/:clubId`.
+
+**Q41. What is middleware? Which custom middleware did you write?**
+
+Middleware is a function `(req, res, next)` that runs in the request pipeline — it can read or modify the request, end the response, or call `next()` to continue. Mine:
+- `authMiddleware` — verify the access-token cookie, load `req.user`.
+- `roleMiddleware(...roles)` — global role check.
+- `classroomAuthMiddleware`, `clubAdminMiddleware`, `eventManagerMiddleware` — **resource-level** checks; they also attach the loaded document (`req.classroom`, `req.club`, `req.event`) so the controller doesn't fetch it again.
+- `originCheck`, `securityHeaders` — CSRF defence-in-depth and headers.
+- Rate limiters — login, signup, refresh, forgot password, content, upload.
+- `upload` (Multer, disk temp) and `uploadCSV` (Multer, memory).
+- `requestLogger`, `notFound`, `errorMiddleware`.
+
+**Q42. How do you handle errors in async route handlers?**
+
+Express 4 doesn't catch rejected promises from async handlers. So every handler is wrapped in `asyncHandler`: `(fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next)`. Any thrown error or rejection goes to `next(err)` and reaches the central error middleware. In controllers I throw `new ApiError(statusCode, message)` for expected problems.
+
+Code: `backend/utils/asyncHandler.js`, `backend/utils/apiError.js`
+
+**Q43. Explain your central error handler.**
+
+`errorMiddleware` has a `classify()` function that recognizes known errors and maps them to a **safe status and message**:
+- `ApiError` → its own status and message.
+- Mongo duplicate key `11000` → **409** "`<field>` already exists".
+- Mongoose `ValidationError` → **400** with per-field messages; `CastError` (bad ObjectId) → **400** "Invalid ID format".
+- JWT `JsonWebTokenError` / `TokenExpiredError` → **401**.
+- Multer errors → **413**/400; malformed JSON → 400; body too large → 413.
+- Mongo network/server-selection errors or "buffering timed out" → **503** "Service temporarily unavailable".
+- Anything else → **500** "Internal server error" — the real message only shows in development.
+
+The principle is **only messages we wrote reach the client**; a third-party `err.message` could leak internals. Unexpected errors are attached to `res.err` so the request logger logs them **once** with the stack and request ID.
+
+Code: `backend/middleware/errorMiddleware.js`
+
+**Q44. How do you validate input?**
+
+I don't use a schema library like Joi or Zod — validation is **manual in controllers** plus **Mongoose schema validators** (required, enum, min/max, maxlength). Controllers check types first (`typeof email !== "string"` → 400), then business rules (dates, eligibility, ownership). Things I always do: accept only strings for query filters, escape regex input, cap lengths (search ≤ 100 chars, content ≤ 10,000), and use **allow-lists** for writable fields. There's an empty `validateMiddleware.js` stub — adding Zod schemas there is a clear improvement because the manual checks are repetitive.
+
+### Important Follow-Ups
+
+**Q45. Why PUT/DELETE for follow and upvote instead of a toggle?**
+
+A toggle is **not idempotent**. If a user double-clicks, or the network retries, two "toggle" requests cancel out — or in a read-modify-write implementation, they can corrupt a counter. With **desired-state** endpoints, `PUT /clubs/:id/follow` always means "I follow it" and `DELETE` always means "I don't". In MongoDB that's `$addToSet` / `$pull`, which are atomic and converge to the same result no matter how many times they run.
+
+**Q46. How do you prevent mass assignment?**
+
+I never pass `req.body` straight into an update. Events use `EVENT_WRITABLE_FIELDS` and drives use `EDITABLE_DRIVE_FIELDS` — explicit lists of what a client may set. Fields like `createdBy`, `status`, `rounds`, `currentRoundId`, `applicationCount` and `eventOrganizers` can only change through dedicated actions. In `updateProfile`, students can only set bio, links, profile picture and resume; trying to set **CGPA, backlogs or name returns 403**, because those come from the roster. In `updateClub`, only a superadmin can change `isActive`.
+
+**Q47. How do you prevent NoSQL injection?**
+
+Express 4's query parser turns `?category[$ne]=x` into an **object** `{ $ne: "x" }`, and a JSON body can contain `{ "email": { "$regex": "." } }`. If that reaches a Mongo filter, it becomes an operator. So every filter value is checked to be a **string** before use — for example login rejects a non-string email with 400, and list endpoints use helpers like `queryString()` or `str()`. The rate limiter's email key also only accepts strings so an object can't become a bucket called `[object Object]`. User text used in `RegExp` goes through `escapeRegex`, so input like `c++` or `(` doesn't throw or cause bad backtracking.
+
+**Q48. How does file upload work?**
+
+`POST /api/v1/upload?folder=<name>`: `authMiddleware` → `uploadLimiter` (20/hour/user) → `validateFolder` (allow-list of 8 folders, checked **before** Multer so a rejected request never writes a temp file) → Multer `diskStorage` into `./public/temp` with limits (5 MB, 1 file, MIME allow-list) → `uploadOnCloudinary` uploads with `resource_type: "image"` and `allowed_formats` (jpg, png, webp, gif, pdf) → deletes the temp file → returns `secure_url`. The MIME type from Multer is client-supplied, so it's only a cheap first gate; the real content check is Cloudinary parsing the bytes, which also blocks SVG/HTML that could carry scripts. The frontend then saves that URL through the normal profile/club/event endpoint.
+
+Code: `backend/routes/upload.route.js`, `backend/middleware/multerMiddleware.js`, `backend/utils/cloudinary.js`
+
+**Q49. How are CSV uploads processed?**
+
+Shortlist and roster CSVs use a separate Multer config with **memoryStorage** and a 2 MB limit, because they're parsed once and discarded — they never need a permanent URL. `csv-parse/sync` parses with `columns: true`, `trim`, `bom` handling and skipping empty lines. Headers are matched **case-insensitively**. For roster import, every row is validated and the response reports `created`, `updated` and `rejected` rows **with row numbers and reasons**.
+
+**Q50. Where do you use async patterns like `Promise.all`?**
+
+Wherever queries are independent. `getProfileData` runs classroom lookup, discussion count, application count and recent applications in **parallel**. The dashboard runs in "waves" — wave 2 fires five queries together. Paginated lists run the page query and `countDocuments` together. Notifications are deliberately **not awaited** in controllers — they're side effects, wrapped in a `safe()` function that catches and logs errors, so a notification failure never fails the main action.
+
+**Q51. How does logging work?**
+
+I use **Pino** — fast, structured **JSON logs** to stdout, pretty-printed in development and silent in tests. `pino-http` writes **one line per request** with method, path (query string removed), status, duration, user ID and a **request ID** generated with `randomUUID()` and returned as the **`X-Request-Id`** header, so a user's error report can be matched to the log. Logging is **whitelisted** — no headers or bodies — and there's a redaction backstop for keys like `password`, `token`, `cookie`, `authorization`. Mongo duplicate-key messages are scrubbed because they include the duplicated email or roll number.
+
+Code: `backend/config/logger.js`, `backend/middleware/requestLogger.js`
+
+### Advanced
+
+**Q52. Does password hashing block the event loop?**
+
+I use **bcryptjs**, which is a pure-JavaScript implementation, with **cost factor 12**. Its async API splits the work into chunks so other requests can interleave, but the CPU work still happens on the **main thread**. Under heavy login traffic that becomes a bottleneck. Options are the native `bcrypt` package or `argon2`, which run hashing on the **libuv thread pool**, or scaling out with more Node processes. The login rate limits also cap how many hashes an attacker can force.
+
+**Q53. Why do some endpoints return 404 instead of 403?**
+
+To avoid **resource enumeration**. For example, `getNoticeById` returns **404** for a classroom notice you can't read, so a student can't confirm that an ID belongs to another classroom. Same for inactive clubs: a non-admin gets 404, not "this club exists but is inactive".
+
+**Q54. Why aren't activation and reset emails awaited?**
+
+Two reasons. **Timing**: if the response waited for SMTP only when the email is on the roster, response time would reveal whether an address exists — an **account enumeration** side channel. And **reliability**: an SMTP failure shouldn't change the response. So `sendAccountClaimEmail(...).catch(logMailFailure(...))` runs in the background, and every request gets the same generic message: "If this address is on the college roster, an activation link has been sent."
+
+---
 <!-- SECTION:c5 -->
 ## 5. Database (MongoDB + Mongoose)
 
