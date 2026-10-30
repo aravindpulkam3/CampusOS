@@ -1126,12 +1126,57 @@ For drives I already use a MongoDB **text index** (`$text`). For discussions I s
 No, and I wouldn't claim numbers I haven't measured. My testing is functional and concurrency-focused — for example, firing parallel registrations to prove only one succeeds. If I load tested, I'd use **k6** with realistic flows (login → dashboard → drive list → apply), watch p95 latency and error rate, the cache hit/miss metrics the app already logs, and MongoDB's slow query log.
 
 ---
-<!-- SECTION:c11 -->
 ## 11. Deployment & DevOps
 
-_Not written yet. This section is filled in by a later commit._
-<!-- /SECTION:c11 -->
+### Must Know
 
+**Q139. Is the project deployed?**
+
+**No — it currently runs locally.** The repository has no Dockerfile, Nginx config or CI pipeline. What *is* implemented is **production readiness in the code**: `env.js` refuses to start in production unless `CLIENT_URL` is HTTPS, `HOST` is `127.0.0.1`, `TRUST_PROXY` is set, and Cloudinary + SMTP are configured; cookies become `Secure` in production; logs go to stdout as JSON; there's graceful shutdown and crash handling. The README documents a single-VM deployment. *(If you have deployed it yourself, update this answer with the real details.)*
+
+**Q140. What AWS architecture did you plan?** (⏳ planned, not implemented)
+
+```
+Browser ──HTTPS──► CloudFront ──┬── /           → S3 (React build: index.html + assets)
+                                └── /api, /socket.io → EC2 (Nginx → Node on 127.0.0.1:5000)
+EC2 Node ──► MongoDB Atlas (replica set)   ──► Redis (ElastiCache or Redis on EC2)
+         ──► Cloudinary (media)             ──► SMTP (e.g. Amazon SES)
+```
+
+- **S3 + CloudFront** serve the static React build — cheap, cached at edge, HTTPS with an ACM certificate.
+- **EC2** runs Node under a process manager (PM2 or systemd), with **Nginx** as reverse proxy on the same machine.
+- **MongoDB Atlas** because transactions need a **replica set** and I don't want to run that myself.
+- Putting the API behind the **same CloudFront domain** keeps frontend and API on the **same site**, which `SameSite=Strict` cookies require. In that setup `TRUST_PROXY` would be **2** (CloudFront → Nginx), which the env comment already mentions.
+
+**Q141. Why put Nginx in front of Node?**
+
+**TLS termination**, a **reverse proxy** so Node listens only on loopback, proper handling of the **WebSocket upgrade** for `/socket.io`, gzip, request size and timeout limits, and serving static files if not using S3. It also lets me restart Node behind it. The code depends on this: production requires `HOST=127.0.0.1` so nobody can bypass Nginx and forge `X-Forwarded-For`.
+
+**Q142. How would HTTPS and cookies work in production?**
+
+HTTPS ends at CloudFront/Nginx with an ACM or Let's Encrypt certificate. Because `NODE_ENV=production`, auth cookies get the **`Secure`** flag and are only sent over HTTPS. `SameSite=Strict` means the SPA and API must be on the **same site** — easiest is the same domain with path routing (`/api`, `/socket.io` to the backend). Build the frontend with `VITE_API_URL=/api` **before** `npm run build`, since Vite bakes env values at build time. I'd also add **HSTS** at the edge.
+
+**Q143. How do you handle environment variables and secrets?**
+
+Backend config comes only from `config/env.js`, loaded by `dotenv` from `backend/.env` locally; `.env` files are **git-ignored**. Required values are validated at startup and the process refuses to start with clear messages. Secrets are never logged — even the Redis URL isn't echoed because it can contain a password. The frontend has one variable, `VITE_API_URL`, and anything with `VITE_` is **public** (it's in the bundle), so no secrets there. In production, I'd use **AWS Systems Manager Parameter Store or Secrets Manager**, injected into the environment at start.
+
+### Important Follow-Ups
+
+**Q144. How would you set up CI/CD?** (⏳ planned)
+
+**GitHub Actions**: on every pull request — `npm ci` in backend and frontend, run `npm test` (the in-memory replica set works in CI), run `npm run build` for the frontend, and later lint. On merge to main — build the frontend and sync it to **S3**, invalidate the **CloudFront** cache, and deploy the backend to EC2 (SSH + `git pull` + `npm ci --omit=dev` + PM2 reload, or build a Docker image). Secrets come from GitHub Actions secrets / AWS OIDC. Database migrations like `migratePhase1Auth.js` have `--dry-run` modes and would be run manually against a backup first.
+
+**Q145. What production considerations are already in the code?**
+
+Fail-fast **config validation**; DB-before-listen; **graceful shutdown** with drain timeouts; `unhandledRejection` / `uncaughtException` handlers; **structured JSON logs** with request IDs, no sensitive data; `x-powered-by` disabled and security headers; **trust proxy** validation; production **loopback binding**; secure cookies; and Redis as an optional dependency so a cache outage doesn't take the site down. Missing: a health-check endpoint (the logger even has a comment for where it goes), a process manager config, containerization and monitoring/alerts.
+
+### Advanced
+
+**Q146. What Nginx settings would Socket.IO need?**
+
+The `/socket.io/` location must proxy with HTTP/1.1 and pass the upgrade headers — `proxy_http_version 1.1; proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "upgrade";` — plus `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for` and `Host`, and a longer `proxy_read_timeout` so idle sockets aren't cut. With more than one Node process, I'd need sticky sessions or WebSocket-only transport plus the Redis adapter. *(This is planned configuration — I haven't deployed it yet.)*
+
+---
 <!-- SECTION:c12 -->
 ## 12. Testing & Debugging
 
