@@ -429,12 +429,101 @@ On `SIGTERM`/`SIGINT`, `server.js` runs a **graceful shutdown** once (guarded ag
 Code: `backend/server.js` (`shutdown`)
 
 ---
-<!-- SECTION:c3 -->
 ## 3. Frontend (React)
 
-_Not written yet. This section is filled in by a later commit._
-<!-- /SECTION:c3 -->
+### Must Know
 
+**Q23. Which frontend technologies did you use and why?**
+
+**React 18** for component-based UI, **React Router 6** for client-side routing, **Vite 5** as the dev server and bundler, **Tailwind CSS 4** for styling, **Axios** for HTTP, **socket.io-client** for real-time, and **lucide-react** for icons. Vite gives a very fast dev server using native ES modules and has a built-in **proxy**, which I use to forward `/api` and `/socket.io` to the backend, so in development the app behaves like the same-origin production setup.
+
+Code: `frontend/package.json`, `frontend/vite.config.js`
+
+**Q24. How does routing work?**
+
+`App.jsx` uses `BrowserRouter` and `Routes`. Public routes — login, signup, verify-email, forgot/reset password — have no layout. Everything else is **nested** under one parent route whose element is `<ProtectedRoute><Layout/></ProtectedRoute>`; `Layout` renders the top bar, tab bar, toasts and an `<Outlet/>` where the child page appears. Some routes add `allowedRoles`, like `/career/drives/create` for coordinators and superadmins, and the `/admin` section, which has its own nested routes and an index redirect to `/admin/notices`. A catch-all `*` route shows NotFound. While the initial session check is running, `App` shows a spinner so it doesn't flash the login page.
+
+Code: `frontend/src/App.jsx`, `frontend/src/components/layout/Layout.jsx`, `frontend/src/components/common/ProtectedRoute.jsx`
+
+**Q25. How do you manage state?**
+
+I use **React Context** for the two pieces of truly global state: `AuthContext` (current user, loading, logout, `setUser`, `fetchUser`) and `NotificationContext` (notification list, unread count, toasts, mark-read actions, and the socket listener). Everything else is **page-local state** with `useState`, because most data belongs to one page — the drive detail page doesn't need to share its data with the discussions page. I didn't need Redux: the global state is small, and Context with a few values is simpler. If the app grew, I'd consider **React Query (TanStack Query)** for server-state caching and refetching rather than Redux.
+
+Code: `frontend/src/context/AuthContext.jsx`, `frontend/src/context/NotificationContext.jsx`
+
+**Q26. Which React hooks did you use? Any custom hooks?**
+
+Built-in: `useState`, `useEffect`, `useRef`, `useCallback`, `useContext`, `useId` (for accessible IDs), and `useMemo` in a few pages. Custom hooks:
+- `useAuth` / `useNotifications` — read the contexts and throw if used outside the provider.
+- `useSocket(enabled)` — creates the socket connection and handles refresh-and-reconnect.
+- `useDebounce(value, delay)` — delays search input (400 ms on list pages).
+- `useCursorList(fetchPage)` — cursor pagination for comments and replies.
+- `useIsClassRep` — asks the backend whether I'm the class rep (it's a relationship, not a role).
+- `useNow`, `useDocumentTitle`, `useImageOk`, `useIsClamped` — small UI helpers.
+
+There's also a generic `useFetch` hook that is currently unused.
+
+**Q27. How does API integration work?**
+
+There's one Axios instance in `api/axios.js` with the base URL and `withCredentials: true`. Each resource has a small module that only builds requests — for example `discussion.api.js` exports `getComments(id, params)`, `upvoteDiscussion(id)` and so on. Components call these functions and handle loading/error state. A **response interceptor** on the instance handles expired access tokens globally, so no page has to write refresh logic.
+
+**Q28. How does the frontend handle an expired access token?**
+
+The access token lives 15 minutes. When any request gets a **401**, the Axios **response interceptor** checks it's not an auth route and hasn't been retried (`_retry` flag, to prevent infinite loops), then calls `refreshAccessToken()` and **replays the original request**. If refresh fails, the error goes to the caller. The important detail is `refreshAccessToken` is **single-flight**: if five requests fail at the same time, they all share **one** refresh promise. That matters because the server **rotates** refresh tokens — a second refresh with the old token would look like token theft and kill the session.
+
+Code: `frontend/src/api/axios.js` (`refreshAccessToken`, interceptor)
+
+### Important Follow-Ups
+
+**Q29. Why did you use the Web Locks API there?**
+
+Single-flight solves parallel 401s **inside one tab**, but two tabs share the same cookie jar and each has its own JavaScript memory. If both refreshed at once with the same token, the server would treat the second as **reuse**. `navigator.locks.request('campusos:auth-refresh', fn)` makes refreshes **serialize across tabs**: the second tab waits until the first tab's response — and its new `Set-Cookie` — has landed, so it sends the current token. If the browser doesn't support Web Locks, it falls back to calling the function directly.
+
+**Q30. Is `ProtectedRoute` your security?**
+
+No — it's **UX only**. It decides what to render: spinner while loading, redirect to `/login` if there's no user, a Forbidden page if the role isn't allowed. Anyone can modify frontend code in their browser, so **every permission is enforced again on the backend** with `authMiddleware`, `roleMiddleware` and resource checks like `assertClubAdmin`. The frontend just avoids showing buttons that would fail.
+
+**Q31. How do you prevent stale or wasted search requests?**
+
+In the **global search** (`GlobalSearch.jsx`), each keystroke creates a new **AbortController** and aborts the previous one, waits **300 ms**, requires at least 2 characters, and ignores results from an aborted request. On list pages like Events, Drives and Discussions, I use `useDebounce` with 400 ms. The discussions page also applies a response only if it's from the **newest request** and still matches the search box, so an old slow response can't overwrite a newer one.
+
+**Q32. How do you avoid state updates after a component unmounts or responses arriving out of order?**
+
+With **effect cleanup**. The dashboard's effect sets `let cancelled = false` and the cleanup sets it to true, so a late response is ignored. `useCursorList` uses an `aliveRef`, and `useSocket` uses a `disposed` flag so a refresh that finishes after unmount doesn't reconnect. This also matters because **React.StrictMode** (enabled in `main.jsx`) mounts effects twice in development.
+
+**Q33. Why does the dashboard use `Promise.allSettled`?**
+
+The dashboard loads two things in parallel: the personalized `/api/dashboard` and the shared upcoming-events list. With `Promise.all`, if events failed the whole page would fail. With **`Promise.allSettled`**, each result is handled separately — if only the events call fails, the dashboard still renders and the events section just shows nothing, and there's a "Try again" button if the main call fails.
+
+Code: `frontend/src/pages/dashboard/Dashboard.jsx`
+
+**Q34. How do notifications appear on the frontend?**
+
+`NotificationProvider` fetches the first page of notifications and the unread count when a user logs in. It uses `useSocket(!!user)` and listens for `notification:new`. A new notification is added to the list, increments the unread count, and shows a **toast** (only the last 3 are kept). A `seenNotificationIds` **Set** in a ref removes duplicates — for example if a socket event arrives while the initial fetch is in flight. Mark-read is **optimistic**: the UI updates first, and if the API call fails it refetches.
+
+**Q35. How does "Load more" work for comments and replies?**
+
+`useCursorList` is a small hook — one instance for the comment list and one per reply thread, so threads don't affect each other. It stores the **cursor** in a ref, allows **one request at a time** with a `busyRef`, advances the cursor only on success (so a failed page retries as-is), and **dedupes** by `_id`. When the user posts a new comment while older pages are still unloaded, it goes into an `extra` list shown after "Load more", so it doesn't pretend to be in the wrong position.
+
+Code: `frontend/src/pages/discussions/useCursorList.js`
+
+### Advanced
+
+**Q36. What frontend performance work did you do, and what's missing?**
+
+Done: **debounced** and **abortable** search, **pagination** everywhere (offset for lists, cursor for comments), the backend returns **render-ready DTOs** for the dashboard so the client doesn't do heavy joins, skeleton loaders instead of layout jumps, and the dashboard is **one request** instead of many. Missing, and I'd say so honestly: no **code splitting** (`React.lazy`), little memoization, and no client-side server-state cache. With `React.lazy` + `Suspense`, admin and career pages could load only when visited.
+
+**Q37. How do you protect against XSS on the frontend?**
+
+React **escapes text** by default and the codebase has no `dangerouslySetInnerHTML`. The risk left is URLs: React 18 does not block `javascript:` in `href`. So every user-supplied link goes through `safeHref`, which returns the URL only if it's absolute `http:`/`https:`. The backend also validates profile and drive URLs with `isHttpUrl`. When coordinators export applicant lists to CSV, `escapeCsvCell` prefixes cells that start with `=`, `+`, `-`, `@` with `'` to prevent **CSV/formula injection** in Excel.
+
+Code: `frontend/src/utils/safeHref.js`, `frontend/src/utils/csv.js`
+
+**Q38. Any UI or accessibility decisions worth mentioning?**
+
+The global search is an accessible **combobox**: the input keeps focus and points to the highlighted option with `aria-activedescendant`, arrow keys move, Enter opens, Escape closes, and **Ctrl+K / ⌘K** focuses it. The notification panel closes on Escape and returns focus to the bell. Each page sets its document title via `useDocumentTitle`, which screen readers announce. The UI uses a consistent **Tailwind** design system and was audited for responsiveness (a PR was dedicated to that).
+
+---
 <!-- SECTION:c4 -->
 ## 4. Backend (Node.js + Express)
 
