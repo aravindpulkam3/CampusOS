@@ -731,12 +731,114 @@ I tested it. `discussions.test.js` has a "query plans" test that runs `.explain(
 A classroom holds only its **current** semester: `currentSemesterNumber`, `curriculum` and `periods`. When a new semester starts, those are **overwritten** and the timetable is cleared. Deadlines and classroom notices store a **snapshot** `semesterNumber` at creation. Queries filter `semesterNumber: currentSemesterNumber`, so old deadlines naturally stop showing. Old-semester deadlines become read-only — you can't edit them because their subject may no longer exist in the current curriculum. It's a deliberate, documented trade-off: simpler model, no timetable history.
 
 ---
-<!-- SECTION:c6 -->
 ## 6. Authentication & Security
 
-_Not written yet. This section is filled in by a later commit._
-<!-- /SECTION:c6 -->
+### Must Know
 
+**Q73. Explain the full authentication flow.**
+
+1. **Signup (claim):** the student enters only their college email. If it's on the **roster**, the server creates a random 32-byte token, stores only its **SHA-256 hash** in `EmailVerification`, and emails a link `…/verify-email#token=…`. The response is the **same for every email**, so it doesn't reveal who's on the roster.
+2. **Verify:** the student sets a password. In **one transaction**, the server atomically consumes the token (`findOneAndDelete`), checks the roster entry, validates the password, claims the entry (`claimedBy: null` condition) and creates the user with identity data **from the roster**, not from the request.
+3. **Login:** email + password → bcrypt compare → must be email-verified → create a **Session** document → set two **httpOnly cookies**: `accessToken` (15 min, path `/`) and `refreshToken` (path `/api/auth`).
+4. **Each request:** `authMiddleware` verifies the access token and loads the user.
+5. **Refresh:** on 401, the client calls `/api/auth/refresh`; the server **rotates** the refresh token.
+6. **Logout:** deletes that session and clears cookies; **logout-all** deletes all sessions and disconnects sockets.
+
+**Q74. What's the difference between authentication and authorization in CampusOS?**
+
+**Authentication** = who you are. That's `authMiddleware` verifying the JWT and loading `req.user`. **Authorization** = what you're allowed to do. CampusOS has two layers: **global roles** with `roleMiddleware("superadmin")` etc., and **resource-level permissions** based on relationships — `classroomAuthMiddleware` checks you're **that** classroom's representative, `assertClubAdmin` checks you're in **that** club's `clubAdmins`, `canManageEvent` checks superadmin, listed organizer, or admin of the organizing club. Authentication failure is **401**, authorization failure is **403**.
+
+**Q75. Explain your JWT setup — access vs refresh tokens.**
+
+Both are **HS256**-signed JWTs with **different secrets**. The **access token** contains just `{ id }`, lives **15 minutes**, and is checked on every request. The **refresh token** contains `{ id, sid, jti }` — `sid` is the Session document's ID, `jti` is random so every token is unique — and lives up to **7 days** (idle timeout). The **session itself** has an absolute limit of **30 days** from login that refreshing never extends. The algorithm is **pinned** on verify (`algorithms: ["HS256"]`) so a token with a different algorithm, like `none`, is rejected.
+
+Code: `backend/utils/generateToken.js`, `backend/services/auth.service.js`
+
+**Q76. Why store tokens in httpOnly cookies instead of localStorage?**
+
+**localStorage is readable by any JavaScript** on the page, so one XSS bug would let an attacker steal the token. An **httpOnly** cookie can't be read by JavaScript at all. The cookies are also `Secure` in production (HTTPS only) and **`SameSite=Strict`**, so the browser won't send them on cross-site requests. The refresh cookie is scoped to `path=/api/auth`, so it's only ever sent to the auth routes that need it. The trade-off is that cookies bring **CSRF** risk, which I handle separately.
+
+**Q77. How does RBAC work here?**
+
+Three global roles in `User.role`: `student`, `placementCoordinator`, `superadmin`. `roleMiddleware(...allowedRoles)` returns 403 if your role isn't in the list — e.g. drive management needs `placementCoordinator` or `superadmin`, roster import needs `superadmin`, and CGPA corrections allow both. But a pure role system can't express "class rep of **this** classroom", so those are **relationships stored on the resource** (`Classroom.classRepresentative`, `Club.clubAdmins`, `Event.eventOrganizers`) and checked by resource middleware. Superadmin passes every resource check.
+
+**Q78. How are passwords stored?**
+
+Hashed with **bcrypt, cost factor 12**, in a Mongoose `pre("save")` hook; the field has `select: false` so it never comes back from queries unless explicitly requested. bcrypt adds a **salt** automatically. Password rules are in one function `validateNewPassword`: **8 to 72 bytes** — 72 because bcrypt ignores anything after 72 bytes, so I reject longer passwords instead of silently truncating — and it can't be your email, email prefix, or roll number. Changing password also requires a different password from the current one.
+
+**Q79. How is CORS configured?**
+
+`cors({ origin: env.clientUrl, credentials: true })` — only our frontend origin is allowed, and `credentials: true` lets the browser send cookies. `CLIENT_URL` is normalized to a bare **origin** (no trailing slash or path) because CORS compares it exactly. Important point: **CORS is not CSRF protection** — it controls whether JavaScript can **read** a cross-origin response; it doesn't stop the browser from **sending** a simple request. That's why there's a separate Origin check.
+
+**Q80. How do you protect against CSRF?**
+
+Two layers. Primary: auth cookies are **`SameSite=Strict`**, so the browser doesn't attach them to requests coming from another site. Defence in depth: `originCheck` middleware on `/api` rejects any **state-changing** request (not GET/HEAD/OPTIONS) whose `Origin` header is present and isn't our frontend — this also covers same-site attacks like a sibling subdomain. Requests without an Origin (curl, server-to-server) pass, because they don't carry browser cookies automatically. And GET handlers don't change state — except discussion view counts, which is harmless. I didn't add CSRF tokens; with SameSite=Strict and the Origin check, they'd be redundant for this setup.
+
+Code: `backend/middleware/originCheck.js`
+
+**Q81. How do you protect against XSS?**
+
+On the frontend, React escapes all rendered text, there's no `dangerouslySetInnerHTML`, and `safeHref` blocks `javascript:` links. On the backend, links that get rendered for other users — profile links, resume URL, drive application link, brochure, logo — must pass `isHttpUrl` (absolute http/https only). Uploads go through Cloudinary as `resource_type: "image"` with an allow-list, which blocks **SVG and HTML** files that could contain scripts. API responses carry `Content-Security-Policy: default-src 'none'` and `X-Content-Type-Options: nosniff`. And tokens are httpOnly, so even an XSS bug couldn't read them.
+
+**Q82. How did you implement rate limiting?**
+
+With **express-rate-limit**, keyed carefully because many students share one campus **NAT IP**:
+- **Failed logins per email:** 10 / 15 min from any IP — stops guessing one account.
+- **Failed logins per IP:** 100 / 15 min across emails — stops password spraying, generous for a lab.
+- Both use `skipSuccessfulRequests`, so normal logins don't count.
+- **Signup / verify / reset:** 100 / hour per IP. **Forgot password:** 3 / hour per email, so nobody floods an inbox.
+- **Refresh:** 30 / 15 min keyed on the **verified session ID** — not an unverified decode, which would let someone burn a victim's bucket.
+- **Content** (posts/comments/replies): 30 / 10 min per user; **uploads:** 20 / hour per user.
+
+It's a temporary 429, not an account lockout. Limits are configurable via `RATE_LIMIT_*` env vars.
+
+Code: `backend/middleware/rateLimitMiddleware.js`
+
+### Important Follow-Ups
+
+**Q83. What is refresh token rotation and reuse detection?**
+
+**Rotation** means every refresh issues a **new** refresh token and the old one stops working. The session stores the SHA-256 of the **current** token. On refresh I do one atomic `findOneAndUpdate` matching `{ _id: sid, user, tokenHash: sha256(incoming), expiresAt > now }` and set the new hash. If the token is validly signed but **doesn't match** the current hash, it means it was used twice — stolen and replayed, or a race — so I **delete the whole session** and log a `refresh_token_reuse` warning. The attacker and the real user both get logged out of that session, which limits damage.
+
+**Q84. Why hash refresh tokens with SHA-256 and not bcrypt?**
+
+bcrypt is slow **on purpose** because passwords are low-entropy and need protection from brute force. Refresh tokens are long **random, high-entropy** values — brute-forcing them is impossible anyway — so a fast hash like SHA-256 is enough, and it lets me **look the session up by the hash** with a unique index. The point of hashing is that a **database leak doesn't give usable tokens**.
+
+**Q85. What happens on logout and logout-all? Is it instant?**
+
+Logout deletes the session matching the refresh cookie (signature still verified, expiry ignored, and it must match `tokenHash`, so an old token can't log out someone else's live session) and clears both cookies. It works even with an expired access token. **Logout-all** deletes every session and calls `disconnectSockets(true)` on the user's Socket.IO room. It's **not fully instant**: an access token another device already holds stays valid for up to **15 minutes**, because access tokens are stateless. That's the accepted trade-off — short access token lifetime keeps the window small.
+
+**Q86. Why roster-based activation instead of open signup?**
+
+With open signup, anyone could register with someone else's roll number or choose their own branch and section — which matters because classroom access and **placement eligibility** depend on them. With roster claim, identity, cohort, CGPA and backlogs come from the **college roster** imported by the superadmin, and the student only proves they **own the email**. It also prevents duplicate accounts: the claim is a conditional update on `claimedBy: null`, and I have a test that fires two activations with the same link in parallel and checks exactly one account is created.
+
+**Q87. How does password reset work securely?**
+
+`/forgot-password` always returns the same message. If the account exists and is activated, it stores the SHA-256 of a random token in `PasswordReset` (one per user, so a new request replaces the old link) with a **30-minute expiry**, and emails a link with the token in the **URL fragment** (`#token=…`). Fragments are **never sent to servers**, so the token stays out of server logs, CDN logs and `Referer` headers; the page reads it and removes it from history with `replaceState`. `/reset-password` runs one transaction: consume the token, set the new password, **delete all sessions**.
+
+**Q88. What security headers do you set?**
+
+On API responses: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'` (the API serves JSON, never documents), `Referrer-Policy: no-referrer`, and `x-powered-by` is disabled. I wrote this small middleware instead of using Helmet. The SPA's own headers (its CSP, HSTS) must be set by whatever serves `index.html` — Nginx or CloudFront — and that's part of the deployment plan.
+
+**Q89. What is `trust proxy` and why is `TRUST_PROXY=true` refused?**
+
+Behind Nginx, every request arrives from `127.0.0.1`, so without `trust proxy` all users share **one rate-limit bucket**. With `trust proxy`, Express reads the client IP from `X-Forwarded-For`. But that header can be **forged** by the client, so you must trust only known proxy hops. `true` trusts every hop, which makes rate limiting bypassable, so `env.js` refuses it and asks for a hop count or subnet like `loopback`. In production Node must also bind to `127.0.0.1`, so nobody can connect to it directly and forge the header.
+
+### Advanced
+
+**Q90. What if the JWT secret leaks?**
+
+An attacker could forge access tokens for any user. Response: **rotate** `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET` and restart. All existing tokens immediately fail verification, so everyone logs in again; I could also delete all `Session` documents. Prevention: secrets are at least 32 random characters, different from each other (enforced by `env.js`), never committed (`.env` is git-ignored), and in production they'd live in a secrets manager.
+
+**Q91. Give examples of IDOR protection.**
+
+**IDOR** is accessing another user's object by changing an ID. Examples: `getApplicationById` queries `{ _id, student: req.user._id }`, so another student's application returns 404. `markAsRead` filters `{ _id, recipient: userId }`. Deadline update/delete query `{ _id: deadlineId, classroom: classroom._id }`, so a class rep can't edit another classroom's deadline through their own classroom URL. Comments are scoped to their discussion and replies to their comment. `authz.test.js` covers several of these.
+
+**Q92. What security improvements would you add next?**
+
+1. **Schema validation** with Zod on every route. 2. A **shared rate-limit store** (Redis) before running multiple processes. 3. A **CSP and HSTS** for the SPA at Nginx/CloudFront. 4. Consistent `isHttpUrl` validation for every image URL field (club logo/banner, event banner, announcement image currently aren't validated server-side). 5. **Audit logs** for admin actions like roster and CGPA changes. 6. Optional **2FA** for staff. 7. **Dependency scanning** (npm audit / Dependabot) in CI.
+
+---
 <!-- SECTION:c7 -->
 ## 7. Redis Caching
 
