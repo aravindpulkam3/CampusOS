@@ -198,12 +198,59 @@ Load test first; then multiple Node processes with a **Redis rate-limit store** 
 Deploy + CI/CD, Zod validation, horizontal-scaling prerequisites, job queue, frontend tests. Learned: concurrency is normal, authorization per object, optional dependencies must fail fast, one source of truth for rules.
 
 ---
-<!-- SECTION:partB -->
 # Part B — Project Explanation Script
 
-_Not written yet. This section is filled in by a later commit._
-<!-- /SECTION:partB -->
+A natural script for "Tell me about your project". It takes about **3 minutes** at a relaxed pace. Words in *[brackets]* are cues, not things to say. Don't memorize it word for word — learn the **flow**, then say it in your own words.
 
+### The script
+
+*[Start calmly. Look at the interviewer, not the screen.]*
+
+"My main project is **CampusOS** — a full-stack portal for college life, built with React, Node.js, Express and MongoDB.
+
+The idea came from a simple problem. In college, the information a student needs every day is scattered: the timetable is in one place, club events are on WhatsApp, deadlines are announced in class groups, and placement drives come by email. It's easy to miss something important. *[pause]* So I built one system that knows who you are — your classroom, the clubs you follow, the events you registered for, the drives you're eligible for — and shows you what matters **today**.
+
+*[If there's a whiteboard, draw: Browser → API → MongoDB, with Redis and Socket.IO on the side.]*
+
+It has five areas. **Home** is a personalized dashboard. **Academics** has the classroom timetable and semester deadlines, which the class representative manages. **Community** has clubs, events, announcements and a discussion forum with upvotes, comments and accepted answers. **Career** is the placement module — coordinators create drives with eligibility criteria, students apply, and the coordinator runs the rounds by uploading a CSV shortlist. And **Admin** is where staff manage the student roster, classrooms and notices.
+
+On the technical side, the frontend is a **React** single-page app. It talks to an **Express REST API** through Axios. Authentication uses **JWTs stored in httpOnly cookies** — a short 15-minute access token and a refresh token that **rotates** every time it's used, with one session record per device. Permissions have two levels: **global roles** like superadmin or placement coordinator, and **relationships** — for example, only the class rep of *that* classroom can edit its timetable.
+
+*[Slow down here — this is where you show depth.]*
+
+Two parts I'm proud of. First, **sign-up**: students can't just register. The college roster is imported first, and a student activates their account by proving they own the email on the roster. So nobody can sign up as someone else, and their branch, CGPA and backlogs come from the official data, which matters because placement eligibility depends on them. Second, **concurrency**: things like following a club, registering for an event or applying to a drive are written as **atomic database operations** or **transactions**, so double clicks or two tabs can't create duplicates or wrong counts. I have tests that fire parallel requests to prove it.
+
+For performance, I added **Redis** as a cache for shared data like the club list and upcoming events, using the **cache-aside** pattern — and it's optional, so if Redis goes down the app simply reads from MongoDB. For real-time, **Socket.IO** pushes notifications to each user's own room, and every notification is also saved in MongoDB so nothing is lost when someone is offline.
+
+I tested the backend with **111 integration tests** using Vitest, Supertest and an in-memory MongoDB replica set.
+
+*[Close with honesty and direction.]*
+
+Right now it runs locally. The code is already prepared for production — it validates its configuration and expects to run behind Nginx with HTTPS — and my next step is deploying it on AWS with a CI/CD pipeline. I'm happy to go deeper into any part — the authentication, the placement workflow, or the caching."
+
+### Steering tips
+
+- **End with an invitation** ("happy to go deeper into…"). You're choosing the topics you know best — authentication, placements, caching.
+- If they pick **authentication**, go to Q73 → Q83 → Q86.
+- If they pick **database**, go to Q55 → Q57 → Q58 → Q60.
+- If they pick **"most challenging"**, tell the refresh-token story (Q155) — it has a clear problem, a measured symptom from the commit, a fix and a lesson.
+
+### If they say "Show me the code" — what to open, in order
+
+1. `backend/app.js` — the middleware pipeline and route mounts (2 minutes).
+2. `backend/routes/event.routes.js` → `backend/controllers/event.controller.js` `registerForEvent` — a full request with an authorization guard and an atomic write.
+3. `backend/services/auth.service.js` — `refreshSession` (rotation + reuse detection) and `verifyAccountClaim` (transaction).
+4. `backend/utils/cache.js` + `backend/controllers/club.controller.js` `getAllClubs` — cache-aside.
+5. `backend/services/notification.service.js` + `backend/sockets/socketHandler.js` — notifications.
+6. `frontend/src/api/axios.js` — interceptor and single-flight refresh.
+
+### Recovery lines (when you're stuck)
+
+- "I haven't implemented that yet, but here's how I'd approach it: …"
+- "I don't remember the exact number, but the idea is …, and I'd confirm it in `<file>`."
+- "That's a fair point — that's one of the known limitations. The trade-off I made was …, and the fix would be …"
+
+---
 <!-- SECTION:c1 -->
 # Part C — Full Question Bank
 
