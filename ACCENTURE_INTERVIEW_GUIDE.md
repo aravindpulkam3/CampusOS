@@ -1232,12 +1232,49 @@ No **frontend** unit or component tests, no **end-to-end** browser tests, no **l
 By design: notifications are side effects wrapped in `safe()`, so failures are logged, not thrown; cache failures fall back to MongoDB; cache invalidation failures are logged; email failures are logged by error code only (the message can contain the address). Database outages return **503**. Crashes are logged at `fatal` before exit. Visibility is through logs only — no metrics or alerting yet, which I'd add (CloudWatch or Grafana) with alerts on 5xx rate.
 
 ---
-<!-- SECTION:c13 -->
 ## 13. Technical Challenges
 
-_Not written yet. This section is filled in by a later commit._
-<!-- /SECTION:c13 -->
+Use the **STAR** structure: Situation → Task → Action → Result. These are real problems visible in the commit history.
 
+### Must Know
+
+**Q155. What was the most challenging problem you solved?**
+
+**The refresh-token race.** *Situation:* after the 15-minute access token expired, the dashboard fired several requests in parallel; all got 401 and each one called `/auth/refresh`. *Problem:* refresh tokens **rotate**, so the second refresh presented an already-rotated token, the server treated it as **theft**, revoked the session, and the user got logged out. The commit records a reproduction: 5 parallel 401s produced 5 refreshes and only 1 of 5 requests recovered. *Action:* I made `refreshAccessToken()` the **single owner** of refresh with a **shared in-flight promise**, so all callers wait on one request, and later added the **Web Locks API** to serialize refreshes **across tabs**. *Result:* after the fix, 1 refresh and 5 of 5 requests recovered. *Lesson:* a security feature (strict rotation) changes what the client must guarantee.
+
+**Q156. Tell me about a concurrency bug you fixed.**
+
+Follows, event registration, votes and drive applications were originally **read-modify-write toggles**: read the document, check the array, then save. Two fast clicks or two tabs could double-count followers or flip state twice. I changed them to **atomic conditional updates** where the condition lives in the filter — `{ _id, followedClubs: { $ne: clubId } }` with `$addToSet` — used `matchedCount` (not `modifiedCount`, because timestamps make that always 1), put follow membership and follower count in a **transaction**, made event registration count **derived**, and relied on a **unique index** for applications. Then I wrote a script to **reconcile** old inflated follower counts, and tests that fire parallel requests.
+
+**Q157. Tell me about a reliability problem.**
+
+**Redis outages hung requests.** The Redis client's **offline queue** held commands while disconnected, so during an outage cached reads hung — and worse, club and event writes hung **after** MongoDB had already committed, because they were waiting on cache deletion. I set `disableOfflineQueue: true`, added a readiness check that **bypasses** Redis when it's not ready, replaced the reconnect strategy because the default gives up permanently, made `REDIS_URL` optional, and made `connectRedis()` never reject. Now a Redis outage only means "slower, no cache". There are tests for the bypass behaviour.
+
+### Important Follow-Ups
+
+**Q158. Tell me about a bug caused by duplicated logic.**
+
+Drive eligibility was implemented in **five places** — dashboard, two notice paths, drive controller and apply — and they disagreed. One used `user.cgpa || 0`, which made students with no CGPA eligible only for zero-cutoff drives; another used `user.cgpa ?? 10`, the opposite, so a drive could be **advertised as eligible and then rejected** on apply. I created one `eligibility.service.js` with a Mongo filter and an in-memory check that evaluate the same rules in the same order, and a `getPlacementProfile` helper that treats missing CGPA honestly. Lesson: **one source of truth** for business rules.
+
+**Q159. Tell me about a pagination bug.**
+
+Lists sorted only by `createdAt` could show the **same item on two pages or skip one** when timestamps tie, and offset pagination shifts when new comments are added. For comments/replies I moved to **keyset pagination** on `(createdAt, _id)` with a matching compound index and the "fetch limit + 1" trick. For offset lists I added `_id` as a tie-breaker everywhere. I wrote tests that seed comments with identical timestamps and insert/delete between pages and check there are no duplicates or gaps.
+
+**Q160. Tell me about a security issue you found in your own code.**
+
+During a review I found **authorization was missing on writes**: any logged-in user could create an event for any club, `$set` arbitrary fields on any event, and post announcements — with notifications to all followers — to any club. I fixed it by extracting one rule (`isClubAdmin`/`assertClubAdmin`, `canManageEvent`), authorizing against the **exact** club the event is written for, adding **allow-lists** of writable fields, and requiring admin rights on the destination club when an event moves clubs. Lesson: **authentication isn't authorization** — every write needs a "may this user do this to this object?" check.
+
+### Advanced
+
+**Q161. A real-time problem you solved?**
+
+Live notifications **stopped silently after 15 minutes**. The socket was authenticated at handshake; when it reconnected after the token expired, the handshake failed with "Unauthorized", and **Socket.IO never retries a middleware rejection**. I made the client refresh through the **shared** single-flight function and reconnect, and the server disconnect sockets when their token expires so a revoked session can't keep listening. I also separated real auth errors from server errors, so a DB failure during handshake doesn't trigger a pointless refresh.
+
+**Q162. What did these challenges teach you overall?**
+
+Three things. **Concurrency is the default** — double clicks, retries and multiple tabs happen, so writes must be atomic or idempotent. **Optional dependencies must fail fast**, or they become hard dependencies. And **business rules need one home** — duplicated logic drifts. I also learned to **reproduce a bug as a test first**, then fix it.
+
+---
 <!-- SECTION:c14 -->
 ## 14. Scenario-Based Questions
 
