@@ -986,12 +986,93 @@ Right now there's one Node process, so `io.to(room).emit()` reaches every socket
 It's **fan-out on write**: one platform notice creates **one document per user** with `insertMany`, and `notifyAllUsers` loads every user ID into memory. For a college of a few thousand students that's fine, but for much larger numbers it's heavy and runs inside the API process. Improvements: move fan-out to a **background job queue** (BullMQ on Redis) so the request returns immediately and work is retried on failure; batch `insertMany`; or store **one platform notice** and compute per-user read state on read (**fan-out on read**) for broadcast-type messages.
 
 ---
-<!-- SECTION:c9 -->
 ## 9. Important Features — Technical Flows
 
-_Not written yet. This section is filled in by a later commit._
-<!-- /SECTION:c9 -->
+### Must Know
 
+**Q117. How is the personalized dashboard built?**
+
+`GET /api/dashboard` → `buildStudentDashboard(user)`. It runs in **waves** so independent queries run in parallel and dependent ones wait:
+- **Wave 1:** the student's applications and their classroom (from the shared cache).
+- **Wave 2 (5 parallel queries):** current-semester deadlines due after now; registered events overlapping today; active drives the student is still in; eligible open drives (using the shared eligibility filter); events from followed clubs whose registration closes today.
+- **Wave 3:** notices — one aggregation over five sources (platform, my classroom for the current semester, followed clubs, registered events, applied ∪ eligible drives), keeping only pinned/urgent/high or recent (≤ 14 days), sorted pinned → priority → newest, limit 5, then at most 3 grouped populates.
+- **Wave 4 (in memory):** merge class periods (stored as **minutes since midnight**), today's events and reachable placement rounds into one **sorted timeline**; build "Don't miss" (eligible unapplied drives closing today/tomorrow + followed-club events closing today); map subject IDs to names.
+
+It returns **render-ready DTOs**, so the frontend only lays them out. Nothing is cached per user.
+
+Code: `backend/services/dashboard.service.js`
+
+**Q118. How do classrooms and the timetable work?**
+
+A `Classroom` is unique per **branch + batch + section** and is created by a superadmin; creating it **backfills** students of that cohort (`User.updateMany`). Students are linked automatically at activation by `findClassroomForUser`. The **class representative** is a field on the classroom, not a user role. Periods are embedded with `day`, `subject` (an ID inside the curriculum's subjects), faculty, room, and `startTime`/`endTime` in **minutes since midnight (0–1439)**. Adding a period validates the day, the time range, that the subject belongs to the **current curriculum**, and checks **overlap** on the same day with `start < other.end && other.start < end` → 409 with the conflicting period ID. Every change invalidates the academic cache.
+
+Code: `backend/controllers/classroom.controller.js`
+
+**Q119. How does "start next semester" work?**
+
+`POST /classroom/:id/semester/next` (class rep or superadmin). The **next number is always derived** on the server (`current + 1`, or 1) — the request body isn't read, so the client can't jump semesters. It fails with 409 if past semester 8 or if no curriculum exists for that branch and semester. Then it sets the new semester number and curriculum and **clears the periods** — deliberately destructive, no history kept. It invalidates the classroom and notice caches. A separate superadmin-only **override** route can set an explicit semester for onboarding or corrections.
+
+**Q120. How do clubs, follow and mute work?**
+
+Students see only **active** clubs (superadmin sees all for approval). Club creation is superadmin-only. Follow/unfollow is `PUT`/`DELETE /clubs/:id/follow` → `setClubFollow` runs in a **transaction**: a conditional `User.updateOne` with the membership condition **in the filter** (`followedClubs: { $ne: clubId }` to follow), and only if it matched, `$inc` the club's `followerCount` by ±1. Then it deletes both club cache keys. A detail I learned: with `timestamps`, Mongoose adds `$set: { updatedAt }` to every update, so `modifiedCount` is 1 even when `$addToSet` changed nothing — that's why I check `matchedCount` with the condition in the filter. Popular clubs = top 5 active by `followerCount`, cached 1 hour.
+
+**Q121. Explain the events feature.**
+
+- **Create:** `POST /events/create` — a route-level guard checks you're admin of the `organizerClub` **in the body**, the body is filtered through an allow-list, dates are validated (end after start, registration deadline ≤ start), the upcoming-events cache is cleared, and followers are notified.
+- **List:** the aggregation from Q59 — ongoing first, then upcoming nearest first, then completed most recent first, 15 per page, with search and category filters.
+- **Register:** the atomic conditional `$push` from Q11, after checking cancelled status, cutoff (the earlier of deadline and start) and branch/year eligibility. Unregister is a conditional `$pull`, idempotent.
+- **Update:** `eventManagerMiddleware` (superadmin, organizer, or club admin); moving the event to another club requires admin rights on **that** club too; registrants are notified.
+
+**Q122. How does the community feed mix announcements?**
+
+`getCommunityFeed` builds three **audience buckets**: announcements of events I registered for, of clubs I follow, and "general" (everything else). Each page targets **20 items** split **8 / 8 / 4**. It counts how many remain in each bucket; if a bucket runs short, the leftover quota is **redistributed** round-robin to buckets that still have items. Each bucket has its **own offset**, returned to the client for the next page. Results are **interleaved** — event, club, general, event, … — and announcements whose club/event was deleted are filtered out. Search and type filters are added **inside** each bucket with `$and`, so they never break the audience rules.
+
+Code: `backend/controllers/announcement.controller.js` (`getCommunityFeed`)
+
+**Q123. How do notices work?**
+
+A notice has a `targetType` — `platform`, `drive`, `classroom`, `clubs`, `events` — plus `targetId`, `priority` (low/normal/high/urgent), `isPinned`, optional `expiresAt` and `isArchived`. **Posting** is checked by `canPost`: platform → superadmin; drive → coordinator or superadmin; classroom → that classroom's rep; clubs → that club's admin; events → anyone who can manage the event. Classroom notices can be scoped to the **current semester** — the client only sends a boolean and the server fills in the number. **Reading** must name a target type — there are two personalized feeds, `community` and `career` — and classroom notices require you to belong to that classroom. Results exclude archived/expired, sort pinned then priority, and return the top 5. Each post fans out notifications to the right audience. Pin, archive and delete are allowed for the **creator or superadmin**.
+
+**Q124. How do discussions work?**
+
+Discussions have categories, tags, views, upvotes, bookmarks, pinned/locked flags and soft delete. The list supports four sorts — **newest, popular (views), unanswered (fewest comments), active (last activity)** — always with pinned first and `_id` as tie-breaker. **Search** splits the query into words; **every word** must appear (case-insensitive, partial words allowed) in the title, content or tags; regex input is escaped; results with more words in the **title** rank first. Opening a discussion increments `views` atomically and returns the **accepted answer**, not the comments; comments and replies are **cursor-paginated** separately. Replies can reply to replies (`parentReply`, `replyingTo` for "@Name") and are rendered as a flat thread. Only the **discussion author** can accept an answer, and the comment must belong to that discussion. Votes are `$addToSet`/`$pull`, and responses return **counts plus my own state**, never the list of who voted.
+
+**Q125. How does drive eligibility work?**
+
+One service, `eligibility.service.js`, is the **single source of truth**. It has two functions that must stay equivalent: `buildEligibilityFilter(user)` produces a **MongoDB query** (min CGPA ≤ mine, minYear ≤ my year ≤ maxYear, branch list empty or contains mine, batch unset or equals mine, max backlogs ≥ mine if known), and `checkDriveEligibility(drive, user)` does the same checks **in memory** and returns **all failing reasons**. The query is used to list eligible drives; the in-memory check is used on apply and detail pages. Before this, there were **five different copies** of the logic that disagreed — a drive could be shown as eligible and then rejected on apply. `getPlacementProfile` handles missing data: no CGPA → can't evaluate, show nothing and ask for it; no backlogs → skip that rule.
+
+**Q126. Walk me through the recruitment round lifecycle.**
+
+A drive has an ordered `rounds` array and a `currentRoundId`. A round's state isn't stored — it's **derived** in `deriveRoundStates` from its position relative to the current round and its `startDate`, `endedAt`, `processedAt`: **upcoming → ongoing → ended_awaiting → processed**. Rules:
+1. **Add/edit rounds** any time while active; delete only pending rounds.
+2. **Advance to round 1** only after registration closes.
+3. **End round** — only the current round, only after its start date.
+4. **Shortlist** — preview CSV, then confirm (Q127). This sets `processedAt`.
+5. **Advance** — only to the **immediately next** round, only if the current one is ended and processed. It's a **compare-and-set**: `updateOne({ _id, currentRoundId: previous }, { $set: { currentRoundId: next } })`; if it didn't modify, another coordinator moved it first → 409.
+6. **Finish** — only when the current round is the last and processed: in a transaction, drive → `completed`, every still-active application → `selected`, and students are notified.
+7. **Cancel** — atomic `status: active → cancelled`. It doesn't touch applications, so other code also checks drive status.
+
+Code: `backend/controllers/drive.controller.js`, `backend/utils/roundState.js`
+
+**Q127. How does CSV shortlisting work?**
+
+Two steps so a coordinator can't make a mistake blindly. **Preview** (pure read): parse the CSV, require a `rollNumber` column, normalize to uppercase, and split into buckets — **valid**, **duplicates** in the file, **unknown** roll numbers, students who **never applied**, and students **already rejected/selected**. **Confirm**: the client sends the valid roll numbers, and the server **re-validates against live data** instead of trusting the preview. Then in a transaction: set the round's `processedAt` (the one-shot guard), snapshot who's active, and one **`bulkWrite`** with two `updateMany`s — shortlisted students get a timeline entry and stay `active`; everyone else active becomes `rejected` with a timeline entry. Then both groups are notified.
+
+**Q128. How does roster import work?**
+
+`POST /admin/roster/import` (superadmin, CSV). Steps: parse with case-insensitive headers and check required columns; **validate every row** (email format, batch year, year 1–4, CGPA 0–10, backlogs ≥ 0; blank means "not on file"); reject **every copy** of a roll number or email duplicated in the file; check conflicts against existing roster entries and users. **Unclaimed** entries are written with one unordered `bulkWrite` of upserts filtered on `claimedBy: null` (so an entry claimed in the meantime isn't overwritten). **Claimed** entries can only update year/CGPA/backlogs, in a transaction that updates the roster entry and the linked user together. The response lists `created`, `updated` and each `rejected` row with its spreadsheet row number and reason.
+
+### Important Follow-Ups
+
+**Q129. How does global search work?**
+
+`GET /api/dashboard/search?q=` — 2 to 100 characters. It normalizes the query, checks Redis (`cache:search:v2:<q>`), and on a miss runs **four queries in parallel**: active clubs by name/description, non-cancelled events by name/description, drives by company/role, non-deleted discussions by title — 5 each, all with an **escaped case-insensitive regex**. Results are mapped into one list with `type`, `title`, `subtitle`, `image` and a frontend `url`, cached for 60 seconds. On the frontend it's a combobox grouped by type with keyboard navigation.
+
+**Q130. How do profile and uploads connect?**
+
+The profile page shows roster data (name, roll number, branch, year, CGPA) as read-only and lets the student edit bio, GitHub, LinkedIn, portfolio, profile picture and resume. Images/PDFs are uploaded first through `ImageUploadZone` → `/api/v1/upload?folder=user-profiles` or `student-resumes` (with a 5 MB client-side check), which returns a Cloudinary URL; then `PATCH /auth/profile` saves that URL after `isHttpUrl` validation. `getProfileData` returns stats — clubs followed, events registered, discussions created, applications — computed with parallel queries.
+
+---
 <!-- SECTION:c10 -->
 ## 10. Performance & Scalability
 
