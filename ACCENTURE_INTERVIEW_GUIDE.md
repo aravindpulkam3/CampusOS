@@ -1393,12 +1393,74 @@ Utility classes keep styles next to the markup, make a **consistent design syste
 Most of my important bugs were about **real database behaviour** — unique indexes, transactions, conditional updates, `matchedCount` vs `modifiedCount`, query plans. Mocking Mongoose would hide exactly those bugs. An **in-memory replica set** runs the real MongoDB engine with transactions, Supertest exercises the real middleware chain, and Vitest is fast, ESM-native and has a Jest-compatible API.
 
 ---
-<!-- SECTION:c16 -->
 ## 16. Cross-Question Drills
 
-_Not written yet. This section is filled in by a later commit._
-<!-- /SECTION:c16 -->
+Interviewers dig deeper on whatever you say. Practice these chains out loud — each follow-up is what usually comes next.
 
+**Drill 1 — "You used JWT."**
+- *"Where is it stored?"* → httpOnly cookie, not localStorage, so JavaScript can't read it.
+- *"Then how is it sent to the API?"* → The browser attaches cookies automatically; Axios uses `withCredentials: true`; CORS allows credentials for our origin only.
+- *"Cookies mean CSRF. How do you stop it?"* → `SameSite=Strict` plus an Origin check on every state-changing request.
+- *"If you load the user from the DB on every request anyway, why JWT at all?"* → The DB read gives fresh role and state (role changes apply immediately, deleted users are blocked). The JWT avoids a separate session-store lookup and also authenticates the socket. If the user lookup became a bottleneck, I'd cache it briefly in Redis.
+- *"How do you revoke an access token?"* → I can't before expiry; that's why it lives only 15 minutes. Revocation happens at the session (refresh) level.
+
+**Drill 2 — "You used Redis caching."**
+- *"What happens on a write?"* → Write MongoDB first, then delete the key.
+- *"Why delete instead of update?"* → Avoids computing the cached value in two places and avoids writing an old value in a race; the next read rebuilds it.
+- *"What if the delete fails?"* → It's logged; the stale value lives at most until the TTL.
+- *"So a user can see stale data?"* → For shared, non-critical lists, yes, for a bounded time. Personal data like eligibility and applications is never cached.
+- *"Why not cache the dashboard then?"* → It's per user and time-dependent (Q98).
+
+**Drill 3 — "You used transactions."**
+- *"Why does MongoDB need a replica set for that?"* → Transactions depend on the replica set's oplog and session machinery; a standalone server doesn't support them.
+- *"What if a transaction conflicts?"* → `withTransaction()` retries on transient errors like write conflicts.
+- *"Why not use transactions everywhere?"* → They cost performance; single-document updates are already atomic, so I use transactions only when two documents must change together.
+- *"Example where you chose not to?"* → Event registration — the state lives in one array on the User document, so one conditional update is enough.
+
+**Drill 4 — "Your pagination."**
+- *"Offset or cursor?"* → Both; cursor for comments/replies, offset for page-numbered lists.
+- *"Why include `_id` in the sort?"* → `createdAt` can tie; without a unique tie-breaker the order between ties isn't guaranteed, so rows can repeat or vanish across pages.
+- *"How do you know if there's a next page?"* → Fetch `limit + 1`; if I got the extra row, `hasMore` is true, and the cursor is from the last row **returned**.
+- *"What index supports it?"* → `{ discussion: 1, createdAt: 1, _id: 1 }` — equality, then sort fields — and a test checks there's no in-memory sort.
+
+**Drill 5 — "Socket.IO notifications."**
+- *"How does the server know which socket is which user?"* → Handshake middleware verifies the cookie and the socket joins `user:<id>`.
+- *"What if the user has three tabs?"* → Three sockets in the same room; all get it.
+- *"What if they're offline?"* → It's in MongoDB; fetched next time.
+- *"What if you run two servers?"* → Emits on server A wouldn't reach sockets on B — need the Redis adapter (Q115).
+- *"How do you stop a logged-out user still receiving events?"* → logout-all disconnects the room; and sockets are disconnected when their token expires, and can't reconnect without a valid refresh.
+
+**Drill 6 — "Role-based access control."**
+- *"Where is it enforced?"* → On the backend in middleware; the frontend `ProtectedRoute` is only UX.
+- *"Is a class rep a role?"* → No — it's a relationship on the Classroom. A role is global; being a class rep applies to one classroom only.
+- *"How does an admin make someone a club admin?"* → Honestly, there's no API for that yet; it's set in the database. The edit-club form sends `adminIds`, but the backend ignores it. Adding a superadmin-only endpoint is on my list.
+- *"How do you test permissions?"* → `authz.test.js`: students on superadmin routes, coordinators editing academics but not year, IDOR checks.
+
+**Drill 7 — "Roster-based signup."**
+- *"What stops someone typing a classmate's email?"* → The activation link goes to that email inbox; you must own it.
+- *"Can the response tell an attacker who's on the roster?"* → No — same message and the email isn't awaited, so timing doesn't leak.
+- *"What if two people click the same link at once?"* → The token is consumed with `findOneAndDelete` inside a transaction — only one request gets it; the test proves exactly one account is created.
+- *"Why store only the hash of the token?"* → A database leak wouldn't give working links.
+
+**Drill 8 — "Eligibility."**
+- *"Where is it computed?"* → One service with a Mongo filter and an in-memory check that must match.
+- *"Why both?"* → The filter is for listing many drives efficiently; the in-memory check gives the student **all the reasons** they fail one drive.
+- *"What if CGPA is missing?"* → Can't evaluate → show nothing and ask for it; never guess 0 or 10.
+- *"Can a student change their CGPA?"* → No — `updateProfile` returns 403; only coordinators/superadmin change it via the roster endpoint, in a transaction with the roster entry.
+
+**Drill 9 — "Error handling."**
+- *"What does the client see on an unexpected error?"* → "Internal server error" in production; the real message only in development.
+- *"How do you find out what happened?"* → The response's `X-Request-Id` matches a log line with the stack.
+- *"What about a bad ObjectId in the URL?"* → `CastError` → 400 "Invalid ID format", not 500.
+- *"Duplicate email on insert?"* → Code 11000 → 409, and the logger scrubs the duplicated value from the message.
+
+**Drill 10 — "Testing."**
+- *"Unit or integration?"* → Mostly integration — real HTTP through the real app into a real (in-memory) MongoDB.
+- *"Why not mock the DB?"* → My bugs were DB-behaviour bugs (Q186).
+- *"How do you test rate limiting without interference?"* → Each test client sends its own `X-Forwarded-For` IP, trusted because `TRUST_PROXY=loopback` and Supertest connects from loopback.
+- *"What about the frontend?"* → Not tested yet — I'd add React Testing Library and Playwright.
+
+---
 <!-- SECTION:c17 -->
 ## 17. HR + Project Questions
 
