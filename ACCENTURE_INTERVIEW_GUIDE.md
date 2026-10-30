@@ -334,12 +334,101 @@ I'd be upfront: the **competitive prep** page is a frontend prototype with no ba
 Code: `README.md` ("Project status"), `frontend/src/pages/academics/competitive/CompetitivePrep.jsx`, `backend/models/Resource.js`
 
 ---
-<!-- SECTION:c2 -->
 ## 2. Architecture
 
-_Not written yet. This section is filled in by a later commit._
-<!-- /SECTION:c2 -->
+### Must Know
 
+**Q10. Explain the overall architecture.**
+
+It's a **client–server, three-tier** application with two separate apps in one repo.
+
+```
+React + Vite (browser)
+   │  Axios  /api/*  (cookies)          Socket.IO  (cookie handshake)
+   ▼                                          ▼
+Express API ── middleware ── routes ── controllers/services ── Mongoose ── MongoDB
+                                  │                         └─ Redis (optional cache)
+                                  ├─ Cloudinary (uploads)
+                                  ├─ SMTP (activation/reset emails)
+                                  └─ Socket.IO server (user rooms)
+```
+
+The frontend is a **single-page app**. It calls the API over **REST** using Axios with `withCredentials: true`, so the **httpOnly auth cookies** go along automatically. For live notifications, it opens a **Socket.IO** connection that authenticates with the same cookie. On the backend, the layers are **routes** (URL + middleware chain), **middleware** (auth, permissions, rate limits, uploads, errors), **controllers** (request handling), **services** (shared domain logic like auth, eligibility, dashboard, notifications) and **models** (Mongoose schemas and indexes). MongoDB is the **source of truth**; Redis is only a cache.
+
+Code: `backend/app.js`, `backend/server.js`
+
+**Q11. Walk me through a complete request, end to end.**
+
+Let me take "student registers for an event":
+1. In `EventDetail.jsx`, `handleRegister` calls `registerForEvent(id)`, which does `api.put('/events/:id/register')`. The browser attaches the `accessToken` cookie.
+2. In development, **Vite's proxy** forwards `/api` to port 5000. In production the plan is **Nginx** forwarding to Node on `127.0.0.1`.
+3. Express runs global middleware in order: **requestLogger** (assigns an `X-Request-Id`), **securityHeaders**, **cors**, **originCheck** (PUT is state-changing, so the Origin must be our frontend), `express.json()`, `cookieParser()`.
+4. The events router runs **authMiddleware**: it reads the cookie, verifies the JWT with the pinned **HS256** algorithm, loads the user from MongoDB, and sets `req.user`.
+5. The controller `registerForEvent` loads the event, checks it's not cancelled, registration is still open, and the student's branch/year are eligible.
+6. It does **one atomic conditional update**: `User.updateOne({ _id, registeredEvents: { $ne: eventId } }, { $push: ... })`. If `matchedCount` is 0, the student was already registered → **409**.
+7. It counts registrations and responds with `201 { success, message, data }`.
+8. Any thrown error goes through **asyncHandler** to the central **errorMiddleware**, which maps it to a safe status and message. The request logger writes one log line when the response finishes.
+9. Back in React, `applyRegistration` updates the count and the user's `registeredEvents` in AuthContext so other pages agree.
+
+Code: `backend/app.js`, `backend/routes/event.routes.js`, `backend/controllers/event.controller.js` (`registerForEvent`), `frontend/src/pages/events/EventDetail.jsx`
+
+**Q12. How do the frontend and backend communicate?**
+
+Two channels. **REST over HTTP** for everything request/response: a shared Axios instance (`frontend/src/api/axios.js`) with `baseURL` from `VITE_API_URL` and `withCredentials: true`, plus one small API module per resource (`club.api.js`, `career.api.js`, …). And **Socket.IO** for server-to-client pushes, only for notifications. The data format is **JSON**. Auth is **cookies**, not an `Authorization` header — the frontend never touches the token.
+
+**Q13. Explain your folder structure and why you organized it this way.**
+
+The backend is **layered**: `routes/` define URLs and the middleware chain, `middleware/` holds cross-cutting checks, `controllers/` handle the request, `services/` hold logic shared across controllers (auth, eligibility, dashboard, notifications, shortlist), `models/` are schemas, `utils/` are small helpers (ApiError, asyncHandler, cache, transaction), `config/` loads and validates environment and connections. This is **separation of concerns** — for example, eligibility logic lives in one service and is used by the dashboard, drive list, apply endpoint and notices, so they can't disagree.
+
+The frontend is organized by **feature**: `pages/` per workspace (career, clubs, events, discussions…), `components/` for shared layout and UI, `api/` for HTTP wrappers, `context/` for global state, `hooks/` for reusable logic.
+
+**Q14. What is the middleware order in `app.js` and why does it matter?**
+
+`requestLogger → securityHeaders → cors → originCheck (on /api) → express.json → cookieParser → routers → notFound → errorMiddleware`.
+
+Order matters because Express runs middleware **top to bottom**. The logger is first so even a 403 from originCheck, a 429 from a rate limiter, or a 404 gets logged. `originCheck` runs **before the body is parsed**, so a cross-origin write is rejected cheaply. `notFound` comes after all routers so unknown routes get the same JSON error shape, and `errorMiddleware` is last because Express identifies error handlers by their **four arguments** `(err, req, res, next)`. Rate limiters are attached **per route** — login limiters on login, `contentLimiter` and `uploadLimiter` after `authMiddleware` because they're keyed per user.
+
+### Important Follow-Ups
+
+**Q15. Why are `app.js` and `server.js` separate?**
+
+`app.js` builds the Express app only — no database connection, no `listen()`. `server.js` connects MongoDB (and waits for it), starts Redis in the background, creates the HTTP server, attaches Socket.IO, listens, and handles shutdown. The split makes the app **testable**: my tests import `app` directly into **Supertest** without opening a port.
+
+**Q16. What does a standard API response look like?**
+
+Success: `{ success: true, message, data }` via the `sendResponse` helper. Error: `{ success: false, message }`, and for Mongoose validation errors also an `errors` array with field names. The one exception is the upload endpoint, which returns `url` and `publicId` at the top level. One bug I fixed early was some handlers returning `success: true` with a 4xx status — I replaced those with `throw new ApiError(...)`.
+
+Code: `backend/utils/sendResponse.js`, `backend/utils/apiError.js`
+
+**Q17. Why is MongoDB a hard dependency but Redis optional?**
+
+MongoDB is the **source of truth** — without it the app can't answer anything correctly, so `server.js` does `await connectDB()` and **exits** if the first connection fails. It never listens without a database. Redis only holds **copies** of data, so losing it should cost speed, not correctness. If `REDIS_URL` is missing, malformed, or Redis is down, caching is disabled and reads go to MongoDB.
+
+**Q18. How do you manage configuration?**
+
+Everything goes through one module, `config/env.js`. Nothing else reads `process.env`. It **validates at startup** and **fails fast**: it collects every problem, prints them, and exits. For example, `NODE_ENV` is required because it decides whether cookies are `Secure`; JWT secrets must be at least 32 characters and different from each other; in production `CLIENT_URL` must be HTTPS, `HOST` must be loopback and `TRUST_PROXY` must be set. Optional groups like SMTP or Cloudinary must be **all set or none set**. The exported object is **frozen**.
+
+**Q19. Why a monolith and not microservices?**
+
+For a college-scale app built by one person, a **modular monolith** is the right trade-off: one deployment, one database, simple transactions across collections, easy local development and testing. Microservices add network calls, distributed transactions, service discovery and ops overhead that this scale doesn't need. The code is still modular — services and routers per domain — so if one area (say notifications) needed to scale separately, it could be extracted.
+
+### Advanced
+
+**Q20. How do services emit socket events without importing `server.js`?**
+
+`sockets/socketHandler.js` stores the `io` instance in a module variable during `initSocket(io)` and exports `getIO()`. The notification service calls `getIO()?.to(room).emit(...)`. This avoids a **circular import** between `server.js` and the services, and the optional chaining means tests (which never create a Socket.IO server) just skip emitting. The code comment also notes this is the place a **Redis adapter** would plug in for multiple servers.
+
+**Q21. If you had to split this into services, how would you do it?**
+
+Along domain boundaries that already exist: **Auth/Identity** (users, sessions, roster), **Academics** (classrooms, curricula, deadlines), **Community** (clubs, events, announcements, discussions), **Placements** (drives, applications), and **Notifications** (fan-out and sockets). Notifications is the best first candidate, because it's already a side effect behind one service boundary — other services would publish events to a **message queue** and the notification service would consume them. The hard part would be cross-domain data like eligibility, which reads user CGPA and drive criteria.
+
+**Q22. What happens when the server shuts down?**
+
+On `SIGTERM`/`SIGINT`, `server.js` runs a **graceful shutdown** once (guarded against re-entry): `io.close()` disconnects sockets and closes the HTTP server, idle keep-alive connections are dropped, in-flight requests get **10 seconds** to finish before `closeAllConnections()`, then MongoDB is closed, then Redis (`close()` if ready, `destroy()` if it's mid-reconnect), then exit. A **15-second backstop timer** forces exit if anything hangs. An `unhandledRejection` is logged and triggers graceful shutdown with exit code 1; an `uncaughtException` exits immediately because the process may be in a bad state.
+
+Code: `backend/server.js` (`shutdown`)
+
+---
 <!-- SECTION:c3 -->
 ## 3. Frontend (React)
 
