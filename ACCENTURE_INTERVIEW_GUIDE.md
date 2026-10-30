@@ -103,12 +103,101 @@ Use this to answer "is that implemented?" honestly.
 | Multi-instance scaling (shared rate-limit store, Socket.IO Redis adapter) | ⏳ | Seams noted in code comments |
 
 ---
-<!-- SECTION:partA -->
 # Part A — Top 30 Most Likely Questions (Quick Revision)
 
-_Not written yet. This section is filled in by a later commit._
-<!-- /SECTION:partA -->
+Short answers for last-minute revision. The full answer is in the linked question.
 
+**1. Tell me about your project.** → Q1–Q3
+A MERN college portal that combines classes, clubs, events, discussions, notices and placements into one **personalized dashboard**, with **cookie-based JWT auth**, **role + resource-level permissions**, **Redis cache-aside**, and **Socket.IO** notifications.
+
+**2. What problem does it solve, and for whom?** → Q4
+Campus information is scattered. Students, class reps, club admins, placement coordinators and a superadmin each get the workflows they need in one system.
+
+**3. What was your role?** → Q6, Q188
+Solo project: data model, API, React frontend, auth, caching, real-time, tests. *(Be ready to discuss AI-assisted commits honestly — Q197.)*
+
+**4. Explain the architecture.** → Q10
+React SPA → Axios (cookies) → Express middleware → routes → controllers/services → Mongoose → MongoDB; Redis as optional cache; Socket.IO for pushes; Cloudinary for uploads; SMTP for emails.
+
+**5. Walk through one request end to end.** → Q11
+Event registration: logger → security headers → CORS → **origin check** → JSON → cookies → **authMiddleware** → controller checks → **atomic conditional `$push`** → 201 or 409 → error middleware if anything throws.
+
+**6. Why MongoDB?** → Q175
+Document-shaped data (drive + rounds, classroom + periods, application + timeline), evolving schema, JSON end to end — while using **references, unique indexes and transactions** for the relational parts. PostgreSQL would also have worked.
+
+**7. Explain the authentication flow.** → Q73
+Roster **claim email** → set password in a **transaction** → login sets **access + refresh cookies** → middleware verifies access token → 401 triggers **refresh with rotation** → logout deletes the session.
+
+**8. Access token vs refresh token?** → Q75, Q83
+Access: 15 min, `{id}`, checked every request. Refresh: `{id, sid, jti}`, rotates each use, stored as **SHA-256 hash** in a `Session`; **reuse revokes the session**.
+
+**9. Why httpOnly cookies, not localStorage?** → Q76
+JavaScript can't read httpOnly cookies, so XSS can't steal tokens; `Secure` + `SameSite=Strict`; refresh cookie scoped to `/api/auth`.
+
+**10. Authentication vs authorization; how does RBAC work?** → Q74, Q77
+AuthN = `authMiddleware` (401). AuthZ = `roleMiddleware` for global roles + **relationship checks** (class rep, club admin, event manager) (403).
+
+**11. How are passwords stored?** → Q78
+**bcrypt cost 12** in a `pre("save")` hook, `select: false`, 8–72 bytes, can't equal email or roll number.
+
+**12. Middleware and error handling?** → Q41–Q43
+`asyncHandler` forwards async errors; `errorMiddleware` maps known errors (ApiError, 11000→409, CastError→400, JWT→401, DB down→503) and hides internal messages.
+
+**13. How did you design the schema?** → Q55–Q56
+Embed small owned data (periods, rounds, timeline); reference large or independently queried data (comments, replies, applications).
+
+**14. Which indexes did you add?** → Q57
+Unique (email, rollNumber, `{student, drive}`), keyset (`{discussion, createdAt, _id}`), membership (`registeredEvents`, `followedClubs`), feed indexes, text index on drives, TTL indexes on sessions and tokens.
+
+**15. How does pagination work?** → Q58
+Offset with `_id` tie-breaker for page lists; **keyset cursor** `"<createdAt>_<id>"` with **limit + 1** for comments/replies.
+
+**16. Give an aggregation example.** → Q59
+Events list: `$match` → `$facet` (count + data) → `$switch` tier (ongoing/upcoming/completed) → sort → skip/limit → `$lookup` clubs.
+
+**17. What if two users update the same data?** → Q166
+Atomic `$addToSet`/`$pull`, conditional updates (`$ne` in filter, check `matchedCount`), unique indexes, compare-and-set for round advance, transactions for multi-document writes.
+
+**18. Where do you use transactions?** → Q60
+Account activation, password change/reset + session revoke, follow + follower count, roster + user academics, shortlist and finish drive. Requires a **replica set**.
+
+**19. Why Redis and how does cache-aside work?** → Q93–Q95
+Shared, rarely changing reads (clubs, upcoming events, search, classroom data, drive catalogue). Check cache → miss → DB → `SET` with **TTL** → write path deletes the key.
+
+**20. What if Redis is down? How do you invalidate?** → Q96–Q97
+`isReady` check bypasses Redis; `disableOfflineQueue` so nothing hangs; reads fall back to MongoDB. Invalidation = delete affected keys after the DB write; TTL bounds staleness.
+
+**21. How do real-time notifications work?** → Q106
+Controller calls the notification service (not awaited) → mute filter → `insertMany` → emit `notification:new` to room `user:<id>` → React context updates list, count and toast.
+
+**22. WebSocket vs polling; why Socket.IO?** → Q107, Q179
+Server push instead of empty polling requests; Socket.IO adds rooms, reconnection, long-polling fallback and handshake auth.
+
+**23. How do you manage state in React?** → Q25
+Context for auth and notifications; page-local `useState` for everything else; no Redux needed.
+
+**24. How does the frontend handle token expiry?** → Q28–Q29
+Axios **response interceptor** → one **single-flight** refresh shared by parallel 401s → **Web Locks** across tabs → retry the original request.
+
+**25. CORS, CSRF, XSS and rate limiting?** → Q79–Q82
+CORS for our origin with credentials; CSRF via **SameSite=Strict + Origin check**; XSS via React escaping, `safeHref`, `isHttpUrl`, Cloudinary format allow-list; rate limits keyed per email / IP / session / user.
+
+**26. Most challenging problem?** → Q155
+Parallel 401s caused refresh-token reuse and logouts; fixed with a shared in-flight refresh and cross-tab Web Locks.
+
+**27. How did you test it?** → Q147–Q149
+111 integration tests: Vitest + Supertest + in-memory MongoDB replica set, including **parallel-request race tests**, security tests and query-plan tests.
+
+**28. Is it deployed? What's the plan?** → Q139–Q140
+Not deployed yet. Planned: S3 + CloudFront for the SPA, EC2 with Nginx → Node on loopback, MongoDB Atlas, Redis, HTTPS, GitHub Actions CI/CD.
+
+**29. How would it handle thousands of users?** → Q133
+Load test first; then multiple Node processes with a **Redis rate-limit store** and **Socket.IO Redis adapter**, DB-side pagination for drives, queued notification fan-out, Atlas replica set.
+
+**30. What would you improve, and what did you learn?** → Q190–Q191
+Deploy + CI/CD, Zod validation, horizontal-scaling prerequisites, job queue, frontend tests. Learned: concurrency is normal, authorization per object, optional dependencies must fail fast, one source of truth for rules.
+
+---
 <!-- SECTION:partB -->
 # Part B — Project Explanation Script
 
