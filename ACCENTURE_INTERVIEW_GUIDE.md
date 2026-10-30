@@ -1461,12 +1461,71 @@ Interviewers dig deeper on whatever you say. Practice these chains out loud — 
 - *"What about the frontend?"* → Not tested yet — I'd add React Testing Library and Playwright.
 
 ---
-<!-- SECTION:c17 -->
 ## 17. HR + Project Questions
 
-_Not written yet. This section is filled in by a later commit._
-<!-- /SECTION:c17 -->
+### Must Know
 
+**Q187. Why did you build this project?**
+
+*(Make this personal and true.)* A natural version: "As a student, I kept missing things — a club event I'd have joined, a deadline that was only announced in one group, a placement drive I was eligible for but saw too late. Each piece of information existed, just scattered. I wanted one place that knows who I am — my class, my clubs, my eligibility — and shows what matters today. It was also a chance to build something realistic end to end: real authentication, permissions, caching and real-time features, not just CRUD."
+
+**Q188. What was your role?**
+
+"I built it on my own — requirements, data model, backend API, frontend, authentication and security, caching, notifications, and tests. Because it was solo, I also had to make the trade-off decisions myself, like keeping Redis optional or making the semester transition destructive, and I documented those decisions in code comments and the README." *(Adjust if anyone helped you.)*
+
+**Q189. Explain the project to a non-technical person.**
+
+"It's like a college app that knows you. When you open it, it tells you: here are your classes today, here's the club event you signed up for, here's an assignment due tomorrow, and here's a company hiring that you qualify for — apply before tonight. Teachers' representatives update the timetable, clubs post events, and the placement office runs the hiring rounds, all in the same app. And when something new happens, you get a notification instantly."
+
+**Q190. What would you improve if you had more time?**
+
+In priority order: (1) **deploy it** with CI/CD on AWS; (2) **schema validation** with Zod on every route; (3) a **shared Redis store** for rate limits and the **Socket.IO Redis adapter**, so it can run multiple instances; (4) move notification fan-out to a **job queue**; (5) fix the drive list so it **paginates in the database**; (6) **frontend tests** and E2E tests; (7) finish the competitive prep backend and add an API for assigning club admins.
+
+**Q191. What did you learn?**
+
+Technically: **concurrency** — that double clicks, retries and multiple tabs are normal, and writes must be atomic or idempotent; **security thinking** — authentication isn't authorization, and every write needs an ownership check; and how **optional dependencies** must fail fast. Process-wise: writing a **failing test first** for a bug, keeping **one source of truth** for business rules, and documenting trade-offs so future me understands why.
+
+**Q192. What was your biggest mistake?**
+
+*(Pick one that's true.)* A strong, honest one from the history: "Building features first and adding authorization later. Early on, any logged-in user could create an event for any club or post announcements to any club, because I only checked that the user was logged in. I found it in a review and fixed it with resource-level checks and allow-lists. Now I think about 'who is allowed to do this to this object' when I design the endpoint, not after." Another true option: duplicating the eligibility logic in five places.
+
+### Important Follow-Ups
+
+**Q193. How long did it take, and how did you plan it?**
+
+The commit history runs from **June 2026 to October 2026**, in phases: core features first (June), then notifications, classrooms, placements and Redis (September), then a hardening phase — auth, security, race conditions, error handling, tests — and finally caching improvements, logging and a UI redesign (October). *(Describe your real schedule — e.g. alongside classes.)*
+
+**Q194. How did you decide what to build first?**
+
+The core student value first — dashboard, clubs, events, placements — because without those there's nothing to secure or optimize. Then I hardened what existed: auth, permissions, race conditions and tests. I'd say this taught me that security should come **earlier** next time (see Q192).
+
+**Q195. How do you handle a feature you don't know how to build?**
+
+Break it into small parts, read the official docs (Mongoose, Socket.IO, MDN), build a minimal version, and write a test for the tricky behaviour. For example, for cursor pagination I first wrote the test with tied timestamps to see the bug, then implemented the keyset query.
+
+**Q196. How would you work on this in a team?**
+
+Feature branches and **pull requests** — the repo already uses PRs for larger changes like the logging feature and the responsive redesign — code review, CI running tests on every PR, small focused commits, and documenting decisions in the README so others don't undo them by accident.
+
+### Advanced
+
+**Q197. Did you use AI tools while building it?**
+
+Answer **honestly** — the commit history shows several commits co-authored with an AI coding assistant, and an interviewer might look. A confident answer: "Yes, I used an AI assistant, mainly for reviewing and hardening — finding edge cases, writing tests, and refactoring. I treated it like a reviewer: I decided what to build, checked every change, ran the tests, and I can explain every part of the code and why it's designed that way." Then **prove it** by explaining a piece of code in depth. Never claim you wrote every line alone if that's not true; understanding and ownership are what the interviewer is checking.
+
+**Q198. Which part are you most proud of, and why?**
+
+"The race-safety work. It's invisible to users when it works, but it's the difference between a demo and a real system. Every write — follows, registrations, votes, applications, account activation — behaves correctly under parallel requests, and I have tests that actually fire concurrent requests to prove it."
+
+**Q199. If you rebuilt it from scratch, what would you do differently?**
+
+Validation schemas (Zod) from day one; authorization designed with each endpoint; RESTful URLs everywhere (no `/create` and `/update` verbs); TypeScript for safer refactoring; React Query for server state; and a CI pipeline from the first week.
+
+**Q200. Why should we believe you understand this code?**
+
+"Ask me about any part. For example, I can explain why the follow endpoint checks `matchedCount` instead of `modifiedCount` — Mongoose timestamps add `updatedAt` to every update, so `modifiedCount` is 1 even when nothing really changed. Or why refresh tokens are hashed with SHA-256 but passwords with bcrypt." *(Pick two details you know cold.)*
+
+---
 <!-- SECTION:partD -->
 # Part D — Potential Weak Points
 
