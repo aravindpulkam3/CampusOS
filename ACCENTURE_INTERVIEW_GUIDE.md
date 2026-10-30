@@ -251,12 +251,89 @@ Right now it runs locally. The code is already prepared for production — it va
 - "That's a fair point — that's one of the known limitations. The trade-off I made was …, and the fix would be …"
 
 ---
-<!-- SECTION:c1 -->
 # Part C — Full Question Bank
 
-_Not written yet. This section is filled in by a later commit._
-<!-- /SECTION:c1 -->
+Every answer below is written in first person, the way you would say it. Bold words are the keywords to remember. `Code:` lines point to where you can re-read the real implementation before the interview.
 
+---
+
+## 1. Project Introduction
+
+### Must Know
+
+**Q1. Explain your project in 30 seconds.**
+
+CampusOS is a **full-stack college portal** I built with the **MERN stack**. It brings classes, clubs, events, discussions, notices and placement drives into one place. When a student logs in, one **personalized dashboard** shows today's classes, registered events, upcoming deadlines, eligible placement drives and important notices. The backend is an **Express + MongoDB REST API** with **cookie-based JWT authentication**, role-based and resource-level permissions, **Redis caching** for shared data, and **Socket.IO** for live notifications.
+
+**Q2. Explain it in 1 minute.**
+
+In most colleges, information is scattered: timetables in one place, club events on WhatsApp, placement updates over email, notices on boards. Students miss deadlines and drives because of that. CampusOS puts it all in one workspace.
+
+It has five areas. **Home** is a personalized dashboard. **Academics** has the classroom timetable, semester deadlines and classroom notices. **Community** has clubs, events, announcements and a Q&A-style discussion forum. **Career** lets students browse placement drives with automatic eligibility checks, apply once, and track each recruitment round. **Admin** is where staff manage the student roster, classrooms, curricula and notices.
+
+Technically, the frontend is **React 18 with Vite**, the backend is **Node.js and Express**, data is in **MongoDB through Mongoose**. Login uses **access and refresh JWTs in httpOnly cookies**, with per-device sessions. **Redis** caches shared reads like the club list, and **Socket.IO** pushes notifications in real time. I also wrote **111 backend integration tests** using Vitest, Supertest and an in-memory MongoDB replica set.
+
+**Q3. Explain it in 2–3 minutes (detailed version).**
+
+*Problem.* CampusOS is a single portal for campus life. The problem I wanted to solve was that a student's day depends on information from many sources — class timetable, club events, deadlines, placement drives — and nothing connects them.
+
+*Users.* There are three global roles: **student**, **placementCoordinator** and **superadmin**. On top of that there are **relationship-based permissions**: a student can be the **class representative** of one classroom, an **admin of a club**, or an **organizer of an event**. So permissions are not only "what role are you" but "what is your relationship to this exact resource".
+
+*Features.* The **dashboard** is built by one backend endpoint that merges today's class periods, registered events and placement rounds into one sorted timeline, plus a "Don't miss" list of drives and events closing today or tomorrow. In **Career**, a coordinator creates a drive with criteria like minimum CGPA, branches, year and backlogs. Students see only what they are eligible for, apply once, and the coordinator runs rounds — ends a round, uploads a **CSV shortlist**, previews it, confirms it, then advances to the next round. In **Community**, students follow clubs, register for events, and use discussions with upvotes, bookmarks, comments, nested replies and accepted answers.
+
+*Architecture.* The React client talks to the Express API using **Axios** with cookies. Each request goes through middleware — request logging, security headers, CORS, an **Origin check**, JSON parsing, cookie parsing — then route-level **auth and permission middleware**, then a controller or service, then Mongoose. Redis sits beside MongoDB as an **optional cache-aside layer**: if Redis is down, the app just reads MongoDB.
+
+*Engineering highlights.* Two things I am proud of. First, **authentication**: students can't just sign up — they activate an account by proving they own an email that's on the college **roster**, so nobody can register as someone else. Refresh tokens **rotate** on every use and a reused token revokes the session. Second, **race safety**: follows, event registrations, votes and drive applications are written as **atomic conditional updates** or **transactions**, so double clicks or parallel requests can't create duplicates or wrong counts — and I have tests that fire parallel requests to prove it.
+
+*Close.* It runs locally right now; the code is prepared for a single-server production setup behind Nginx, and my next step would be deploying it on AWS with CI/CD.
+
+**Q4. What problem does CampusOS solve, and who uses it?**
+
+It solves **information fragmentation** on campus. A student shouldn't have to check five places to know what's happening today. Users are:
+- **Students** — dashboard, classroom, clubs, events, discussions, placements.
+- **Class representatives** (a student linked to a classroom) — maintain the timetable, deadlines, classroom notices, and start the next semester.
+- **Club admins / event organizers** — manage their club's profile, events, announcements and notices.
+- **Placement coordinators** — create drives, run rounds, upload shortlists, correct CGPA/backlogs.
+- **Superadmin** — roster import, classrooms, curricula, clubs, platform notices.
+
+**Q5. What are the main features?** (✅ implemented, 🟡 partial, ⏳ not built)
+
+| Area | Features | Status |
+|---|---|---|
+| Home | Personalized dashboard (today's schedule, don't-miss, deadlines, eligible drives, notices), global search | ✅ |
+| Academics | Classroom timetable, deadlines per semester, classroom notices, semester progression, curricula | ✅ |
+| Academics | Competitive prep resources page | 🟡 frontend-only prototype, no backend |
+| Community | Clubs (follow, mute), events (register, eligibility), announcements, community feed | ✅ |
+| Discussions | Posts, search, upvotes, bookmarks, comments, nested replies, accepted answer | ✅ |
+| Career | Drives with eligibility, applications, rounds, CSV shortlisting, finish/cancel | ✅ |
+| Admin | Roster CSV import, academics update, classrooms, curricula, notices | ✅ |
+| Admin | Assigning club admins / event organizers from the UI | ⏳ not exposed by the API |
+| Platform | Notifications (stored + real-time), email activation, password reset | ✅ |
+| Platform | Moderation queue | ⏳ placeholder only |
+
+**Q6. What exactly was your contribution?**
+
+This is a solo project — the repository has a single author. I designed the data model, built the REST API, the React frontend, the authentication and permission system, the caching layer, the real-time notifications and the test suite. *(Adjust this honestly to your real story. The commit history also shows AI-assisted commits — see Q197 for how to talk about that confidently.)*
+
+### Important Follow-Ups
+
+**Q7. How is this different from a WhatsApp group or Google Classroom?**
+
+WhatsApp is a stream of messages — nothing is structured, searchable by type, or personalized. Google Classroom covers coursework only. CampusOS is **structured and personalized**: it knows your classroom, the clubs you follow, events you registered for and drives you're eligible for, so the dashboard shows only what's relevant to you. It also has **workflows**, not just messages — for example, a placement drive has rounds, shortlists and statuses.
+
+**Q8. Why do the package names say "EventSphere"?**
+
+Be honest with your real reason. The README itself says "CampusOS (also named EventSphere in package names)". A natural answer: *"EventSphere was the earlier name when it was mainly about clubs and events. As the scope grew to academics and placements, I renamed the product to CampusOS but didn't rename the packages and Cloudinary folders, because it's cosmetic and renaming upload folders would break existing file paths."* (Only say the history part if it's true for you.)
+
+### Advanced
+
+**Q9. What is not finished in the project?**
+
+I'd be upfront: the **competitive prep** page is a frontend prototype with no backend; the **moderation queue** is a placeholder; there's **no UI/API to assign club admins or event organizers** (they're set directly in the database); there's **no frontend test suite**, **no CI/CD**, and it's **not deployed** yet. The `Resource` model and `drive.service.js`/`resource.service.js` files are unused stubs. Everything else — auth, dashboard, academics, community, placements, roster, notifications — is implemented and mounted.
+
+Code: `README.md` ("Project status"), `frontend/src/pages/academics/competitive/CompetitivePrep.jsx`, `backend/models/Resource.js`
+
+---
 <!-- SECTION:c2 -->
 ## 2. Architecture
 
