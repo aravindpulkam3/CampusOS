@@ -1177,12 +1177,61 @@ Fail-fast **config validation**; DB-before-listen; **graceful shutdown** with dr
 The `/socket.io/` location must proxy with HTTP/1.1 and pass the upgrade headers — `proxy_http_version 1.1; proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "upgrade";` — plus `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for` and `Host`, and a longer `proxy_read_timeout` so idle sockets aren't cut. With more than one Node process, I'd need sticky sessions or WebSocket-only transport plus the Redis adapter. *(This is planned configuration — I haven't deployed it yet.)*
 
 ---
-<!-- SECTION:c12 -->
 ## 12. Testing & Debugging
 
-_Not written yet. This section is filled in by a later commit._
-<!-- /SECTION:c12 -->
+### Must Know
 
+**Q147. How did you test the project?**
+
+The backend has **111 integration tests in 18 files** using **Vitest** as the runner, **Supertest** to send real HTTP requests to the Express `app`, and **mongodb-memory-server** to start an in-memory **MongoDB replica set** (version 7.0) — a replica set because the code uses transactions. Each test file gets a **fresh database**, indexes are built before tests run, and email sending is **mocked** to capture tokens. A helper creates a Supertest **agent** that keeps cookies like a browser and sends a unique `X-Forwarded-For` IP so rate-limit buckets don't leak between tests. Run with `npm test` in `backend/`. There are **no frontend tests** yet.
+
+Code: `backend/vitest.config.js`, `backend/tests/globalSetup.js`, `backend/tests/setup.js`, `backend/tests/helpers.js`
+
+**Q148. Give examples of meaningful tests.**
+
+- **Race tests:** two activations with the same link in parallel → exactly one user created (`claim.test.js`); parallel event registrations → registered once (`eventRegistration.test.js`).
+- **Security:** refresh token rotation, reuse revokes the session, logout-all (`auth.test.js`); students blocked from superadmin routes, IDOR on applications and notifications (`authz.test.js`); login rate limits per email across IPs and per IP across emails (`login.test.js`).
+- **Pagination:** 45 comments page as 20 + 20 + 5 with **no duplicates or gaps**, even when timestamps tie or comments are added/deleted between pages.
+- **Query plans:** asserting the keyset index is used with no in-memory sort.
+- **Cache:** corrupted JSON is deleted and refilled; when Redis isn't ready, the API still serves from MongoDB.
+- **Logging:** passwords, cookies and auth headers are never logged.
+
+**Q149. How do you test concurrency?**
+
+Fire the requests at the same time with `Promise.all` against the real app and real (in-memory) MongoDB, then check the **final database state**, not just status codes. For example, two activation requests with the same token → status codes sort to `[200, 400]`, `User.find({ email })` has length 1, and the roster entry's `claimedBy` equals that user.
+
+### Important Follow-Ups
+
+**Q150. How do you mock Redis and email in tests?**
+
+Tests set `REDIS_URL` to empty, so normally caching is off. Cache-specific tests use `vi.mock("../config/redis.js")` with a fake client backed by a **Map** and a toggleable `isReady`, so I can simulate Redis being down. Email is mocked in `setup.js` with `vi.mock("../utils/mailer.js")`, pushing `{ type, to, token }` into `globalThis.sentMail` so tests can read the one-time token and continue the flow.
+
+**Q151. How do you debug a production-style issue?**
+
+Start from the **request ID**: every response has `X-Request-Id`, and the log line for that request has method, path, status, duration and user ID, plus the stack for unexpected errors. Then **reproduce** it — ideally as a failing test — fix it, and keep the test. For data issues, check the query with `explain()` or check the documents directly. For frontend issues, browser DevTools Network tab (status, cookies, CORS errors) and the console.
+
+**Q152. What bugs did you find and fix?** (all visible in commit history and code comments)
+
+- Some handlers returned `{ success: true }` with a **4xx status**.
+- Searching for `c++` or `(` caused a **500** because user input went into `new RegExp` unescaped.
+- `Application.notes` was **missing from the schema**, so Mongoose strict mode **silently dropped** every write.
+- `deleteAnnouncement` checked `club.clubAdmin` — a field that doesn't exist — so club admins could never delete.
+- The community notice feed used `user.joinedClubs`, which doesn't exist — always undefined.
+- **Authorization holes**: any logged-in user could create an event for any club or post announcements to any club.
+- **Eligibility** logic existed in five copies that disagreed.
+- Parallel 401s caused **refresh-token reuse** and logged users out; sockets stopped after 15 minutes.
+
+**Q153. What isn't tested?**
+
+No **frontend** unit or component tests, no **end-to-end** browser tests, no **load** tests, and not every endpoint has a test. Next I'd add Vitest + React Testing Library for components like `useCursorList` and the Axios refresh logic, and Playwright for key flows (login → apply to drive).
+
+### Advanced
+
+**Q154. How does the system handle failures, and how do you know?**
+
+By design: notifications are side effects wrapped in `safe()`, so failures are logged, not thrown; cache failures fall back to MongoDB; cache invalidation failures are logged; email failures are logged by error code only (the message can contain the address). Database outages return **503**. Crashes are logged at `fatal` before exit. Visibility is through logs only — no metrics or alerting yet, which I'd add (CloudWatch or Grafana) with alerts on 5xx rate.
+
+---
 <!-- SECTION:c13 -->
 ## 13. Technical Challenges
 
